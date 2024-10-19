@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"crypto/hmac"
@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -38,16 +39,48 @@ func createToken (userID string) (string, error) {
 	payloadEncoded := base64.RawURLEncoding.EncodeToString(payloadJSON)
 
 	// Create Signature
-	h := hmac.New(sha256.New, []byte(os.Getenv("SECRET_KEY")))
-	h.Write([]byte(fmt.Sprintf("%s.%s", headerEncoded, payloadEncoded)))
-	signature := base64.RawURLEncoding.EncodeToString((h.Sum(nil)))
-	return fmt.Sprintf("%s.%s.%s", headerEncoded, payloadEncoded, signature), nil
+	signature := createSignature(headerEncoded, payloadEncoded)
+    return fmt.Sprintf("%s.%s.%s", headerEncoded, payloadEncoded, signature), nil
 }
 
-func verifyToken(){
-	
+func createSignature(header, payload string) string {
+    h := hmac.New(sha256.New, []byte(os.Getenv("SECRET_KEY")))
+    h.Write([]byte(fmt.Sprintf("%s.%s", header, payload)))
+    return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }
 
-func main(){
-	createToken("Test_User")
+func verifyToken(token string) (Payload, error) {
+	parts := strings.Split(token, ".") // Split token by "."
+	if len(parts) != 3 {
+		return Payload{}, fmt.Errorf("invalid token")
+	}
+
+	header := parts[0]
+	payload := parts[1]
+	signature := parts[2]
+
+	// Compare received signature with expected generated signature
+	expectedSignature := createSignature(header, payload)
+	if expectedSignature != signature {
+		return Payload{}, fmt.Errorf("invalid signature")
+	}
+
+	// Decode payload string into original bytes
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(payload)
+	if err != nil {
+		return Payload{}, err
+	}
+
+	// Parse decoded payloadbytes back into Payload object
+	var claims Payload
+	err = json.Unmarshal(payloadBytes, &claims)
+	if err != nil {
+		return Payload{}, err
+	}
+
+	if claims.Expiration < time.Now().Unix() {
+		return Payload{}, fmt.Errorf("token expired")
+	}
+
+	return claims, nil
 }
