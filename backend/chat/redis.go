@@ -1,5 +1,7 @@
 package chat
 
+// Redis connection and pub/sub logic
+
 import (
 	"context"
 	"log"

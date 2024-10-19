@@ -1,5 +1,7 @@
 package chat
 
+// WebSocket message handling logic
+
 import (
 	"log"
 	"net/http"

@@ -3,13 +3,19 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"rtc-nb/backend/chat"
+	"rtc-nb/backend/config"
 )
 
 func main() {
+
+	// Load environment variables from config file (and .env)
+	config.LoadEnv()
+
 	// Start the Redis client
-	redisClient := chat.NewRedisClient("redis://localhost:6379") // Adjust your Redis URL
+	redisClient := chat.NewRedisClient(os.Getenv("REDIS_SERVER"))
 
 	// Create a new chat server
 	cs := chat.NewChatServer(redisClient)
