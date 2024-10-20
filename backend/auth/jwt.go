@@ -19,16 +19,16 @@ type Header struct {
 }
 
 type Payload struct {
-	UserID string `json:"user_id"`
+	Username string `json:"username"`
 	Expiration int64 `json:"expiration"`
 }
 
 // Encode header & payload as JSON as base64-URL
 // Create a signature using SECRET_KEY
-func createToken (userID string) (string, error) {
+func CreateToken(username string) (string, error) {
 	// Create Go objects
 	header := Header{Type: "JWT", Algorithm: "HS256"}
-	payload := Payload{UserID: userID, Expiration: time.Now().Add(EXPIRE_HOURS * time.Hour).Unix()}
+	payload := Payload{Username: username, Expiration: time.Now().Add(EXPIRE_HOURS * time.Hour).Unix()}
 	
 	// Convert Go objects to JSON
 	headerJSON, _ := json.Marshal(header)
@@ -49,7 +49,7 @@ func createSignature(header, payload string) string {
     return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }
 
-func verifyToken(token string) (Payload, error) {
+func VerifyToken(token string) (Payload, error) {
 	parts := strings.Split(token, ".") // Split token by "."
 	if len(parts) != 3 {
 		return Payload{}, fmt.Errorf("invalid token")

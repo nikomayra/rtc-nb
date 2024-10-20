@@ -7,7 +7,7 @@ import (
 )
 
 func RegisterRoutes(r *mux.Router) {
-    r.HandleFunc("/register", registerHandler).Methods("POST")
-    r.HandleFunc("/login", loginHandler).Methods("POST")
+    r.HandleFunc("/register", register).Methods("POST")
+    r.HandleFunc("/login", login).Methods("POST")
     //r.HandleFunc("/game/state", authMiddleware(getGameStateHandler)).Methods("GET")
 }
