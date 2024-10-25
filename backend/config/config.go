@@ -33,7 +33,7 @@ func LoadEnv() {
         }
         parts := strings.SplitN(line, "=", 2)
         if len(parts) == 2 {
-            log.Printf("Config Loading...Name: %s : Value: %s",parts[0], parts[1])
+            log.Printf("Config Loading...Name: %s",parts[0])
             os.Setenv(parts[0], parts[1]) // Set env var
         }
     }
