@@ -3,7 +3,8 @@ package database
 import (
 	"context"
 	"fmt"
-	"rtc-nb/backend/models"
+	"log"
+	"rtc-nb/backend/internal/models"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -20,7 +21,6 @@ func AddNewUser(user *models.User) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal user: %w", err)
 	}
-
 	// Put the item into the DB table
 	_, err = dbClient.PutItem(context.TODO(), &dynamodb.PutItemInput{
 		TableName: aws.String(UsersTable),
@@ -30,7 +30,7 @@ func AddNewUser(user *models.User) error {
 		return fmt.Errorf("failed to put item in DynamoDB: %w", err)
 	}
 
-	fmt.Println("Successfully added user to DynamoDB")
+	log.Println("Successfully added user to DynamoDB")
 	return nil
 }
 
@@ -61,17 +61,8 @@ func GetUserByUsername(username string) (*models.User, error) {
 		return nil, fmt.Errorf("user not found")
 	}
 
-	fmt.Println("Successfully fetched user from DynamoDB")
+	log.Println("Successfully fetched user from DynamoDB")
 	return &user, nil
-}
-
-func CheckIfUsernameUnique(username string) bool {
-	// TBD Implementation
-	return true
-}
-func GetHashPasswordbyUsername(username string) (string, error) {
-	// TBD Implementation
-	return "password", nil
 }
 
 

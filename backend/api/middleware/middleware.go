@@ -1,80 +1,95 @@
 package middleware
 
 import (
-	"context"
 	"log"
 	"net/http"
-	"rtc-nb/backend/internal/responses"
+	"rtc-nb/backend/api/responses"
+	"rtc-nb/backend/internal/auth"
 	"time"
 )
 
-// Middleware type that wraps http.Handler and returns a new handler
-type Middleware func(http.HandlerFunc) http.HandlerFunc
+// Middleware function type
+type Middleware func(http.Handler) http.Handler
 
-// Chain applies middlewares in reverse order (right to left)
-// This matches the logical order they'll execute in
-func Chain(handler http.HandlerFunc, middlewares ...Middleware) http.HandlerFunc {
-    // Apply in reverse order
+// Chain applies middlewares in reverse order for correct execution
+func Chain(handler http.Handler, middlewares ...Middleware) http.Handler {
     for i := len(middlewares) - 1; i >= 0; i-- {
         handler = middlewares[i](handler)
     }
     return handler
 }
 
-// MethodMiddleware ensures the request uses the correct HTTP method
-func MethodMiddleware(method string) Middleware {
-    return func(next http.HandlerFunc) http.HandlerFunc {
-        return func(w http.ResponseWriter, r *http.Request) {
-            if r.Method != method {
-                responses.ErrorJSON(w, "Method not allowed", http.StatusMethodNotAllowed)
-                return
-            }
-            next(w, r)
-        }
-    }
+// Logger wraps http.ResponseWriter to capture status code
+type responseLogger struct {
+    http.ResponseWriter
+    statusCode int
+}
+
+func (l *responseLogger) WriteHeader(code int) {
+    l.statusCode = code
+    l.ResponseWriter.WriteHeader(code)
 }
 
 // LoggingMiddleware logs request details and timing
-func LoggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
+func LoggingMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         start := time.Now()
         
-        // Create a custom response writer to capture status code
-        rw := responses.NewResponseWriter(w)
+        // Create logging wrapper
+        logger := &responseLogger{w, http.StatusOK}
         
         // Process request
-        next(rw, r)
+        next.ServeHTTP(logger, r)
         
-        // Log after completion
-        duration := time.Since(start)
+        // Log request details
         log.Printf(
             "Method: %s Path: %s Status: %d Duration: %v",
-            r.Method, 
-            r.URL.Path, 
-            rw.StatusCode(), 
-            duration,
+            r.Method,
+            r.URL.Path,
+            logger.statusCode,
+            time.Since(start),
         )
-    }
+    })
 }
 
-// AuthMiddleware handles authentication
-func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
+// AuthMiddleware validates JWT tokens
+func AuthMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         token := r.Header.Get("Authorization")
+        
+        // Check token presence
         if token == "" {
-            responses.ErrorJSON(w, "No authorization token provided", http.StatusUnauthorized)
+            responses.SendError(w, "No authorization token provided", http.StatusUnauthorized)
             return
         }
 
-        // You would validate the token here
-        // userID, err := auth.ValidateToken(token)
-        // if err != nil {
-        //     responses.ErrorJSON(w, "Invalid token", http.StatusUnauthorized)
-        //     return
-        // }
+        // Remove Bearer prefix if present
+        if len(token) > 7 && token[:7] == "Bearer " {
+            token = token[7:]
+        }
 
-        // Store user info in context for handlers
-        ctx := context.WithValue(r.Context(), "userID", "dummy-user-id")
-        next(w, r.WithContext(ctx))
+        // Verify token
+        claims, err := auth.VerifyToken(token)
+        if err != nil {
+            responses.SendError(w, "Invalid or expired token", http.StatusUnauthorized)
+            return
+        }
+
+        // Store user info in context
+        ctx := auth.NewContextWithUser(r.Context(), claims)
+        next.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+
+// MethodMiddleware ensures correct HTTP method
+func MethodMiddleware(method string) Middleware {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            if r.Method != method {
+                responses.SendError(w, "Method not allowed", http.StatusMethodNotAllowed)
+                return
+            }
+            next.ServeHTTP(w, r)
+        })
     }
 }

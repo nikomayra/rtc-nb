@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"rtc-nb/backend/api"
-	"rtc-nb/backend/config"
-	"rtc-nb/backend/database"
+	"rtc-nb/backend/internal/config"
+	"rtc-nb/backend/internal/database"
 )
 
 func main() {
@@ -27,17 +27,17 @@ func main() {
 	// http.HandleFunc("/ws", cs.HandleWebSocket)
 
 	// Create new mux router
-	h := http.NewServeMux()
+	newMuxRouter := http.NewServeMux()
 
 	// Register api routes
-	api.RegisterRoutes(h)
+	api.RegisterRoutes(newMuxRouter)
 
 	// Default route
-	h.HandleFunc("/", api.DefaultRoute)
+	newMuxRouter.HandleFunc("/", api.DefaultRoute)
 
 	// Start the HTTP server
 	log.Println("Server started on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(":8080", newMuxRouter); err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
 }

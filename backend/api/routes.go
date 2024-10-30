@@ -11,14 +11,14 @@ import (
 
 func RegisterRoutes(mux *http.ServeMux) {
     // Public Routes
-    mux.HandleFunc("/login", middleware.Chain(
-        handlers.LoginHandler,
+    mux.Handle("/register", middleware.Chain(
+        http.HandlerFunc(handlers.RegisterHandler),
         middleware.LoggingMiddleware,
         middleware.MethodMiddleware("POST"),
     ))
-
-    mux.HandleFunc("/register", middleware.Chain(
-        handlers.RegisterHandler,
+    
+    mux.Handle("/login", middleware.Chain(
+        http.HandlerFunc(handlers.LoginHandler),
         middleware.LoggingMiddleware,
         middleware.MethodMiddleware("POST"),
     ))
