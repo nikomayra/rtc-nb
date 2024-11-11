@@ -3,39 +3,30 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"rtc-nb/backend/api"
+	"rtc-nb/backend/chat"
 	"rtc-nb/backend/internal/config"
 	"rtc-nb/backend/internal/database"
+	"rtc-nb/backend/redis"
+	"rtc-nb/backend/websocket"
+	"rtc-nb/backend/websocket/connection"
 )
 
 func main() {
 
-	// Load environment variables from config file (and .env)
 	config.LoadEnv()
 
-	// Initial database
 	database.InitDynamoDB()
+	redisClient := redis.NewRedisClient(os.Getenv("REDIS_SERVER"))
+	connectionManager := connection.NewConnectionManager()
+    chatServer := chat.NewChatServer(redisClient, connectionManager)
+	webSocketHandler := websocket.NewWebSocketHandler(redisClient, chatServer, connectionManager)
 
-	// Start the Redis client
-	// redisClient := chat.NewRedisClient(os.Getenv("REDIS_SERVER"))
-
-	// // Create a new chat server
-	// cs := chat.NewChatServer(redisClient)
-
-	// // Set up WebSocket route
-	// http.HandleFunc("/ws", cs.HandleWebSocket)
-
-	// Create new mux router
 	newMuxRouter := http.NewServeMux()
+	api.RegisterRoutes(newMuxRouter, webSocketHandler, chatServer)
 
-	// Register api routes
-	api.RegisterRoutes(newMuxRouter)
-
-	// Default route
-	newMuxRouter.HandleFunc("/", api.DefaultRoute)
-
-	// Start the HTTP server
 	log.Println("Server started on :8080")
 	if err := http.ListenAndServe(":8080", newMuxRouter); err != nil {
 		log.Fatal("ListenAndServe: ", err)

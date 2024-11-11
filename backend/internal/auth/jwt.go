@@ -28,16 +28,16 @@ type Claims struct {
 
 // contextKey type for context values
 type contextKey string
-const userContextKey contextKey = "user"
+const UserContextKey contextKey = "user"
 
 // NewContextWithUser stores user claims in context
 func NewContextWithUser(ctx context.Context, claims Claims) context.Context {
-    return context.WithValue(ctx, userContextKey, claims)
+    return context.WithValue(ctx, UserContextKey, claims)
 }
 
 // UserFromContext retrieves user claims from context
 func UserFromContext(ctx context.Context) (Claims, error) {
-    claims, ok := ctx.Value(userContextKey).(Claims)
+    claims, ok := ctx.Value(UserContextKey).(Claims)
     if !ok {
         return Claims{}, fmt.Errorf("no user in context")
     }

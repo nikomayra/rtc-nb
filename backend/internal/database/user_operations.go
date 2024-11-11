@@ -24,7 +24,7 @@ func AddNewUser(user *models.User) error {
 	// Put the item into the DB table
 	_, err = dbClient.PutItem(context.TODO(), &dynamodb.PutItemInput{
 		TableName: aws.String(UsersTable),
-		Item: item,
+		Item:      item,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to put item in DynamoDB: %w", err)
@@ -64,5 +64,3 @@ func GetUserByUsername(username string) (*models.User, error) {
 	log.Println("Successfully fetched user from DynamoDB")
 	return &user, nil
 }
-
-
