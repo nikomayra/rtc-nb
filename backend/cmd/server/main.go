@@ -18,10 +18,15 @@ func main() {
 
 	config.LoadEnv()
 
-	database.InitDynamoDB()
+	db := database.GetDB()
+	if err := database.PrepareStatements(db); err != nil {
+		log.Fatal(err)
+	}
+	defer database.CloseStatements()
+
 	redisClient := redis.NewRedisClient(os.Getenv("REDIS_SERVER"))
 	connectionManager := connection.NewConnectionManager()
-    chatServer := chat.NewChatServer(redisClient, connectionManager)
+	chatServer := chat.NewChatServer(redisClient, connectionManager)
 	webSocketHandler := websocket.NewWebSocketHandler(redisClient, chatServer, connectionManager)
 
 	newMuxRouter := http.NewServeMux()

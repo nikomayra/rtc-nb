@@ -42,7 +42,7 @@ func (h *Handlers) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check DB to see if username already is taken
-	storedUser, err := database.GetUserByUsername(req.Username)
+	storedUser, err := database.GetUser(req.Username)
 	if err == nil && storedUser != nil {
 		responses.SendError(w, "Username already taken", http.StatusConflict)
 		return
@@ -60,7 +60,7 @@ func (h *Handlers) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	user := models.NewUser(req.Username, hashedPassword)
 	//TODO: Will need some sort of race condition protection to avoid two users with same name registering
 	// Add new user to database
-	if err := database.AddNewUser(user); err != nil {
+	if err := database.AddUser(user); err != nil {
 		log.Printf("error adding new user %s to database: %v", req.Username, err)
 		responses.SendError(w, "Failed to add new user", http.StatusInternalServerError)
 		return
@@ -100,7 +100,7 @@ func (h *Handlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Retrieve user from DB
-	storedUser, err := database.GetUserByUsername(req.Username)
+	storedUser, err := database.GetUser(req.Username)
 	if err != nil {
 		log.Printf("Error fetching user by username: %v", err)
 		responses.SendError(w, "Invalid credentials", http.StatusUnauthorized)
