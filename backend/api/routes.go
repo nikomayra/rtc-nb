@@ -12,41 +12,56 @@ import (
 )
 
 func RegisterRoutes(mux *http.ServeMux, wsh *websocket.WebSocketHandler, chatServer *chat.ChatServer) {
+	// Create a subrouter for /api
+	apiHandler := http.NewServeMux()
 
-    handlers := handlers.NewHandlers(chatServer)
+	// Strip /api prefix and forward to apiHandler
+	mux.Handle("/api/", http.StripPrefix("/api", apiHandler))
 
-	// Default route
-	mux.HandleFunc("/", defaultRoute)
+	handlers := handlers.NewHandlers(chatServer)
 
-    // Public Routes
-    mux.Handle("/register", middleware.Chain(
-        http.HandlerFunc(handlers.RegisterHandler),
-        middleware.LoggingMiddleware,
-        middleware.MethodMiddleware("POST"),
-    ))
-    
-    mux.Handle("/login", middleware.Chain(
-        http.HandlerFunc(handlers.LoginHandler),
-        middleware.LoggingMiddleware,
-        middleware.MethodMiddleware("POST"),
-    ))
+	// Register routes without /api prefix
+	apiHandler.HandleFunc("/", defaultRoute)
 
-    // Protected routes
-    mux.Handle("/ws", middleware.Chain(
-        http.HandlerFunc(wsh.HandleWebSocket),
-        middleware.AuthMiddleware,
-        middleware.LoggingMiddleware,
-    ))
-    
-    mux.Handle("/joinchannel", middleware.Chain(
-        http.HandlerFunc(handlers.JoinChannelHandler),
-        middleware.AuthMiddleware,
-        middleware.LoggingMiddleware,
-    ))
+	apiHandler.Handle("/register", middleware.Chain(
+		http.HandlerFunc(handlers.RegisterHandler),
+		middleware.LoggingMiddleware,
+		middleware.MethodMiddleware("POST"),
+	))
 
+	apiHandler.Handle("/login", middleware.Chain(
+		http.HandlerFunc(handlers.LoginHandler),
+		middleware.LoggingMiddleware,
+		middleware.MethodMiddleware("POST"),
+	))
+
+	apiHandler.Handle("/ws", middleware.Chain(
+		http.HandlerFunc(wsh.HandleWebSocket),
+		middleware.AuthMiddleware,
+		middleware.LoggingMiddleware,
+	))
+
+	apiHandler.Handle("/joinchannel", middleware.Chain(
+		http.HandlerFunc(handlers.JoinChannelHandler),
+		middleware.AuthMiddleware,
+		middleware.LoggingMiddleware,
+	))
+
+	apiHandler.Handle("/createchannel", middleware.Chain(
+		http.HandlerFunc(handlers.CreateChannelHandler),
+		middleware.AuthMiddleware,
+		middleware.LoggingMiddleware,
+	))
+
+	apiHandler.Handle("/channels", middleware.Chain(
+		http.HandlerFunc(handlers.GetChannelsHandler),
+		middleware.AuthMiddleware,
+		middleware.LoggingMiddleware,
+		middleware.MethodMiddleware("GET"),
+	))
 }
 
 func defaultRoute(w http.ResponseWriter, r *http.Request) {
-    log.Printf("Served: %s", r.URL.Path)
-    w.Write([]byte("Welcome to the server!"))
+	log.Printf("Served: %s", r.URL.Path)
+	w.Write([]byte("Welcome to the server!"))
 }

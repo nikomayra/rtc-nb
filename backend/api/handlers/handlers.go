@@ -58,7 +58,7 @@ func (h *Handlers) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create new user
 	user := models.NewUser(req.Username, hashedPassword)
-	//TODO: Will need some sort of race condition protection to avoid two users with same name registering
+
 	// Add new user to database
 	if err := database.AddUser(user); err != nil {
 		log.Printf("error adding new user %s to database: %v", req.Username, err)
@@ -75,7 +75,7 @@ func (h *Handlers) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Success response
-	responses.SendJSON(w, map[string]interface{}{
+	responses.SendSuccess(w, map[string]interface{}{
 		"token":    token,
 		"username": req.Username,
 	}, http.StatusCreated)
@@ -122,7 +122,7 @@ func (h *Handlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send success response with JWT
-	responses.SendJSON(w, map[string]interface{}{
+	responses.SendSuccess(w, map[string]interface{}{
 		"token":    token,
 		"username": req.Username,
 	}, http.StatusOK)
@@ -130,9 +130,9 @@ func (h *Handlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Username        string  `json:"username"`
-		ChannelName     string  `json:"channel-name"`
-		ChannelPassword *string `json:"channel-password"` //optional
+		//Username        string  `json:"username"`
+		ChannelName     string  `json:"channelName"`
+		ChannelPassword *string `json:"channelPassword"` //optional
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -140,19 +140,25 @@ func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Username == "" || req.ChannelName == "" {
-		responses.SendError(w, "username and channel name required", http.StatusBadRequest)
+	if req.ChannelName == "" {
+		responses.SendError(w, "channel name required", http.StatusBadRequest)
 		return
 	}
 
-	h.chatServer.JoinChannel(req.Username, req.ChannelName, req.ChannelPassword)
+	username := r.Context().Value(auth.UserContextKey).(auth.Claims).Username
+	err := h.chatServer.JoinChannel(username, req.ChannelName, req.ChannelPassword)
+	if err != nil {
+		responses.SendError(w, fmt.Sprintf("Failed to join channel: %v", err), http.StatusInternalServerError)
+		return
+	}
 
-	responses.SendJSON(w, fmt.Sprintf("Joined Channel: %s", req.ChannelName), http.StatusOK)
+	responses.SendSuccess(w, fmt.Sprintf("Joined Channel: %s", req.ChannelName), http.StatusOK)
 }
 
+// TODO: maybe I should make them send Username in the request body so I can validate username/token combination..?
 func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Username           string  `json:"username"`
+		// Username           string  `json:"username"`
 		ChannelName        string  `json:"channelName"`
 		ChannelDescription *string `json:"channelDescription"`
 		ChannelPassword    *string `json:"channelPassword"` //optional
@@ -163,12 +169,27 @@ func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if req.Username == "" || req.ChannelName == "" {
-		responses.SendError(w, "username and channel name required", http.StatusBadRequest)
+	if req.ChannelName == "" {
+		responses.SendError(w, "channel name required", http.StatusBadRequest)
 		return
 	}
 
-	h.chatServer.CreateChannel(req.ChannelName, req.Username, req.ChannelDescription, req.ChannelPassword)
+	username := r.Context().Value(auth.UserContextKey).(auth.Claims).Username
+	err := h.chatServer.CreateChannel(req.ChannelName, username, req.ChannelDescription, req.ChannelPassword)
+	if err != nil {
+		responses.SendError(w, fmt.Sprintf("Failed to create channel: %v", err), http.StatusInternalServerError)
+		return
+	}
 
-	responses.SendJSON(w, fmt.Sprintf("Joined Channel: %s", req.ChannelName), http.StatusOK)
+	channel := h.chatServer.GetChannels()[req.ChannelName]
+	responses.SendSuccess(w, channel, http.StatusOK)
+}
+
+func (h *Handlers) GetChannelsHandler(w http.ResponseWriter, r *http.Request) {
+	channels := make([]models.Channel, 0)
+	for _, channel := range h.chatServer.GetChannels() {
+		channels = append(channels, *channel)
+	}
+
+	responses.SendSuccess(w, channels, http.StatusOK)
 }

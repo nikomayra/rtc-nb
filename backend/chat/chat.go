@@ -76,20 +76,25 @@ func (cs *ChatServer) LeaveChannel(username, channelName string) {
 }
 
 func (cs *ChatServer) JoinChannel(username, channelName string, password *string) error {
+	channel, exists := cs.channels[channelName]
+	if !exists {
+		return fmt.Errorf("channel %s does not exist", channelName)
+	}
 
-	if cs.channels[channelName].Password != password {
-		return fmt.Errorf("incorrect channel password")
+	// Check password only if channel has one
+	if channel.Password != nil {
+		if password == nil || *channel.Password != *password {
+			return fmt.Errorf("incorrect channel password")
+		}
 	}
 
 	subChannel, err := cs.redisClient.Subscribe(channelName)
 	if err != nil {
-		log.Printf("Error subscribing to Redis channel %s: %v", channelName, err)
-		return nil
+		return fmt.Errorf("error subscribing to redis channel %s: %v", channelName, err)
 	}
 
 	go func() {
 		for msg := range subChannel {
-			// Handle the incoming message from Redis
 			cs.handleRedisMessage(msg.Payload)
 		}
 	}()
@@ -135,4 +140,8 @@ func (cs *ChatServer) handleRedisMessage(messageJSON string) {
 			}
 		}
 	}
+}
+
+func (cs *ChatServer) GetChannels() map[string]*models.Channel {
+	return cs.channels
 }

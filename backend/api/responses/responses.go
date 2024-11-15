@@ -7,42 +7,36 @@ import (
 
 // APIResponse represents our standard response structure
 type APIResponse struct {
-    Success bool        `json:"success"`
-    Data    interface{} `json:"data,omitempty"`
-    Error   *APIError   `json:"error,omitempty"`
+	Success bool        `json:"success"`
+	Data    interface{} `json:"data,omitempty"`
+	Error   *APIError   `json:"error,omitempty"`
 }
 
 // APIError represents error details
 type APIError struct {
-    Message string `json:"message"`
-    Code    int    `json:"code"`
+	Message string `json:"message"`
+	Code    int    `json:"code"`
 }
 
-// SendJSON sends a success response
 func SendJSON(w http.ResponseWriter, data interface{}, status int) {
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(status)
-    
-    response := APIResponse{
-        Success: true,
-        Data:    data,
-    }
-    
-    json.NewEncoder(w).Encode(response)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
 }
 
-// SendError sends an error response
+func SendSuccess(w http.ResponseWriter, data interface{}, status int) {
+	SendJSON(w, APIResponse{
+		Success: true,
+		Data:    data,
+	}, status)
+}
+
 func SendError(w http.ResponseWriter, message string, status int) {
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(status)
-    
-    response := APIResponse{
-        Success: false,
-        Error: &APIError{
-            Message: message,
-            Code:    status,
-        },
-    }
-    
-    json.NewEncoder(w).Encode(response)
+	SendJSON(w, APIResponse{
+		Success: false,
+		Error: &APIError{
+			Message: message,
+			Code:    status,
+		},
+	}, status)
 }
