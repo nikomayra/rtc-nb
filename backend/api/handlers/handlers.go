@@ -145,8 +145,13 @@ func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username := r.Context().Value(auth.UserContextKey).(auth.Claims).Username
-	err := h.chatServer.JoinChannel(username, req.ChannelName, req.ChannelPassword)
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		log.Println("ERROR: No claims found in context")
+		return
+	}
+
+	err := h.chatServer.JoinChannel(claims.Username, req.ChannelName, req.ChannelPassword)
 	if err != nil {
 		responses.SendError(w, fmt.Sprintf("Failed to join channel: %v", err), http.StatusInternalServerError)
 		return
@@ -174,7 +179,7 @@ func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	username := r.Context().Value(auth.UserContextKey).(auth.Claims).Username
+	username := r.Context().Value(auth.ClaimsContextKey).(auth.Claims).Username
 	err := h.chatServer.CreateChannel(req.ChannelName, username, req.ChannelDescription, req.ChannelPassword)
 	if err != nil {
 		responses.SendError(w, fmt.Sprintf("Failed to create channel: %v", err), http.StatusInternalServerError)

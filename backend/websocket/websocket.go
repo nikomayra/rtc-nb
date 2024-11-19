@@ -3,11 +3,11 @@ package websocket
 // WebSocket message handling logic
 
 import (
-	//"encoding/json"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"rtc-nb/backend/api/responses"
 	"rtc-nb/backend/chat"
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/models"
@@ -37,47 +37,29 @@ func NewWebSocketHandler(redisClient *redis.RedisClient, chatServer *chat.ChatSe
 	}
 }
 
-func authorizeWebSocketRequest(w http.ResponseWriter, r *http.Request) (string, error) {
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		http.Error(w, "Unauthorized: No authorization token provided", http.StatusUnauthorized)
-		return "", fmt.Errorf("no authorization token provided")
-	}
-	if len(token) > 7 && token[:7] == "Bearer " {
-		token = token[7:]
-	}
-
-	claims, err := auth.VerifyToken(token)
-	if err != nil {
-		http.Error(w, "Unauthorized: Invalid or expired token", http.StatusUnauthorized)
-		return "", fmt.Errorf("no authorization token provided")
-	}
-
-	return claims.Username, nil
-}
-
 func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
-	username, err := authorizeWebSocketRequest(w, r)
-	if err != nil {
-		log.Println("Error authorizing websocket request:", err)
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		log.Println("ERROR: No claims found in context")
 		return
 	}
 
 	conn, err := wsh.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Error during WebSocket connection upgrade:", err)
+		log.Printf("Error during WebSocket connection upgrade: %v", err)
+		responses.SendError(w, fmt.Sprintf("Error during WebSocket connection upgrade: %v", err), http.StatusInternalServerError)
 		return
 	}
 	defer conn.Close()
 
 	log.Printf("New WebSocket connection established: %s\n", r.URL.Path)
 
-	wsh.connectionManager.AddConnection(username, conn)
+	wsh.connectionManager.AddConnection(claims.Username, conn)
 
 	for {
 		// Read messages from WebSocket connection
-		wsh.handleMessages(conn, username)
+		wsh.handleMessages(conn, claims.Username)
 
 	}
 

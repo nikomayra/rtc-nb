@@ -88,6 +88,10 @@ func (cs *ChatServer) JoinChannel(username, channelName string, password *string
 		}
 	}
 
+	if helpers.StringInSlice(username, cs.channels[channelName].Users) {
+		return fmt.Errorf("already in channel %s", channelName)
+	}
+
 	subChannel, err := cs.redisClient.Subscribe(channelName)
 	if err != nil {
 		return fmt.Errorf("error subscribing to redis channel %s: %v", channelName, err)

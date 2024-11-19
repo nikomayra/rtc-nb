@@ -20,7 +20,7 @@ func RegisterRoutes(mux *http.ServeMux, wsh *websocket.WebSocketHandler, chatSer
 
 	handlers := handlers.NewHandlers(chatServer)
 
-	// Register routes without /api prefix
+	// Unprotected routes
 	apiHandler.HandleFunc("/", defaultRoute)
 
 	apiHandler.Handle("/register", middleware.Chain(
@@ -35,6 +35,7 @@ func RegisterRoutes(mux *http.ServeMux, wsh *websocket.WebSocketHandler, chatSer
 		middleware.MethodMiddleware("POST"),
 	))
 
+	// Protected routes
 	apiHandler.Handle("/ws", middleware.Chain(
 		http.HandlerFunc(wsh.HandleWebSocket),
 		middleware.AuthMiddleware,

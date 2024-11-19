@@ -33,7 +33,7 @@ func NewChannel(name, creator string, description, password *string) *Channel {
 		Password:    password,
 		Description: description,
 		CreatedAt:   time.Now(),
-		Users:       []string{creator},
+		Users:       []string{},
 		Admins:      []string{creator},
 	}
 }

@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -14,72 +13,47 @@ import (
 
 // Custom errors
 var (
-    ErrInvalidToken     = fmt.Errorf("invalid token format")
-    ErrExpiredToken     = fmt.Errorf("token has expired")
-    ErrInvalidSignature = fmt.Errorf("invalid token signature")
+	ErrInvalidToken     = fmt.Errorf("invalid token format")
+	ErrExpiredToken     = fmt.Errorf("token has expired")
+	ErrInvalidSignature = fmt.Errorf("invalid token signature")
 )
-
-// Claims represents the JWT payload
-type Claims struct {
-    Username    string    `json:"username"`
-    ExpiresAt   time.Time `json:"exp"`
-    IssuedAt    time.Time `json:"iat"`
-}
-
-// contextKey type for context values
-type contextKey string
-const UserContextKey contextKey = "user"
-
-// NewContextWithUser stores user claims in context
-func NewContextWithUser(ctx context.Context, claims Claims) context.Context {
-    return context.WithValue(ctx, UserContextKey, claims)
-}
-
-// UserFromContext retrieves user claims from context
-func UserFromContext(ctx context.Context) (Claims, error) {
-    claims, ok := ctx.Value(UserContextKey).(Claims)
-    if !ok {
-        return Claims{}, fmt.Errorf("no user in context")
-    }
-    return claims, nil
-}
 
 // CreateToken generates a new JWT
 func CreateToken(username string) (string, error) {
-    now := time.Now()
-    claims := Claims{
-        Username:  username,
-        IssuedAt:  now,
-        ExpiresAt: now.Add(24 * time.Hour),
-    }
-    
-    // Convert claims to JSON
-    payload, err := json.Marshal(claims)
-    if err != nil {
-        return "", err
-    }
+	now := time.Now()
+	claims := Claims{
+		Username:  username,
+		IssuedAt:  now,
+		ExpiresAt: now.Add(24 * time.Hour),
+	}
 
-    // Create header
-    header := map[string]string{
-        "typ": "JWT",
-        "alg": "HS256",
-    }
-    headerJSON, _ := json.Marshal(header)
+	// Convert claims to JSON
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
 
-    // Encode header and payload
-    headerEncoded := base64.RawURLEncoding.EncodeToString(headerJSON)
-    payloadEncoded := base64.RawURLEncoding.EncodeToString(payload)
+	// Create header
+	header := map[string]string{
+		"typ": "JWT",
+		"alg": "HS256",
+	}
+	headerJSON, _ := json.Marshal(header)
 
-    // Create signature
-    signature := createSignature(headerEncoded, payloadEncoded)
-    
-    return fmt.Sprintf("%s.%s.%s", headerEncoded, payloadEncoded, signature), nil
+	// Encode header and payload
+	headerEncoded := base64.RawURLEncoding.EncodeToString(headerJSON)
+	payloadEncoded := base64.RawURLEncoding.EncodeToString(payload)
+
+	// Create signature
+	signature := createSignature(headerEncoded, payloadEncoded)
+
+	return fmt.Sprintf("%s.%s.%s", headerEncoded, payloadEncoded, signature), nil
 }
 
 func createSignature(header, payload string) string {
-    h := hmac.New(sha256.New, []byte(os.Getenv("SECRET_KEY")))
-    h.Write([]byte(fmt.Sprintf("%s.%s", header, payload)))
-    return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+	h := hmac.New(sha256.New, []byte(os.Getenv("SECRET_KEY")))
+	h.Write([]byte(fmt.Sprintf("%s.%s", header, payload)))
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }
 
 func VerifyToken(token string) (Claims, error) {
