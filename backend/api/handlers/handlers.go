@@ -70,7 +70,7 @@ func (h *Handlers) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.CreateToken(req.Username)
 	if err != nil {
 		log.Printf("error generating token for user %s: %v", req.Username, err)
-		responses.SendError(w, "Error generating token", http.StatusInternalServerError)
+		responses.SendError(w, "Error processing request", http.StatusInternalServerError)
 		return
 	}
 

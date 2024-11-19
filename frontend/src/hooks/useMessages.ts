@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { messagesApi } from '../api/messages';
+import { messagesApi } from '../api/messagesApi';
 import { Message } from '../types/interfaces';
 import { useAuth } from './useAuth';
 

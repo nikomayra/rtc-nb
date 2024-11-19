@@ -33,6 +33,7 @@ func NewWebSocketHandler(redisClient *redis.RedisClient, chatServer *chat.ChatSe
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Allow connections from any origin
 			},
+			Subprotocols: []string{"Authentication"},
 		},
 	}
 }

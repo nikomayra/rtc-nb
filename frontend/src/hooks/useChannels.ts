@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { channelsApi } from '../api/channels';
+import { channelsApi } from '../api/channelsApi';
 import { Channel, ChannelSchema } from '../types/interfaces';
 import { useAuth } from './useAuth';
 import { z } from 'zod';

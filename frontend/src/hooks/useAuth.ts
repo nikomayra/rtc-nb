@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { authApi } from '../api/auth';
+import { authApi } from '../api/authApi';
 
 export const useAuth = () => {
   const [token, setToken] = useState<string>('');
@@ -27,11 +27,14 @@ export const useAuth = () => {
         sessionStorage.setItem('token', response.data.token);
         sessionStorage.setItem('username', username);
       } else {
-        const serverErrorMessage = `${response.error?.message} + ${response.error?.code}`;
+        const serverErrorMessage = `${response.error?.message}, Code: ${response.error?.code}`;
         throw new Error(serverErrorMessage || 'Login failed');
       }
     } catch (error) {
       console.error('Login failed:', error);
+      setToken('');
+      setUsername('');
+      setIsLoggedIn(false);
       throw error;
     }
   };
@@ -49,21 +52,24 @@ export const useAuth = () => {
         sessionStorage.setItem('token', response.data.token);
         sessionStorage.setItem('username', username);
       } else {
-        const serverErrorMessage = `${response.error?.message} + ${response.error?.code}`;
+        const serverErrorMessage = `${response.error?.message}, Code: ${response.error?.code}`;
         throw new Error(serverErrorMessage || 'Registration failed');
       }
     } catch (error) {
       console.error('Registration failed:', error);
+      setToken('');
+      setUsername('');
+      setIsLoggedIn(false);
       throw error;
     }
   };
 
   const logout = () => {
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('username');
     setToken('');
     setUsername('');
     setIsLoggedIn(false);
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('username');
   };
 
   return {
