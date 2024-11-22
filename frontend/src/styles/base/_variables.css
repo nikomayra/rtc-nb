@@ -1,11 +1,13 @@
 :root {
   /* Colors */
-  --primary-color: #646cff;
+  --primary-color: #24265b;
   --primary-hover: #535bf2;
   --bg-dark: #242424;
   --bg-light: #ffffff;
   --text-dark: #213547;
   --text-light: rgba(255, 255, 255, 0.87);
+  --border-light: #2c64e6;
+  --border-dark: #17359f;
 
   /* Spacing */
   --spacing-xs: 0.25rem;

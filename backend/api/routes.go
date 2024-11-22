@@ -46,12 +46,14 @@ func RegisterRoutes(mux *http.ServeMux, wsh *websocket.WebSocketHandler, chatSer
 		http.HandlerFunc(handlers.JoinChannelHandler),
 		middleware.AuthMiddleware,
 		middleware.LoggingMiddleware,
+		middleware.MethodMiddleware("POST"),
 	))
 
 	apiHandler.Handle("/createchannel", middleware.Chain(
 		http.HandlerFunc(handlers.CreateChannelHandler),
 		middleware.AuthMiddleware,
 		middleware.LoggingMiddleware,
+		middleware.MethodMiddleware("POST"),
 	))
 
 	apiHandler.Handle("/channels", middleware.Chain(

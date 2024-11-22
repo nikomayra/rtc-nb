@@ -7,7 +7,7 @@
 
 .app-container {
   display: flex;
-  height: auto;
+  height: 100vh;
   width: 80%;
   margin: 0 auto;
   background: var(--bg-dark);
@@ -26,17 +26,17 @@
 @media (max-width: 768px) {
   .app-container {
     flex-direction: column;
+    height: 100vh;
   }
 
   .channels-container {
     width: 100%;
     height: auto;
     border-right: none;
-    border-bottom: 1px solid var(--primary-color);
+    border-bottom: 1px solid var(--border-light);
   }
 
   .messages-container {
-    height: 0;
-    min-height: 60vh;
+    height: auto;
   }
 }

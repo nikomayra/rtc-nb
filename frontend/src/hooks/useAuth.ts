@@ -13,7 +13,9 @@ export const useAuth = () => {
     if (storedToken && storedUsername) {
       setToken(storedToken);
       setUsername(storedUsername);
-      setIsLoggedIn(true);
+      setIsLoggedIn(true); //TODO: check if token is valid and not expired
+    } else {
+      setIsLoggedIn(false);
     }
   }, []);
 

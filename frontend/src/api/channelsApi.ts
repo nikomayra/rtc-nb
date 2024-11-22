@@ -6,11 +6,16 @@ export const channelsApi = {
   create: async (
     channelName: string,
     description: string,
+    password: string | undefined,
     token: string
   ): Promise<APIResponse<Channel>> => {
     const res = await axios.post(
       `${BASE_URL}/createchannel`,
-      { channelName, channelDescription: description },
+      {
+        channelName: channelName,
+        channelDescription: description,
+        channelPassword: password,
+      },
       { headers: { Authorization: `Bearer ${token}` } }
     );
     return res.data;
@@ -18,11 +23,12 @@ export const channelsApi = {
 
   join: async (
     channelName: string,
+    password: string | undefined,
     token: string
   ): Promise<APIResponse<void>> => {
     const res = await axios.post(
       `${BASE_URL}/joinchannel`,
-      { channelName, channelPassword: null },
+      { channelName: channelName, channelPassword: password },
       { headers: { Authorization: `Bearer ${token}` } }
     );
     return res.data;

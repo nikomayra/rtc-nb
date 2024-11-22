@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 export const ChannelSchema = z.object({
   name: z.string(),
-  description: z.string().nullable().optional(),
+  password: z.string().optional(),
+  description: z.string().optional(),
   createdAt: z.string(),
   users: z.array(z.string()),
   admins: z.array(z.string()),

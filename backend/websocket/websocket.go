@@ -40,9 +40,14 @@ func NewWebSocketHandler(redisClient *redis.RedisClient, chatServer *chat.ChatSe
 
 func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
+	if _, ok := w.(http.Hijacker); !ok {
+		responses.SendError(w, "WebSocket not supported", http.StatusInternalServerError)
+		return
+	}
+
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {
-		log.Println("ERROR: No claims found in context")
+		fmt.Println("ERROR: No claims found in context")
 		return
 	}
 
@@ -60,18 +65,21 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 
 	for {
 		// Read messages from WebSocket connection
-		wsh.handleMessages(conn, claims.Username)
-
+		err := wsh.handleMessages(conn, claims.Username)
+		if err != nil {
+			log.Println("Error handling WebSocket message:", err)
+			break
+		}
 	}
 
 }
 
-func (wsh *WebSocketHandler) handleMessages(conn *websocket.Conn, username string) {
+func (wsh *WebSocketHandler) handleMessages(conn *websocket.Conn, username string) error {
 	_, messageBytes, err := conn.ReadMessage()
 	if err != nil {
-		log.Println("Error reading WebSocket message:", err)
+		//log.Println("Error reading WebSocket message:", err)
 		wsh.connectionManager.RemoveConnection(username)
-		return
+		return fmt.Errorf("error reading WebSocket message: %v", err)
 	}
 
 	var msgPayload struct {
@@ -83,7 +91,7 @@ func (wsh *WebSocketHandler) handleMessages(conn *websocket.Conn, username strin
 	}
 	if err := json.Unmarshal(messageBytes, &msgPayload); err != nil {
 		log.Println("Invalid message format:", err)
-		return
+		return fmt.Errorf("invalid message format: %v", err)
 	}
 
 	var message *models.Message
@@ -95,8 +103,9 @@ func (wsh *WebSocketHandler) handleMessages(conn *websocket.Conn, username strin
 	// Add cases for other message types
 	default:
 		log.Println("Unknown message type received:", msgPayload.Type)
-		return
+		return fmt.Errorf("unknown message type received: %v", msgPayload.Type)
 	}
 
 	wsh.chatServer.HandleWebsocketMessage(message)
+	return nil
 }

@@ -38,7 +38,19 @@ func (cs *ChatServer) CreateChannel(name, username string, description, password
 
 	channel := models.NewChannel(name, username, description, password)
 	cs.channels[channel.Name] = channel
-	log.Printf("Created channel %s\n", channel.Name)
+
+	subChannel, err := cs.redisClient.Subscribe(channel.Name)
+	if err != nil {
+		return fmt.Errorf("error subscribing to redis channel %s: %v", channel.Name, err)
+	}
+
+	go func() {
+		for msg := range subChannel {
+			cs.handleRedisMessage(msg.Payload)
+		}
+	}()
+
+	log.Printf("Created channel and subscribed to redis channel %s\n", channel.Name)
 
 	return nil
 }
@@ -92,17 +104,6 @@ func (cs *ChatServer) JoinChannel(username, channelName string, password *string
 		return fmt.Errorf("already in channel %s", channelName)
 	}
 
-	subChannel, err := cs.redisClient.Subscribe(channelName)
-	if err != nil {
-		return fmt.Errorf("error subscribing to redis channel %s: %v", channelName, err)
-	}
-
-	go func() {
-		for msg := range subChannel {
-			cs.handleRedisMessage(msg.Payload)
-		}
-	}()
-
 	cs.channels[channelName].Users = append(cs.channels[channelName].Users, username)
 	log.Printf("Client, ID: %s joined channel %s.\n", username, channelName)
 
@@ -130,7 +131,7 @@ func (cs *ChatServer) handleRedisMessage(messageJSON string) {
 		log.Println("Error unmarshaling Redis message:", err)
 		return
 	}
-
+	//log.Printf("Users in channel %s: %v", message.ChannelName, cs.channels[message.ChannelName].Users)
 	for _, username := range cs.channels[message.ChannelName].Users {
 		if conn, ok := cs.connectionManager.GetConnection(username); ok {
 			messageToSend, err := json.Marshal(message)
@@ -138,10 +139,10 @@ func (cs *ChatServer) handleRedisMessage(messageJSON string) {
 				log.Println("Error marshaling message for WebSocket:", err)
 				continue
 			}
-
 			if err := conn.WriteMessage(websocket.TextMessage, messageToSend); err != nil {
 				log.Printf("Error writing message to client %s: %v", username, err)
 			}
+			//log.Printf("Sent message to client %s: %s", username, messageToSend)
 		}
 	}
 }

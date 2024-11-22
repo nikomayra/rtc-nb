@@ -1,7 +1,10 @@
 package middleware
 
 import (
+	"bufio"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/textproto"
 	"rtc-nb/backend/api/responses"
@@ -31,10 +34,18 @@ type responseLogger struct {
 
 func (l *responseLogger) WriteHeader(code int) {
 	if !l.written {
-		l.statusCode = code
 		l.ResponseWriter.WriteHeader(code)
+		l.statusCode = code
 		l.written = true
 	}
+}
+
+func (l *responseLogger) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := l.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("responseWriter doesn't support hijacking")
+	}
+	return hijacker.Hijack()
 }
 
 // LoggingMiddleware logs request details and timing
@@ -66,8 +77,6 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		// Check if this is a WebSocket upgrade request
 		if helpers.IsWebSocketRequest(r) {
-			// For WebSocket, get token from URL query parameter
-			// token = r.URL.Query().Get("token")
 			protocolHeader := textproto.CanonicalMIMEHeaderKey("Sec-WebSocket-Protocol")
 			token = strings.TrimSpace(strings.Split(r.Header.Get(protocolHeader), ",")[1])
 		} else {
@@ -87,6 +96,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		// Verify token
 		claims, err := auth.VerifyToken(token)
+		//log.Printf("AuthMiddleware Claims: %v\n", claims)
 		if err != nil {
 			responses.SendError(w, "Invalid or expired token", http.StatusUnauthorized)
 			return

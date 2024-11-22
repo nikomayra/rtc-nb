@@ -1,26 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
 import { messagesApi } from '../api/messagesApi';
 import { Message } from '../types/interfaces';
-import { useAuth } from './useAuth';
+import { useAuthContext } from './useAuthContext';
 
 export const useMessages = (channelName: string) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const { token } = useAuth();
+  const { token } = useAuthContext();
 
   useEffect(() => {
     if (!token || !channelName) return;
 
-    let ws: WebSocket;
-
-    const connect = async () => {
+    const setupWebSocket = async () => {
       try {
-        ws = await messagesApi.connectWebSocket(token);
+        const ws = await messagesApi.connectWebSocket(token);
 
         ws.onmessage = (event) => {
           const message = JSON.parse(event.data);
           setMessages((prev) => [...prev, message]);
-          console.log('WebSocket message received:', message);
         };
 
         ws.onopen = () => {
@@ -28,22 +25,20 @@ export const useMessages = (channelName: string) => {
           console.log('WebSocket connection opened');
         };
 
-        ws.onclose = (event) => {
+        ws.onclose = () => {
           setIsConnected(false);
-          console.log('WebSocket connection closed:', event.code, event.reason);
+          console.log('WebSocket connection closed');
         };
       } catch (error) {
         console.error('WebSocket connection failed:', error);
         setIsConnected(false);
       }
     };
-
-    connect();
+    console.log('Setting up WebSocket');
+    setupWebSocket();
 
     return () => {
-      if (ws) {
-        ws.close();
-      }
+      messagesApi.closeConnection();
     };
   }, [token, channelName]);
 

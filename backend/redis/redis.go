@@ -62,5 +62,6 @@ func (r *RedisClient) UnSubscribe(channel string) error {
 }
 
 func (r *RedisClient) Publish(channel string, messsage string) error {
+	//log.Println("Publishing message to channel:", channel)
 	return r.client.Publish(ctx, channel, messsage).Err()
 }

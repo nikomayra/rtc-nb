@@ -1,4 +1,4 @@
-import { useChannels } from '../../hooks/useChannels';
+import { useChannelContext } from '../../hooks/useChannelContext';
 import { useMessages } from '../../hooks/useMessages';
 import { MessageContext } from '../../contexts/messageContext';
 export const MessageProvider = ({
@@ -6,7 +6,7 @@ export const MessageProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const channels = useChannels();
+  const channels = useChannelContext();
   const messages = useMessages(channels.currentChannel);
 
   return (

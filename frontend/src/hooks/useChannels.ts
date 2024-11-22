@@ -1,13 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import { channelsApi } from '../api/channelsApi';
 import { Channel, ChannelSchema } from '../types/interfaces';
-import { useAuth } from './useAuth';
+import { useAuthContext } from './useAuthContext';
 import { z } from 'zod';
 
+//TODO: Maybe channel join/creation should be a websocket event so it updates "live"
+//otherwise we'd need to refetch channels on a timer so clients see available channels
 export const useChannels = () => {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [currentChannel, setCurrentChannel] = useState<string>('');
-  const { token } = useAuth();
+  const { token } = useAuthContext();
 
   useEffect(() => {
     const storedCurrentChannel = sessionStorage.getItem('currentChannel');
@@ -32,10 +34,16 @@ export const useChannels = () => {
 
   const createChannel = async (
     name: string,
-    description: string
+    description: string,
+    password?: string
   ): Promise<boolean> => {
     try {
-      const response = await channelsApi.create(name, description, token);
+      const response = await channelsApi.create(
+        name,
+        description,
+        password,
+        token
+      );
 
       if (response.success && response.data) {
         const channel = ChannelSchema.parse(response.data);
@@ -59,9 +67,12 @@ export const useChannels = () => {
     }
   };
 
-  const joinChannel = async (channelName: string): Promise<boolean> => {
+  const joinChannel = async (
+    channelName: string,
+    password?: string
+  ): Promise<boolean> => {
     try {
-      const response = await channelsApi.join(channelName, token);
+      const response = await channelsApi.join(channelName, password, token);
       if (response.success) {
         setCurrentChannel(channelName);
         sessionStorage.setItem('currentChannel', channelName);

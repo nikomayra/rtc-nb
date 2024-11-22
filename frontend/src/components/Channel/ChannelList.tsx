@@ -4,10 +4,16 @@ import { ChannelItem } from './ChannelItem';
 import { CreateChannelForm } from './CreateChannelForm';
 
 export const ChannelList = () => {
-  const { channels, fetchChannels, joinChannel, createChannel } =
-    useChannelContext();
+  const {
+    channels,
+    currentChannel,
+    fetchChannels,
+    joinChannel,
+    createChannel,
+  } = useChannelContext();
 
   useEffect(() => {
+    console.log('Fetching channels');
     fetchChannels();
   }, [fetchChannels]);
 
@@ -18,6 +24,7 @@ export const ChannelList = () => {
           key={channel.name}
           channel={channel}
           onJoin={joinChannel}
+          currentChannel={currentChannel}
         />
       ))}
       <CreateChannelForm onSubmit={createChannel} />
