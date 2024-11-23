@@ -8,13 +8,13 @@ import (
 	"rtc-nb/backend/internal/models"
 )
 
-// AddUser adds a new user to PostgreSQL
+// Adds a new user to PostgreSQL DB
 func AddUser(user *models.User) error {
 	if user == nil {
 		return errors.New("user cannot be nil")
 	}
 
-	result, err := statements.insertUser.Exec(user.Username, user.Password)
+	result, err := statements.insertUser.Exec(user.Username, user.HashedPassword)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return fmt.Errorf("username %s already exists", user.Username)
@@ -46,7 +46,7 @@ func GetUser(username string) (*models.User, error) {
 	var user models.User
 	err := statements.selectUser.QueryRow(username).Scan(
 		&user.Username,
-		&user.Password,
+		&user.HashedPassword,
 	)
 
 	if err != nil {
@@ -58,44 +58,4 @@ func GetUser(username string) (*models.User, error) {
 
 	log.Printf("Successfully fetched user %q from database", username)
 	return &user, nil
-}
-
-// CreateChannel creates a new channel and adds the creator
-func CreateChannel(channel *models.Channel) error {
-	tx, err := db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Insert channel
-	_, err = tx.Stmt(statements.insertChannel).Exec(
-		channel.Name,
-		channel.Password,
-		channel.Description,
-	)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return fmt.Errorf("channel %s already exists", channel.Name)
-		}
-		if isStringTooLong(err) {
-			return fmt.Errorf("channel name, password, or description too long")
-		}
-		return fmt.Errorf("failed to create channel: %w", err)
-	}
-
-	// Add creator as member
-	_, err = tx.Stmt(statements.addChannelMember).Exec(
-		channel.Name,
-		channel.Users[0],
-		true,
-	)
-	if err != nil {
-		if isForeignKeyViolation(err) {
-			return fmt.Errorf("user %s does not exist", channel.Users[0])
-		}
-		return fmt.Errorf("failed to add channel creator: %w", err)
-	}
-
-	return tx.Commit()
 }

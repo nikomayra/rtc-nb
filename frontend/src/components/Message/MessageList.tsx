@@ -4,16 +4,12 @@ import { useChannelContext } from '../../hooks/useChannelContext';
 import { useMessageContext } from '../../hooks/useMessageContext';
 
 export const MessageList = () => {
-  const { channels, currentChannel, joinChannel } = useChannelContext();
+  const { currentChannel } = useChannelContext();
   const { messages, sendMessage, isConnected } = useMessageContext();
 
-  const channel = channels.find((channel) => channel.name === currentChannel);
-  if (!channel) {
+  if (!currentChannel) {
     return <></>;
-  } else {
-    joinChannel(currentChannel, channel.password ?? undefined);
   }
-
   return (
     <div className='messages-container'>
       <div className='messages-list'>

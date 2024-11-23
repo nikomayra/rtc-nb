@@ -42,26 +42,40 @@ func RegisterRoutes(mux *http.ServeMux, wsh *websocket.WebSocketHandler, chatSer
 		middleware.LoggingMiddleware,
 	))
 
-	apiHandler.Handle("/joinchannel", middleware.Chain(
-		http.HandlerFunc(handlers.JoinChannelHandler),
-		middleware.AuthMiddleware,
-		middleware.LoggingMiddleware,
-		middleware.MethodMiddleware("POST"),
-	))
+	// apiHandler.Handle("/joinchannel", middleware.Chain(
+	// 	http.HandlerFunc(handlers.JoinChannelHandler),
+	// 	middleware.AuthMiddleware,
+	// 	middleware.LoggingMiddleware,
+	// 	middleware.MethodMiddleware("POST"),
+	// ))
 
-	apiHandler.Handle("/createchannel", middleware.Chain(
-		http.HandlerFunc(handlers.CreateChannelHandler),
-		middleware.AuthMiddleware,
-		middleware.LoggingMiddleware,
-		middleware.MethodMiddleware("POST"),
-	))
+	// apiHandler.Handle("/createchannel", middleware.Chain(
+	// 	http.HandlerFunc(handlers.CreateChannelHandler),
+	// 	middleware.AuthMiddleware,
+	// 	middleware.LoggingMiddleware,
+	// 	middleware.MethodMiddleware("POST"),
+	// ))
 
-	apiHandler.Handle("/channels", middleware.Chain(
-		http.HandlerFunc(handlers.GetChannelsHandler),
-		middleware.AuthMiddleware,
-		middleware.LoggingMiddleware,
-		middleware.MethodMiddleware("GET"),
-	))
+	// apiHandler.Handle("/deletechannel", middleware.Chain(
+	// 	http.HandlerFunc(handlers.DeleteChannelHandler),
+	// 	middleware.AuthMiddleware,
+	// 	middleware.LoggingMiddleware,
+	// 	middleware.MethodMiddleware("POST"),
+	// ))
+
+	// apiHandler.Handle("/leavechannel", middleware.Chain(
+	// 	http.HandlerFunc(handlers.LeaveChannelHandler),
+	// 	middleware.AuthMiddleware,
+	// 	middleware.LoggingMiddleware,
+	// 	middleware.MethodMiddleware("POST"),
+	// ))
+
+	// apiHandler.Handle("/channels", middleware.Chain(
+	// 	http.HandlerFunc(handlers.GetChannelsHandler),
+	// 	middleware.AuthMiddleware,
+	// 	middleware.LoggingMiddleware,
+	// 	middleware.MethodMiddleware("GET"),
+	// ))
 }
 
 func defaultRoute(w http.ResponseWriter, r *http.Request) {

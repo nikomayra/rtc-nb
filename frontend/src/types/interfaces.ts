@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const ChannelSchema = z.object({
   name: z.string(),
-  password: z.string().optional(),
+  isPrivate: z.boolean(),
   description: z.string().optional(),
   createdAt: z.string(),
   users: z.array(z.string()),
@@ -18,11 +18,17 @@ export interface Message {
   timestamp: string;
 }
 
-export interface APIResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: {
+interface APISuccessResponse<T> {
+  success: true;
+  data: T;
+}
+
+interface APIErrorResponse {
+  success: false;
+  error: {
     message: string;
     code: number;
   };
 }
+
+export type APIResponse<T> = APISuccessResponse<T> | APIErrorResponse;

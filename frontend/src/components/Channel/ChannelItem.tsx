@@ -17,7 +17,7 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({
       <button onClick={() => onJoin(channel.name)}>
         {channel.name}
         {currentChannel === channel.name ? ' ✅' : ' '}
-        {channel.password ? ' 🔒' : ' 🔓'}
+        {channel.isPrivate ? ' 🔒' : ' 🔓'}
       </button>
     </div>
   );

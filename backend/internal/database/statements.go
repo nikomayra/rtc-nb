@@ -7,13 +7,16 @@ import (
 
 // Statements holds all prepared SQL statements
 type Statements struct {
-	insertUser       *sql.Stmt
-	selectUser       *sql.Stmt
-	insertChannel    *sql.Stmt
-	selectChannel    *sql.Stmt
-	addChannelMember *sql.Stmt
-	insertMessage    *sql.Stmt
-	selectMessages   *sql.Stmt
+	insertUser          *sql.Stmt // (username, password_hash)
+	selectUser          *sql.Stmt // (username)
+	insertChannel       *sql.Stmt // (name, password_hash, description)
+	selectChannel       *sql.Stmt // (name)
+	selectChannels      *sql.Stmt //
+	deleteChannel       *sql.Stmt // (name)
+	addChannelMember    *sql.Stmt // (channel_name, username, is_admin)
+	removeChannelMember *sql.Stmt // (channel_name, username)
+	insertMessage       *sql.Stmt // (id, channel_name, username, message_type, content, timestamp)
+	selectMessages      *sql.Stmt // (channel_name, limit)
 }
 
 var statements Statements
@@ -42,11 +45,35 @@ func PrepareStatements(db *sql.DB) error {
 
 	// Channel statements
 	statements.insertChannel, err = db.Prepare(`
-        INSERT INTO channels (name, password_hash, description)
+        INSERT INTO channels (name, hashed_password, description)
         VALUES ($1, $2, $3)
     `)
 	if err != nil {
 		return fmt.Errorf("prepare insert channel: %w", err)
+	}
+	statements.selectChannel, err = db.Prepare(`
+        SELECT name, hashed_password, description
+        FROM channels
+        WHERE name = $1
+    `)
+	if err != nil {
+		return fmt.Errorf("prepare select channel: %w", err)
+	}
+
+	statements.selectChannels, err = db.Prepare(`
+        SELECT name, hashed_password, description
+        FROM channels
+    `)
+	if err != nil {
+		return fmt.Errorf("prepare select channels: %w", err)
+	}
+
+	statements.deleteChannel, err = db.Prepare(`
+        DELETE FROM channels
+        WHERE name = $1
+    `)
+	if err != nil {
+		return fmt.Errorf("prepare delete channel: %w", err)
 	}
 
 	statements.addChannelMember, err = db.Prepare(`
@@ -57,17 +84,25 @@ func PrepareStatements(db *sql.DB) error {
 		return fmt.Errorf("prepare add channel member: %w", err)
 	}
 
+	statements.removeChannelMember, err = db.Prepare(`
+        DELETE FROM channel_members
+        WHERE channel_name = $1 AND username = $2
+    `)
+	if err != nil {
+		return fmt.Errorf("prepare remove channel member: %w", err)
+	}
+
 	// Message statements
 	statements.insertMessage, err = db.Prepare(`
-        INSERT INTO messages (id, channel_name, username, message_type, content)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO messages (id, channel_name, username, message_type, content, timestamp)
+        VALUES ($1, $2, $3, $4, $5, $6)
     `)
 	if err != nil {
 		return fmt.Errorf("prepare insert message: %w", err)
 	}
 
 	statements.selectMessages, err = db.Prepare(`
-        SELECT id, username, message_type, content, timestamp
+        SELECT id, channel_name, username, message_type, content, timestamp
         FROM messages
         WHERE channel_name = $1
         ORDER BY timestamp DESC
@@ -87,7 +122,10 @@ func CloseStatements() {
 		statements.selectUser,
 		statements.insertChannel,
 		statements.selectChannel,
+		statements.selectChannels,
+		statements.deleteChannel,
 		statements.addChannelMember,
+		statements.removeChannelMember,
 		statements.insertMessage,
 		statements.selectMessages,
 	}
