@@ -18,6 +18,14 @@ func NewConnectionManager() *ConnectionManager {
 	}
 }
 
+func (cm *ConnectionManager) BroadcastMessage(message []byte) {
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
+	for _, conn := range cm.connections {
+		conn.WriteMessage(websocket.TextMessage, message)
+	}
+}
+
 func (cm *ConnectionManager) AddConnection(username string, conn *websocket.Conn) {
 	cm.mutex.Lock()
 	defer cm.mutex.Unlock()

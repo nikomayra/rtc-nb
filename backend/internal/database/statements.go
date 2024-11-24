@@ -9,7 +9,7 @@ import (
 type Statements struct {
 	insertUser          *sql.Stmt // (username, password_hash)
 	selectUser          *sql.Stmt // (username)
-	insertChannel       *sql.Stmt // (name, password_hash, description)
+	insertChannel       *sql.Stmt // (name, is_private, hashed_password, description)
 	selectChannel       *sql.Stmt // (name)
 	selectChannels      *sql.Stmt //
 	deleteChannel       *sql.Stmt // (name)
@@ -45,8 +45,8 @@ func PrepareStatements(db *sql.DB) error {
 
 	// Channel statements
 	statements.insertChannel, err = db.Prepare(`
-        INSERT INTO channels (name, hashed_password, description)
-        VALUES ($1, $2, $3)
+        INSERT INTO channels (name, is_private, hashed_password, description)
+        VALUES ($1, $2, $3, $4)
     `)
 	if err != nil {
 		return fmt.Errorf("prepare insert channel: %w", err)

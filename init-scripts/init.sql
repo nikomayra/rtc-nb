@@ -38,10 +38,11 @@ CREATE TABLE channels (
 
 -- Represents a user's status and metadata within a channel
 CREATE TABLE channel_member (
+    channel_name VARCHAR(50) REFERENCES channels(name) ON DELETE CASCADE,
     username VARCHAR(50) REFERENCES users(username) ON DELETE CASCADE,
     is_admin BOOLEAN NOT NULL DEFAULT false,
     joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_message TIMESTAMP
+    last_message TIMESTAMP,
 );
 
 -- type Channel struct {

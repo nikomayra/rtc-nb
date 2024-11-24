@@ -3,8 +3,14 @@ module rtc-nb
 go 1.23.2
 
 require (
+	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/gorilla/websocket v1.5.3
 	github.com/redis/go-redis/v9 v9.7.0
+)
+
+require (
+	github.com/onsi/ginkgo v1.16.5 // indirect
+	github.com/onsi/gomega v1.35.1 // indirect
 )
 
 require (

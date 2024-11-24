@@ -9,7 +9,7 @@ import (
 	"rtc-nb/backend/chat"
 	"rtc-nb/backend/internal/config"
 	"rtc-nb/backend/internal/database"
-	"rtc-nb/backend/redis"
+	"rtc-nb/backend/redismanager"
 	"rtc-nb/backend/websocket"
 	"rtc-nb/backend/websocket/connection"
 )
@@ -24,7 +24,7 @@ func main() {
 	}
 	defer database.CloseStatements()
 
-	redisClient := redis.NewRedisClient(os.Getenv("REDIS_SERVER"))
+	redisClient := redismanager.NewRedisClient(os.Getenv("REDIS_SERVER"))
 	connectionManager := connection.NewConnectionManager()
 	chatServer := chat.NewChatServer(redisClient, connectionManager)
 	webSocketHandler := websocket.NewWebSocketHandler(redisClient, chatServer, connectionManager)

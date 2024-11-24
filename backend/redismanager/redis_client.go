@@ -1,4 +1,4 @@
-package redis
+package redismanager
 
 import (
 	"context"
@@ -39,7 +39,6 @@ func (r *RedisClient) Subscribe(channel string) (<-chan *redis.Message, error) {
 	if _, err := sub.Receive(ctx); err != nil {
 		return nil, fmt.Errorf("failed to subscribe to channel %s: %v", channel, err)
 	}
-
 	r.subscriptions[channel] = sub
 	return sub.Channel(), nil
 }

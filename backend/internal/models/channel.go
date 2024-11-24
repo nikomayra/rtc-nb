@@ -21,6 +21,7 @@ type Channel struct {
 	IsPrivate      bool      `json:"isPrivate"`
 	Description    *string   `json:"description,omitempty"`
 	HashedPassword *string   `json:"-"` // Never expose in JSON
+	CreatedBy      string    `json:"createdBy"`
 	CreatedAt      time.Time `json:"createdAt"`
 
 	mu      sync.RWMutex              `json:"-"`
@@ -52,6 +53,7 @@ func NewChannel(name string, creator string, description, password *string) (*Ch
 		IsPrivate:      isPrivate,
 		Description:    description,
 		HashedPassword: password,
+		CreatedBy:      creator,
 		CreatedAt:      time.Now().UTC(),
 		Members:        make(map[string]*ChannelMember),
 	}

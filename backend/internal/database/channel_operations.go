@@ -9,7 +9,7 @@ import (
 )
 
 // CreateChannel creates a new channel and adds the creator
-func CreateChannel(channel *models.Channel) error {
+func CreateChannel(channel *models.Channel, creatorUsername string) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -19,7 +19,8 @@ func CreateChannel(channel *models.Channel) error {
 	// Insert channel
 	_, err = tx.Stmt(statements.insertChannel).Exec(
 		channel.Name,
-		channel.Password,
+		channel.IsPrivate,
+		channel.HashedPassword,
 		channel.Description,
 	)
 	if err != nil {
@@ -32,15 +33,15 @@ func CreateChannel(channel *models.Channel) error {
 		return fmt.Errorf("failed to create channel: %w", err)
 	}
 
-	// Add creator as member
+	// Add creator as member as admin
 	_, err = tx.Stmt(statements.addChannelMember).Exec(
 		channel.Name,
-		channel.Users[0],
+		creatorUsername,
 		true,
 	)
 	if err != nil {
 		if isForeignKeyViolation(err) {
-			return fmt.Errorf("user %s does not exist", channel.Users[0])
+			return fmt.Errorf("user %s does not exist", creatorUsername)
 		}
 		return fmt.Errorf("failed to add channel creator: %w", err)
 	}
@@ -113,7 +114,7 @@ func GetChannels() ([]*models.Channel, error) {
 	var channels []*models.Channel
 	for rows.Next() {
 		var channel models.Channel
-		if err := rows.Scan(&channel.Name, &channel.Password, &channel.Description); err != nil {
+		if err := rows.Scan(&channel.Name, &channel.HashedPassword, &channel.Description); err != nil {
 			return nil, fmt.Errorf("failed to scan channel: %w", err)
 		}
 		channels = append(channels, &channel)
@@ -130,7 +131,7 @@ func GetChannel(channelName string) (*models.Channel, error) {
 	var channel models.Channel
 	err := statements.selectChannel.QueryRow(channelName).Scan(
 		&channel.Name,
-		&channel.Password,
+		&channel.HashedPassword,
 		&channel.Description,
 	)
 	if err != nil {

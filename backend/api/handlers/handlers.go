@@ -65,7 +65,12 @@ func (h *Handlers) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create new user
-	user := models.NewUser(req.Username, hashedPassword)
+	user, err := models.NewUser(req.Username, hashedPassword)
+	if err != nil {
+		log.Printf("error creating new user %s: %v", req.Username, err)
+		responses.SendError(w, "Failed to create new user", http.StatusInternalServerError)
+		return
+	}
 
 	// Add new user to database
 	if err := database.AddUser(user); err != nil {
@@ -156,7 +161,12 @@ func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 		responses.SendError(w, fmt.Sprintf("Failed to join channel: %v", err), http.StatusInternalServerError)
 		return
 	}
-	isAdmin := h.chatServer.IsUserAdmin(req.ChannelName, claims.Username)
+	isAdmin, err := h.chatServer.IsUserAdmin(req.ChannelName, claims.Username)
+	if err != nil {
+		log.Printf("error checking if user %s is admin of channel %s: %v", claims.Username, req.ChannelName, err)
+		responses.SendError(w, "Failed to check if user is admin", http.StatusInternalServerError)
+		return
+	}
 	if err := database.AddUserToChannel(req.ChannelName, claims.Username, isAdmin); err != nil {
 		log.Printf("error adding user %s to channel %s in database: %v", claims.Username, req.ChannelName, err)
 		responses.SendError(w, "Failed to add user to channel in database", http.StatusInternalServerError)
@@ -196,7 +206,7 @@ func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := database.CreateChannel(channel); err != nil {
+	if err := database.CreateChannel(channel, claims.Username); err != nil {
 		log.Printf("error creating channel %s in database: %v", req.ChannelName, err)
 		responses.SendError(w, "Failed to create channel in database", http.StatusInternalServerError)
 		return
@@ -235,7 +245,12 @@ func (h *Handlers) DeleteChannelHandler(w http.ResponseWriter, r *http.Request) 
 		log.Println("ERROR: No claims found in context")
 		return
 	}
-	isAdmin := h.chatServer.IsUserAdmin(req.ChannelName, claims.Username)
+	isAdmin, err := h.chatServer.IsUserAdmin(req.ChannelName, claims.Username)
+	if err != nil {
+		log.Printf("error checking if user %s is admin of channel %s: %v", claims.Username, req.ChannelName, err)
+		responses.SendError(w, "Failed to check if user is admin", http.StatusInternalServerError)
+		return
+	}
 	if !isAdmin {
 		responses.SendError(w, "not an admin of this channel", http.StatusForbidden)
 		return
