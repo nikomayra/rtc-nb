@@ -10,8 +10,8 @@ import (
 	"rtc-nb/backend/internal/config"
 	"rtc-nb/backend/internal/database"
 	"rtc-nb/backend/redismanager"
-	"rtc-nb/backend/websocket"
-	"rtc-nb/backend/websocket/connection"
+	"rtc-nb/backend/websocketmanager"
+	"rtc-nb/backend/websocketmanager/connection"
 )
 
 func main() {
@@ -27,7 +27,7 @@ func main() {
 	redisClient := redismanager.NewRedisClient(os.Getenv("REDIS_SERVER"))
 	connectionManager := connection.NewConnectionManager()
 	chatServer := chat.NewChatServer(redisClient, connectionManager)
-	webSocketHandler := websocket.NewWebSocketHandler(redisClient, chatServer, connectionManager)
+	webSocketHandler := websocketmanager.NewWebSocketHandler(redisClient, connectionManager)
 
 	newMuxRouter := http.NewServeMux()
 	api.RegisterRoutes(newMuxRouter, webSocketHandler, chatServer)
