@@ -11,12 +11,10 @@ import (
 	"rtc-nb/backend/websocket"
 )
 
-func RegisterRoutes(mux *http.ServeMux, wsh *websocket.WebSocketHandler, chatServer *chat.ChatServer) {
+func RegisterRoutes(router *http.ServeMux, wsh *websocket.Handler, chatServer *chat.ChatServer) {
 	// Create a subrouter for /api
 	apiHandler := http.NewServeMux()
-
-	// Strip /api prefix and forward to apiHandler
-	mux.Handle("/api/", http.StripPrefix("/api", apiHandler))
+	router.Handle("/api/", http.StripPrefix("/api", apiHandler))
 
 	handlers := handlers.NewHandlers(chatServer)
 

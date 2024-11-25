@@ -1,7 +1,7 @@
 package events
 
 import (
-	"rtc-nb/backend/internal/models"
+	"rtc-nb/backend/internal/domain"
 	"time"
 )
 
@@ -25,16 +25,40 @@ type BaseEvent struct {
 // ChannelEvent represents channel-related events
 type ChannelEvent struct {
 	BaseEvent
-	Channel   *models.Channel `json:"channel"`
+	Channel   *domain.Channel `json:"channel"`
 	Username  string          `json:"username"`
 	Operation string          `json:"operation"`
+}
+
+func (ce *ChannelEvent) GetID() string {
+	return ce.BaseEvent.ID
+}
+
+func (ce *ChannelEvent) GetType() EventType {
+	return ce.BaseEvent.Type
+}
+
+func (ce *ChannelEvent) GetTimestamp() time.Time {
+	return ce.BaseEvent.Timestamp
 }
 
 // MessageEvent represents message-related events
 type MessageEvent struct {
 	BaseEvent
-	Message   *models.Message `json:"message"`
+	Message   *domain.Message `json:"message"`
 	ChannelID string          `json:"channel_id"`
+}
+
+func (me *MessageEvent) GetID() string {
+	return me.BaseEvent.ID
+}
+
+func (me *MessageEvent) GetType() EventType {
+	return me.BaseEvent.Type
+}
+
+func (me *MessageEvent) GetTimestamp() time.Time {
+	return me.BaseEvent.Timestamp
 }
 
 // Event interface ensures all events have common methods

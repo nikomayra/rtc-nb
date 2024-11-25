@@ -11,8 +11,8 @@ import (
 type ChatService struct {
 	channelRepo *operations.ChannelRepository
 	messageRepo *operations.MessageRepository
-	broker      *RedisBroker
-	state       *MemoryState
+	broker      *MessageBroker
+	state       *MemoryStateManager
 }
 
 // Example of a high-level operation

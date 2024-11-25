@@ -2,12 +2,14 @@ package chat
 
 import (
 	"fmt"
+	"rtc-nb/backend/chat/events"
 	"rtc-nb/backend/internal/core"
+	"rtc-nb/backend/internal/domain"
 	"rtc-nb/backend/internal/models"
 	"sync"
 )
 
-type MemoryState struct {
+type MemoryStateManager struct {
 	mu       sync.RWMutex
 	channels map[string]*models.Channel
 	// Optional: Add LRU cache for recent messages
@@ -17,11 +19,11 @@ type MemoryState struct {
 type MessageCache struct {
 	mu      sync.RWMutex
 	cache   map[string][]models.Message // channelName -> recent messages
-	maxSize int
+	maxSize int                         // max number of messages to keep per channel
 }
 
-func NewMemoryState(messageCacheSize int) *MemoryState {
-	return &MemoryState{
+func NewMemoryStateManager(messageCacheSize int) *MemoryStateManager {
+	return &MemoryStateManager{
 		channels: make(map[string]*models.Channel),
 		messageCache: &MessageCache{
 			cache:   make(map[string][]models.Message),
@@ -30,26 +32,42 @@ func NewMemoryState(messageCacheSize int) *MemoryState {
 	}
 }
 
-func (ms *MemoryState) UpdateState(event core.Event) error {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
+func (msm *MemoryStateManager) UpdateState(event core.Event) error {
+	msm.mu.Lock()
+	defer msm.mu.Unlock()
 
-	switch evt := event.(type) {
-	case *ChannelCreateEvent:
-		return ms.handleChannelCreate(evt)
-	case *ChannelDeleteEvent:
-		return ms.handleChannelDelete(evt)
-	case *MessageEvent:
-		return ms.handleMessage(evt)
+	switch event.Type() {
+	case :
+		return msm.handleChannelCreate(evt)
+	case *events.ChannelDeleteEvent:
+		return msm.handleChannelDelete(evt)
+	case *events.MessageEvent:
+		return msm.handleMessage(evt)
 	default:
 		return fmt.Errorf("unsupported state event: %T", event)
 	}
 }
 
-func (ms *MemoryState) handleChannelCreate(evt *ChannelCreateEvent) error {
-	if _, exists := ms.channels[evt.Channel.Name]; exists {
+func (msm *MemoryStateManager) handleChannelCreate(evt *events.ChannelCreateEvent) error {
+	if _, exists := msm.channels[evt.Channel.Name]; exists {
 		return fmt.Errorf("channel already exists: %s", evt.Channel.Name)
 	}
-	ms.channels[evt.Channel.Name] = evt.Channel
+	msm.channels[evt.Channel.Name] = evt.Channel
 	return nil
+}
+
+func (msm *MemoryStateManager) handleChannelDelete(evt *events.ChannelDeleteEvent) error {
+	delete(msm.channels, evt.ChannelName)
+	return nil
+}
+
+func (msm *MemoryStateManager) handleMessage(evt *events.MessageEvent) error {
+	msm.messageCache.AddMessage(evt.ChannelID, evt.Message)
+	return nil
+}
+
+func (mc *MessageCache) AddMessage(channelName string, message *domain.Message) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.cache[channelName] = append(mc.cache[channelName], message)
 }

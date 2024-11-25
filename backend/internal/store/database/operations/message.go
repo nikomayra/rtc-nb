@@ -12,7 +12,7 @@ type MessageRepository struct {
 }
 
 func (r *MessageRepository) SaveBatch(ctx context.Context, tx *sql.Tx, messages []*domain.Message) error {
-	stmt := tx.StmtContext(ctx, statements.insertMessage)
+	stmt := tx.StmtContext(ctx, database.statements.InsertMessage)
 
 	for _, msg := range messages {
 		content, err := json.Marshal(msg.Content)
@@ -33,5 +33,10 @@ func (r *MessageRepository) SaveBatch(ctx context.Context, tx *sql.Tx, messages 
 		}
 	}
 
+	return nil
+}
+
+func (r *MessageRepository) QueueForBatch(ctx context.Context, msg *domain.Message) error {
+	// Implement queueing logic here
 	return nil
 }
