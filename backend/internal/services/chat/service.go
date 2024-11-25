@@ -4,15 +4,23 @@ import (
 	"context"
 	"database/sql"
 	"log"
-	"rtc-nb/backend/internal/database/operations"
 	"rtc-nb/backend/internal/domain"
+	"rtc-nb/backend/internal/store"
+	"rtc-nb/backend/internal/store/redis"
 )
 
 type ChatService struct {
-	channelRepo *operations.ChannelRepository
-	messageRepo *operations.MessageRepository
-	broker      *MessageBroker
-	state       *MemoryStateManager
+	store  *store.Store
+	broker *redis.Broker
+	state  *StateManager
+}
+
+func NewService(store *store.Store, broker *redis.Broker, state *StateManager) *ChatService {
+	return &ChatService{
+		store:  store,
+		broker: broker,
+		state:  state,
+	}
 }
 
 // Example of a high-level operation
@@ -24,7 +32,7 @@ func (s *ChatService) SendMessage(ctx context.Context, channelName, username str
 	}
 
 	// 2. Queue for batch persistence
-	s.messageRepo.QueueForBatch(msg)
+	s.store.Message.QueueForBatch(msg)
 
 	// 3. Update in-memory state if needed
 	if err := s.state.AddMessage(msg); err != nil {
@@ -42,9 +50,9 @@ func (s *ChatService) CreateChannel(ctx context.Context, name, creator string, i
 		return err
 	}
 
-	return s.txManager.WithinTx(ctx, func(tx *sql.Tx) error {
+	return s.store.WithinTx(ctx, func(tx *sql.Tx) error {
 		// 1. Persist to database
-		if err := s.channelRepo.Create(ctx, tx, channel); err != nil {
+		if err := s.store.Channel.Create(ctx, tx, channel); err != nil {
 			return err
 		}
 

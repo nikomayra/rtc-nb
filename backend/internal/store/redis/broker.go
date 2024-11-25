@@ -1,4 +1,4 @@
-package chat
+package redis
 
 import (
 	"context"
@@ -7,33 +7,32 @@ import (
 	"log"
 	"rtc-nb/backend/internal/domain"
 
-	"github.com/redis/go-redis/v9"
+	goRedis "github.com/redis/go-redis/v9"
 )
 
-type MessageBroker struct {
-	client *redis.Client
-	// Track subscriptions for cleanup
-	subscriptions map[string]*redis.PubSub
+// var ctx = context.Background()
+
+type Broker struct {
+	client        *goRedis.Client
+	subscriptions map[string]*goRedis.PubSub
 }
 
-func NewMessageBroker(client *redis.Client) *MessageBroker {
-	return &MessageBroker{
-		client:        client,
-		subscriptions: make(map[string]*redis.PubSub),
-	}
-}
+func NewBroker(addr string) *Broker {
 
-func (mb *MessageBroker) PublishEvent(ctx context.Context, channelID string, event interface{}) error {
-	payload, err := json.Marshal(event)
+	opts, err := goRedis.ParseURL(addr)
 	if err != nil {
-		return fmt.Errorf("marshal event: %w", err)
+		log.Println(err)
 	}
+	rdb := goRedis.NewClient(opts)
 
-	return mb.client.Publish(ctx, channelID, payload).Err()
+	return &Broker{
+		client:        rdb,
+		subscriptions: make(map[string]*goRedis.PubSub),
+	}
 }
 
-func (mb *MessageBroker) Subscribe(ctx context.Context, channelID string) (<-chan domain.Message, error) {
-	pubsub := mb.client.Subscribe(ctx, channelID)
+func (b *Broker) Subscribe(ctx context.Context, channelID string) (<-chan domain.Message, error) {
+	pubsub := b.client.Subscribe(ctx, channelID)
 
 	// Verify subscription
 	if _, err := pubsub.Receive(ctx); err != nil {
@@ -44,13 +43,22 @@ func (mb *MessageBroker) Subscribe(ctx context.Context, channelID string) (<-cha
 	messageChan := make(chan domain.Message, 100)
 
 	// Start goroutine to handle messages
-	go mb.handleMessages(ctx, pubsub.Channel(), messageChan)
+	go b.handleMessages(ctx, pubsub.Channel(), messageChan)
 
-	mb.subscriptions[channelID] = pubsub
+	b.subscriptions[channelID] = pubsub
 	return messageChan, nil
 }
 
-func (mb *MessageBroker) handleMessages(ctx context.Context, redisMessages <-chan *redis.Message, outChan chan<- domain.Message) {
+func (b *Broker) PublishEvent(ctx context.Context, channelID string, event interface{}) error {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal event: %w", err)
+	}
+
+	return b.client.Publish(ctx, channelID, payload).Err()
+}
+
+func (b *Broker) handleMessages(ctx context.Context, redisMessages <-chan *goRedis.Message, outChan chan<- domain.Message) {
 	defer close(outChan)
 
 	for {
@@ -73,12 +81,12 @@ func (mb *MessageBroker) handleMessages(ctx context.Context, redisMessages <-cha
 	}
 }
 
-func (mb *MessageBroker) Unsubscribe(ctx context.Context, channelID string) error {
-	if pubsub, exists := mb.subscriptions[channelID]; exists {
+func (b *Broker) Unsubscribe(ctx context.Context, channelID string) error {
+	if pubsub, exists := b.subscriptions[channelID]; exists {
 		if err := pubsub.Unsubscribe(ctx, channelID); err != nil {
 			return fmt.Errorf("unsubscribe: %w", err)
 		}
-		delete(mb.subscriptions, channelID)
+		delete(b.subscriptions, channelID)
 	}
 	return nil
 }

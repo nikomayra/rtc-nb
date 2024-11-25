@@ -9,10 +9,9 @@ import (
 	"sync"
 )
 
-type MemoryStateManager struct {
+type StateManager struct {
 	mu       sync.RWMutex
 	channels map[string]*models.Channel
-	// Optional: Add LRU cache for recent messages
 	messageCache *MessageCache
 }
 
@@ -22,8 +21,8 @@ type MessageCache struct {
 	maxSize int                         // max number of messages to keep per channel
 }
 
-func NewMemoryStateManager(messageCacheSize int) *MemoryStateManager {
-	return &MemoryStateManager{
+func NewStateManager(messageCacheSize int) *StateManager {
+	return &StateManager{
 		channels: make(map[string]*models.Channel),
 		messageCache: &MessageCache{
 			cache:   make(map[string][]models.Message),

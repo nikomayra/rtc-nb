@@ -1,44 +1,66 @@
-package models
+package database
 
 import (
-	"encoding/json"
+	"context"
+	"database/sql"
 	"rtc-nb/backend/internal/domain"
 	"time"
 )
 
-type MessageDB struct {
-	ID          string          `db:"id"`
-	ChannelName string          `db:"channel_name"`
-	Username    string          `db:"username"`
-	Type        int             `db:"message_type"`
-	Content     json.RawMessage `db:"content"`
-	Timestamp   time.Time       `db:"timestamp"`
+type MessageStore struct {
+	db        *sql.DB
+	batchSize int
+	messages  chan *domain.Message
 }
 
-func (m *MessageDB) ToEntity() (*domain.Message, error) {
-	var content domain.MessageContent
-
-	switch domain.MessageType(m.Type) {
-	case domain.MessageTypeText:
-		var textContent domain.TextContent
-		if err := json.Unmarshal(m.Content, &textContent); err != nil {
-			return nil, err
-		}
-		content = &textContent
-	case domain.MessageTypeImage:
-		var imageContent domain.ImageContent
-		if err := json.Unmarshal(m.Content, &imageContent); err != nil {
-			return nil, err
-		}
-		content = &imageContent
+func NewMessageStore(db *sql.DB) *MessageStore {
+	ms := &MessageStore{
+		db:        db,
+		batchSize: 100,
+		messages:  make(chan *domain.Message, 1000),
 	}
 
-	return &domain.Message{
-		ID:          m.ID,
-		ChannelName: m.ChannelName,
-		Username:    m.Username,
-		Type:        domain.MessageType(m.Type),
-		Content:     content,
-		Timestamp:   m.Timestamp,
-	}, nil
+	go ms.batchWorker()
+	return ms
+}
+
+// Save queues message for batch processing
+func (ms *MessageStore) Save(ctx context.Context, msg *domain.Message) error {
+	select {
+	case ms.messages <- msg:
+		return nil
+	default:
+		// If queue is full, fall back to immediate write
+		return ms.saveImmediate(ctx, msg)
+	}
+}
+
+func (ms *MessageStore) batchWorker() {
+	batch := make([]*domain.Message, 0, ms.batchSize)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case msg := <-ms.messages:
+			batch = append(batch, msg)
+			if len(batch) >= ms.batchSize {
+				ms.saveBatch(context.Background(), batch)
+				batch = batch[:0]
+			}
+		case <-ticker.C:
+			if len(batch) > 0 {
+				ms.saveBatch(context.Background(), batch)
+				batch = batch[:0]
+			}
+		}
+	}
+}
+
+func (ms *MessageStore) processBatch() {
+	for msgs := range ms.batchMessages() {
+		if err := ms.persistBatch(msgs); err != nil {
+			ms.handleFailure(msgs)
+		}
+	}
 }

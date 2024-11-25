@@ -1,14 +1,12 @@
 package api
 
-// Route definitions for lobby management and game actions
-
 import (
 	"log"
 	"net/http"
-	"rtc-nb/backend/api/handlers"
-	"rtc-nb/backend/api/middleware"
-	"rtc-nb/backend/chat"
-	"rtc-nb/backend/websocket"
+
+	"rtc-nb/backend/internal/api/handlers"
+	"rtc-nb/backend/internal/api/middleware"
+	"rtc-nb/backend/internal/websocket"
 )
 
 func RegisterRoutes(router *http.ServeMux, wsh *websocket.Handler, chatServer *chat.ChatServer) {

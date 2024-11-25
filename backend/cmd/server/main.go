@@ -6,38 +6,41 @@ import (
 	"os"
 
 	"rtc-nb/backend/api"
+	"rtc-nb/backend/chat"
 	"rtc-nb/backend/internal/config"
-	"rtc-nb/backend/internal/database"
-	"rtc-nb/backend/redismanager"
+	"rtc-nb/backend/internal/store/database"
+	"rtc-nb/backend/internal/store/redis"
+	"rtc-nb/backend/websocket"
 )
 
 func main() {
 
-	config.LoadEnv()
+	cfg := config.Load()
 
-	db := database.GetDB()
-
-	if err := database.PrepareStatements(db); err != nil {
+	if err := database.PrepareStatements(cfg.DB); err != nil {
 		log.Fatal(err)
 	}
 	defer database.CloseStatements()
 
-	redisClient := redismanager.NewRedisClient(os.Getenv("REDIS_SERVER"))
-	// connectionManager := connection.NewConnectionManager()
-	// chatServer := chat.NewChatServer(redisClient, connectionManager)
+	dbStore := database.NewStore(cfg.DB)
+	redisStore := redis.NewStore(cfg.Redis)
 
 	chatService := chat.NewService(
 		store.NewStore(db),
-		redis.NewBroker(redisClient),
-		chat.NewStateManager(1000),
+		redis.NewBroker(os.Getenv("REDIS_SERVER")),
+		chat.NewStateManager(500), // TODO: make this configurable
 	)
 
-	wsHandler := websocket.NewHandler(chatService)
+	wsHandler := websocket.NewWebSocketHandler(chatService)
 
 	// webSocketHandler := websocketmanager.NewWebSocketHandler(redisClient, connectionManager)
 
 	router := http.NewServeMux()
 	api.RegisterRoutes(router, wsHandler, chatService)
+
+	// TODO: serve the frontend from the dist folder for production
+	// fs := http.FileServer(http.Dir("./dist"))
+	// router.Handle("/", fs)
 
 	log.Println("Server started on :8080")
 	if err := http.ListenAndServe(":8080", router); err != nil {

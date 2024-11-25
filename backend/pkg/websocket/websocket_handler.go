@@ -1,4 +1,4 @@
-package websocketmanager
+package websocket
 
 import (
 	"encoding/json"
@@ -10,8 +10,6 @@ import (
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/events"
 	"rtc-nb/backend/internal/models"
-	"rtc-nb/backend/redismanager"
-	"rtc-nb/backend/websocketmanager/connection"
 
 	"github.com/gorilla/websocket"
 )
@@ -19,11 +17,11 @@ import (
 type WebSocketHandler struct {
 	redisClient       *redismanager.RedisClient // Redis client for pub/sub
 	chatServer        *chat.ChatServer
-	connectionManager *connection.ConnectionManager
+	connectionManager *Hub
 	upgrader          websocket.Upgrader // Upgrader for handling WebSocket connections
 }
 
-func NewWebSocketHandler(redisClient *redismanager.RedisClient, chatServer *chat.ChatServer, connectionManager *connection.ConnectionManager) *WebSocketHandler {
+func NewWebSocketHandler(redisClient *redismanager.RedisClient, chatServer *chat.ChatServer, connectionManager *Hub) *WebSocketHandler {
 	return &WebSocketHandler{
 		redisClient:       redisClient,
 		chatServer:        chatServer,
