@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"os"
 
-	"rtc-nb/backend/api"
 	"rtc-nb/backend/chat"
 	"rtc-nb/backend/internal/config"
 	"rtc-nb/backend/internal/store/database"
 	"rtc-nb/backend/internal/store/redis"
+	"rtc-nb/backend/pkg/api"
 	"rtc-nb/backend/websocket"
 )
 
@@ -17,12 +17,13 @@ func main() {
 
 	cfg := config.Load()
 
-	if err := database.PrepareStatements(cfg.DB); err != nil {
+	store := database.NewStore()
+	db, err := store.Open()
+	if err != nil {
 		log.Fatal(err)
 	}
-	defer database.CloseStatements()
+	defer store.Close()
 
-	dbStore := database.NewStore(cfg.DB)
 	redisStore := redis.NewStore(cfg.Redis)
 
 	chatService := chat.NewService(

@@ -14,7 +14,7 @@ const (
 )
 
 // Helper functions to check error types
-func isPgError(err error) (*pq.Error, bool) {
+func IsPgError(err error) (*pq.Error, bool) {
 	var pgErr *pq.Error
 	if errors.As(err, &pgErr) {
 		return pgErr, true
@@ -22,17 +22,17 @@ func isPgError(err error) (*pq.Error, bool) {
 	return nil, false
 }
 
-func isUniqueViolation(err error) bool {
-	pgErr, ok := isPgError(err)
+func IsUniqueViolation(err error) bool {
+	pgErr, ok := IsPgError(err)
 	return ok && pgErr.Code == uniqueViolation
 }
 
-func isForeignKeyViolation(err error) bool {
-	pgErr, ok := isPgError(err)
+func IsForeignKeyViolation(err error) bool {
+	pgErr, ok := IsPgError(err)
 	return ok && pgErr.Code == foreignKeyViolation
 }
 
-func isStringTooLong(err error) bool {
-	pgErr, ok := isPgError(err)
+func IsStringTooLong(err error) bool {
+	pgErr, ok := IsPgError(err)
 	return ok && pgErr.Code == stringTooLong
 }

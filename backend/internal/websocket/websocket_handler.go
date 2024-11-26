@@ -6,26 +6,26 @@ import (
 	"log"
 	"net/http"
 	"rtc-nb/backend/api/responses"
-	"rtc-nb/backend/chat"
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/events"
 	"rtc-nb/backend/internal/models"
 
+	"github.com/go-redis/redis"
 	"github.com/gorilla/websocket"
 )
 
 type WebSocketHandler struct {
-	redisClient       *redismanager.RedisClient // Redis client for pub/sub
-	chatServer        *chat.ChatServer
-	connectionManager *Hub
-	upgrader          websocket.Upgrader // Upgrader for handling WebSocket connections
+	redisClient *redis.Client // Redis client for pub/sub
+	chatServer  *chat.ChatServer
+	hub         *Hub
+	upgrader    websocket.Upgrader // Upgrader for handling WebSocket connections
 }
 
-func NewWebSocketHandler(redisClient *redismanager.RedisClient, chatServer *chat.ChatServer, connectionManager *Hub) *WebSocketHandler {
+func NewWebSocketHandler(redisClient *redis.Client, chatServer *chat.ChatServer, hub *Hub) *WebSocketHandler {
 	return &WebSocketHandler{
 		redisClient:       redisClient,
 		chatServer:        chatServer,
-		connectionManager: connectionManager,
+		connectionManager: hub,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Allow connections from any origin
@@ -58,7 +58,7 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 
 	log.Printf("New WebSocket connection established: %s\n", r.URL.Path)
 
-	wsh.connectionManager.AddConnection(claims.Username, conn)
+	wsh.hub.AddConnection(claims.Username, conn)
 
 	for {
 		// Read messages from WebSocket connection
@@ -74,7 +74,7 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 func (wsh *WebSocketHandler) handleWebSocketMessages(conn *websocket.Conn, username string) error {
 	_, messageBytes, err := conn.ReadMessage()
 	if err != nil {
-		wsh.connectionManager.RemoveConnection(username)
+		wsh.hub.RemoveConnection(username)
 		return fmt.Errorf("error reading WebSocket message: %v", err)
 	}
 	event, err := events.ParseEvent(messageBytes)
