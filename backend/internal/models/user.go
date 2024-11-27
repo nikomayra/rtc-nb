@@ -9,9 +9,9 @@ import (
 type User struct {
 	Username       string    `json:"username"`
 	HashedPassword string    `json:"-"` // Never expose in JSON
-	IsOnline       bool      `json:"isOnline"`
-	CreatedAt      time.Time `json:"createdAt"`
-	LastSeen       time.Time `json:"lastSeen"`
+	IsOnline       bool      `json:"is_online"`
+	CreatedAt      time.Time `json:"created_at"`
+	LastSeen       time.Time `json:"last_seen"`
 }
 
 // NewUser creates a new user with proper initialization

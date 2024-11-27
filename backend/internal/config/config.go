@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 var ctx = context.Background()
 
+// Loads env variables & initializes db & redis clients
 type Config struct {
 	DB    *sql.DB
 	Redis *goRedis.Client
@@ -30,10 +32,16 @@ func Load() *Config {
 }
 
 func initPostgres() *sql.DB {
-	dsn := os.Getenv("POSTGRES_DSN")
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		os.Getenv("POSTGRES_HOST"),
+		os.Getenv("POSTGRES_PORT"),
+		os.Getenv("POSTGRES_USER"),
+		os.Getenv("POSTGRES_PASSWORD"),
+		os.Getenv("POSTGRES_DB"),
+	)
 
 	var err error
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
 	}

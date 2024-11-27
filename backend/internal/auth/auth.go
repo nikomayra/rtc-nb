@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"rtc-nb/backend/internal/models"
-
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -25,16 +23,6 @@ var (
 	ErrExpiredToken     = fmt.Errorf("token has expired")
 	ErrInvalidSignature = fmt.Errorf("invalid token signature")
 )
-
-// AuthService defines the interface for authentication-related actions.
-type AuthService interface {
-	GenerateAccessToken(user models.User) (string, error)
-	GenerateRefreshToken(user models.User) (string, error)
-	ValidateAccessToken(token string) (Claims, error)
-	RefreshAccessToken(refreshToken string) (string, error)
-	HashPassword(password string) (string, error)
-	CheckPassword(hashedPassword, password string) error
-}
 
 type Claims struct {
 	Username  string    `json:"username"`
@@ -51,24 +39,10 @@ func ClaimsFromContext(ctx context.Context) (*Claims, bool) {
 	return claims, ok
 }
 
-type JWTService struct {
-	secretKey string
-}
-
-func (jwt *JWTService) GenerateRefreshToken(user User) (string, error) {
-	// Logic to generate refresh token
-	return "some-refresh-token", nil
-}
-
-func (jwt *JWTService) RefreshAccessToken(refreshToken string) (string, error) {
-	// Logic to refresh access token
-	return "new-access-token", nil
-}
-
-func (jwt *JWTService) GenerateAccessToken(user User) (string, error) {
+func GenerateAccessToken(username string) (string, error) {
 	now := time.Now()
 	claims := Claims{
-		Username:  user.Username,
+		Username:  username,
 		IssuedAt:  now,
 		ExpiresAt: now.Add(24 * time.Hour),
 	}
@@ -96,7 +70,7 @@ func (jwt *JWTService) GenerateAccessToken(user User) (string, error) {
 	return fmt.Sprintf("%s.%s.%s", headerEncoded, payloadEncoded, signature), nil
 }
 
-func (jwt *JWTService) ValidateAccessToken(token string) (Claims, error) {
+func ValidateAccessToken(token string) (Claims, error) {
 	parts := strings.Split(token, ".") // Split token by "."
 	if len(parts) != 3 {
 		return Claims{}, ErrInvalidToken
@@ -150,4 +124,14 @@ func HashPassword(password string) (string, error) {
 func CheckPassword(hashedPassword, password string) error {
 	// Comparing the hashed password to string password
 	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+}
+
+func GenerateRefreshToken(username string) (string, error) {
+	// Logic to generate refresh token
+	return "some-refresh-token", nil
+}
+
+func RefreshAccessToken(refreshToken string) (string, error) {
+	// Logic to refresh access token
+	return "new-access-token", nil
 }

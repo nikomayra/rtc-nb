@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axiosInstance, { isAxiosError } from './axiosInstance';
 import { APIResponse, Channel, ChannelSchema } from '../types/interfaces';
 import { BASE_URL } from '../utils/constants';
 import { z } from 'zod';
@@ -11,7 +11,7 @@ export const channelsApi = {
     token: string
   ): Promise<APIResponse<Channel>> => {
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         `${BASE_URL}/createchannel`,
         {
           channelName: channelName,
@@ -34,7 +34,7 @@ export const channelsApi = {
           error: { message: 'Server returned invalid channel data', code: 422 },
         };
       }
-      if (axios.isAxiosError(error)) {
+      if (isAxiosError(error)) {
         return {
           success: false,
           error: {
@@ -57,7 +57,7 @@ export const channelsApi = {
     token: string
   ): Promise<APIResponse<void>> => {
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         `${BASE_URL}/joinchannel`,
         { channelName: channelName, channelPassword: password },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -68,7 +68,7 @@ export const channelsApi = {
         return { success: res.data.success, error: res.data.error };
       }
     } catch (error) {
-      if (axios.isAxiosError(error)) {
+      if (isAxiosError(error)) {
         return {
           success: false,
           error: {
@@ -86,7 +86,7 @@ export const channelsApi = {
 
   getAll: async (token: string): Promise<APIResponse<Channel[]>> => {
     try {
-      const res = await axios.get(`${BASE_URL}/channels`, {
+      const res = await axiosInstance.get(`${BASE_URL}/channels`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.data.success) {
@@ -106,7 +106,7 @@ export const channelsApi = {
           },
         };
       }
-      if (axios.isAxiosError(error)) {
+      if (isAxiosError(error)) {
         return {
           success: false,
           error: {

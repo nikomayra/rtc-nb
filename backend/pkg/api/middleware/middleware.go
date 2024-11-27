@@ -7,11 +7,12 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
-	"rtc-nb/backend/api/responses"
-	"rtc-nb/backend/helpers"
-	"rtc-nb/backend/internal/auth"
 	"strings"
 	"time"
+
+	"rtc-nb/backend/internal/auth"
+	"rtc-nb/backend/pkg/api/responses"
+	"rtc-nb/backend/pkg/utils"
 )
 
 // Middleware function type
@@ -76,7 +77,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		var token string
 
 		// Check if this is a WebSocket upgrade request
-		if helpers.IsWebSocketRequest(r) {
+		if utils.IsWebSocketRequest(r) {
 			protocolHeader := textproto.CanonicalMIMEHeaderKey("Sec-WebSocket-Protocol")
 			token = strings.TrimSpace(strings.Split(r.Header.Get(protocolHeader), ",")[1])
 		} else {
@@ -95,7 +96,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Verify token
-		claims, err := auth.VerifyToken(token)
+		claims, err := auth.ValidateAccessToken(token)
 		//log.Printf("AuthMiddleware Claims: %v\n", claims)
 		if err != nil {
 			responses.SendError(w, "Invalid or expired token", http.StatusUnauthorized)
@@ -120,29 +121,3 @@ func MethodMiddleware(method string) Middleware {
 		})
 	}
 }
-
-// import "github.com/go-redis/redis_rate/v10"
-// func rateLimit(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
-//     return func(w http.ResponseWriter, req bunrouter.Request) error {
-//         res, err := limiter.Allow(req.Context(), "project:123", redis_rate.PerMinute(10))
-//         if err != nil {
-//             return err
-//         }
-
-//         h := w.Header()
-//         h.Set("RateLimit-Remaining", strconv.Itoa(res.Remaining))
-
-//         if res.Allowed == 0 {
-//             // We are rate limited.
-
-//             seconds := int(res.RetryAfter / time.Second)
-//             h.Set("RateLimit-RetryAfter", strconv.Itoa(seconds))
-
-//             // Stop processing and return the error.
-//             return ErrRateLimited
-//         }
-
-//         // Continue processing as normal.
-//         return next(w, req)
-//     }
-// }

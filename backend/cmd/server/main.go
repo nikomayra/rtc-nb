@@ -3,39 +3,40 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
 
-	"rtc-nb/backend/chat"
 	"rtc-nb/backend/internal/config"
+	"rtc-nb/backend/internal/repositories"
+	"rtc-nb/backend/internal/services/chat"
 	"rtc-nb/backend/internal/store/database"
 	"rtc-nb/backend/internal/store/redis"
+	"rtc-nb/backend/internal/websocket"
 	"rtc-nb/backend/pkg/api"
-	"rtc-nb/backend/websocket"
 )
 
 func main() {
-
 	cfg := config.Load()
 
-	store := database.NewStore()
-	db, err := store.Open()
+	// Initialize store with config-provided DB
+	store, err := database.NewStore(cfg.DB)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to initialize store: %v", err)
 	}
 	defer store.Close()
 
-	redisStore := redis.NewStore(cfg.Redis)
+	// Initialize Redis PubSub with config-provided client
+	pubSub := redis.NewPubSub(cfg.Redis)
 
-	chatService := chat.NewService(
-		store.NewStore(db),
-		redis.NewBroker(os.Getenv("REDIS_SERVER")),
-		chat.NewStateManager(500), // TODO: make this configurable
-	)
+	// Initialize repository with store
+	repo := repositories.NewRepository(store)
 
-	wsHandler := websocket.NewWebSocketHandler(chatService)
+	// Initialize websocket hub and handler
+	wsHub := websocket.NewHub()
+	wsHandler := websocket.NewWebSocketHandler(wsHub)
 
-	// webSocketHandler := websocketmanager.NewWebSocketHandler(redisClient, connectionManager)
+	// Initialize chat service
+	chatService := chat.NewService(repo, pubSub, wsHub)
 
+	// Setup router and routes
 	router := http.NewServeMux()
 	api.RegisterRoutes(router, wsHandler, chatService)
 

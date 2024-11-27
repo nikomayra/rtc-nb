@@ -18,11 +18,11 @@ var (
 // Represents a chat room
 type Channel struct {
 	Name           string    `json:"name"`
-	IsPrivate      bool      `json:"isPrivate"`
+	IsPrivate      bool      `json:"is_private"`
 	Description    *string   `json:"description,omitempty"`
 	HashedPassword *string   `json:"-"` // Never expose in JSON
-	CreatedBy      string    `json:"createdBy"`
-	CreatedAt      time.Time `json:"createdAt"`
+	CreatedBy      string    `json:"created_by"`
+	CreatedAt      time.Time `json:"created_at"`
 
 	mu      sync.RWMutex              `json:"-"`
 	Members map[string]*ChannelMember `json:"members"` // username -> member data
@@ -31,9 +31,9 @@ type Channel struct {
 // Represents a user's status and metadata within a channel
 type ChannelMember struct {
 	Username    string     `json:"username"`
-	IsAdmin     bool       `json:"isAdmin"`
-	JoinedAt    time.Time  `json:"joinedAt"`
-	LastMessage *time.Time `json:"lastMessage,omitempty"`
+	IsAdmin     bool       `json:"is_admin"`
+	JoinedAt    time.Time  `json:"joined_at"`
+	LastMessage *time.Time `json:"last_message,omitempty"`
 }
 
 func NewChannel(name string, creator string, description, password *string) (*Channel, error) {
@@ -46,6 +46,8 @@ func NewChannel(name string, creator string, description, password *string) (*Ch
 	var isPrivate bool
 	if password == nil {
 		isPrivate = false
+	} else {
+		isPrivate = true
 	}
 
 	ch := &Channel{

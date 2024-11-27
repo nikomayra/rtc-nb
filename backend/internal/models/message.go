@@ -18,7 +18,7 @@ const (
 
 type Message struct {
 	ID          string         `json:"id"`
-	ChannelName string         `json:"channelName"`
+	ChannelName string         `json:"channelname"`
 	Username    string         `json:"username"`
 	Type        MessageType    `json:"type"`
 	Content     MessageContent `json:"content"`

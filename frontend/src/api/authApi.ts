@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axiosInstance from './axiosInstance';
 import { APIResponse } from '../types/interfaces';
 import { BASE_URL } from '../utils/constants';
 
@@ -7,7 +7,7 @@ export const authApi = {
     username: string,
     password: string
   ): Promise<APIResponse<{ token: string; username: string }>> => {
-    const res = await axios.post(`${BASE_URL}/register`, {
+    const res = await axiosInstance.post(`${BASE_URL}/register`, {
       username,
       password,
     });
@@ -18,7 +18,10 @@ export const authApi = {
     username: string,
     password: string
   ): Promise<APIResponse<{ token: string; username: string }>> => {
-    const res = await axios.post(`${BASE_URL}/login`, { username, password });
+    const res = await axiosInstance.post(`${BASE_URL}/login`, {
+      username,
+      password,
+    });
     return res.data;
   },
 };

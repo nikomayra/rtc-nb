@@ -1,7 +1,7 @@
 -- Basic user table - stores authentication info
 CREATE TABLE users (
-    username VARCHAR(50) PRIMARY KEY,  -- Limited to 50 chars, must be unique
-    hashed_password VARCHAR(100) NOT NULL  -- Store hashed password, never plaintext
+    username VARCHAR(50) PRIMARY KEY,
+    hashed_password VARCHAR(100) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -13,27 +13,14 @@ CREATE TABLE user_status (
     last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- type User struct {
--- 	Username       string    `json:"username"`
--- 	HashedPassword string    `json:"-"` // Never expose in JSON
--- 	CreatedAt      time.Time `json:"createdAt"`
--- 	LastSeen       time.Time `json:"lastSeen"`
--- }
-
--- // Represents the current state of a user
--- type UserStatus struct {
--- 	Username string    `json:"username"`
--- 	IsOnline bool      `json:"isOnline"`
--- 	LastSeen time.Time `json:"lastSeen"`
--- }
-
 -- Channel table - stores channel information
 CREATE TABLE channels (
-    name VARCHAR(50) PRIMARY KEY,  -- Channel names must be unique
-    hashed_password VARCHAR(100),    -- Optional password for private channels
+    name VARCHAR(50) PRIMARY KEY,
     is_private BOOLEAN NOT NULL DEFAULT false,
-    description TEXT,             -- TEXT has no length limit, unlike VARCHAR
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    description TEXT,                  -- Optional
+    hashed_password VARCHAR(100),      -- Optional
+    created_by VARCHAR(50) NOT NULL REFERENCES users(username),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Represents a user's status and metadata within a channel
@@ -43,27 +30,10 @@ CREATE TABLE channel_member (
     is_admin BOOLEAN NOT NULL DEFAULT false,
     joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_message TIMESTAMP,
+    PRIMARY KEY (channel_name, username)
 );
 
--- type Channel struct {
--- 	Name           string    `json:"name"`
--- 	IsPrivate      bool      `json:"isPrivate"`
--- 	Description    *string   `json:"description,omitempty"`
--- 	HashedPassword *string   `json:"-"` // Never expose in JSON
--- 	CreatedAt      time.Time `json:"createdAt"`
-
--- 	mu      sync.RWMutex              `json:"-"`
--- 	Members map[string]*ChannelMember `json:"members"` // username -> member data
--- }
-
--- // Represents a user's status and metadata within a channel
--- type ChannelMember struct {
--- 	Username    string     `json:"username"`
--- 	IsAdmin     bool       `json:"isAdmin"`
--- 	JoinedAt    time.Time  `json:"joinedAt"`
--- 	LastMessage *time.Time `json:"lastMessage,omitempty"`
--- }
-
+-- Messages table
 CREATE TABLE messages (
     id UUID PRIMARY KEY,
     channel_name VARCHAR(50) REFERENCES channels(name) ON DELETE CASCADE,
@@ -73,15 +43,6 @@ CREATE TABLE messages (
     timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Message
--- ID          string         `json:"id"`
--- ChannelName string         `json:"channelName"`
--- Username    string         `json:"username"`
--- Type        MessageType    `json:"type"`
--- Content     MessageContent `json:"content"`
--- Timestamp   time.Time      `json:"timestamp"`
-
-
--- Index to make it faster to find messages in a channel ordered by time
+-- Indexes to speed up queries
 CREATE INDEX idx_messages_channel_timestamp ON messages(channel_name, timestamp);
-
+CREATE INDEX idx_channels_created_by ON channels(created_by);
