@@ -97,6 +97,17 @@ func (cs *ChatService) JoinChannel(ctx context.Context, channelName, username st
 	// 2. Check password if required
 	// 3. Add user to channel
 	// 4. Subscribe to channel events
+	channel, err := cs.repo.GetChannel(ctx, channelName) // TODO: use redis cache?
+	if err != nil {
+		return fmt.Errorf("get channel: %w", err)
+	}
+	if channel.HashedPassword != nil && *channel.HashedPassword != *password {
+		return fmt.Errorf("invalid password")
+	}
+
+	if conn, ok := cs.hub.GetConnection(username); ok {
+		cs.hub.AddClientToChannel(channelName, conn)
+	}
 	return nil
 }
 

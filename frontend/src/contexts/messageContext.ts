@@ -1,10 +1,10 @@
 import { createContext } from 'react';
-import { Message } from '../types/interfaces';
+import { IncomingMessage, OutgoingMessage } from '../types/interfaces';
 
 interface MessageContextType {
-  messages: Message[];
+  messages: IncomingMessage[];
   isConnected: boolean;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (message: OutgoingMessage) => Promise<void>;
 }
 
 export const MessageContext = createContext<MessageContextType | null>(null);

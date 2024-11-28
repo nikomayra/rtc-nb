@@ -1,29 +1,42 @@
 import { useState, useEffect, useCallback } from 'react';
 import { messagesApi } from '../api/messagesApi';
-import { Message } from '../types/interfaces';
+import {
+  IncomingMessage,
+  IncomingMessageSchema,
+  OutgoingMessage,
+} from '../types/interfaces';
 import { useAuthContext } from './useAuthContext';
+import { z } from 'zod';
 
 export const useMessages = (channelName: string) => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<IncomingMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const { token } = useAuthContext();
 
   useEffect(() => {
     if (!token || !channelName) return;
 
-    const setupWebSocket = async () => {
+    const setupWebSocket = async (): Promise<void> => {
       try {
         const ws = await messagesApi.connectWebSocket(token);
 
         ws.onmessage = (event) => {
-          const message = JSON.parse(event.data);
-          setMessages((prev) => [...prev, message]);
+          try {
+            const incomingMessageJson: JSON = JSON.parse(event.data);
+            const parsedIncomingMessage: IncomingMessage =
+              IncomingMessageSchema.parse(incomingMessageJson);
+            setMessages((prev) => [...prev, parsedIncomingMessage]);
+          } catch (error) {
+            if (error instanceof z.ZodError) {
+              console.error('Invalid incoming message:', error.errors);
+            } else {
+              console.error('Failed to json parse incoming message:', error);
+            }
+          }
         };
 
-        ws.onopen = () => {
-          setIsConnected(true);
-          console.log('WebSocket connection opened');
-        };
+        setIsConnected(true);
+        console.log('WebSocket connection opened in useMessages');
 
         ws.onclose = () => {
           setIsConnected(false);
@@ -43,11 +56,11 @@ export const useMessages = (channelName: string) => {
   }, [token, channelName]);
 
   const sendMessage = useCallback(
-    async (text: string): Promise<void> => {
+    async (message: OutgoingMessage): Promise<void> => {
       if (!token || !channelName) return;
 
       try {
-        await messagesApi.sendMessage(channelName, text, token);
+        await messagesApi.sendMessage(message, token);
       } catch (error) {
         console.error('Failed to send message:', error);
       }

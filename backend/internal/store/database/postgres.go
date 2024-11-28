@@ -115,6 +115,26 @@ func (s *Store) CreateChannel(ctx context.Context, channel *models.Channel) erro
 	return nil
 }
 
+func (s *Store) GetChannel(ctx context.Context, channelName string) (*models.Channel, error) {
+	channel := &models.Channel{
+		Members: make(map[string]*models.ChannelMember),
+	}
+	err := s.statements.SelectChannel.QueryRowContext(ctx, channelName).Scan(
+		&channel.Name,
+		&channel.IsPrivate,
+		&channel.Description,
+		&channel.CreatedBy,
+		&channel.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err := s.loadChannelMembers(ctx, channel); err != nil {
+		return nil, fmt.Errorf("failed to load channel members: %w", err)
+	}
+	return channel, err
+}
+
 func (s *Store) GetChannels(ctx context.Context) ([]*models.Channel, error) {
 
 	rows, err := s.statements.SelectChannels.QueryContext(ctx)

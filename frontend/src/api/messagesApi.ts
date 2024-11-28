@@ -1,47 +1,46 @@
 import { BASE_URL } from '../utils/constants';
+import { OutgoingMessage } from '../types/interfaces';
 
 export const messagesApi = {
   ws: null as WebSocket | null,
 
   connectWebSocket: async (token: string): Promise<WebSocket> => {
-    console.log('Closing any open WebSocket connection and creating a new one');
+    if (messagesApi.ws?.readyState === WebSocket.OPEN) {
+      return messagesApi.ws;
+    }
+
+    console.log('Creating new WebSocket connection');
     messagesApi.closeConnection();
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}${BASE_URL}/ws`;
 
-    const ws = new WebSocket(wsUrl, ['Authentication', token]);
-    ws.onerror = (error) => {
-      return new Error(`WebSocket connection failed ${error}`);
-    };
-    messagesApi.ws = ws;
-    return ws;
-    // return new Promise((resolve, reject) => {
-    //   ws.onopen = () => resolve(ws);
-    //   ws.onerror = (error) => {
-    //     console.error('WebSocket error:', error);
-    //     reject(new Error('WebSocket connection failed'));
-    //   };
-    // });
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(wsUrl, ['Authentication', token]);
+
+      ws.onopen = () => {
+        messagesApi.ws = ws;
+        resolve(ws);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        reject(new Error('WebSocket connection failed'));
+      };
+    });
   },
 
   sendMessage: async (
-    channelName: string,
-    text: string,
+    message: OutgoingMessage,
     token: string
   ): Promise<void> => {
-    let ws = messagesApi.ws;
-
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      ws = await messagesApi.connectWebSocket(token);
+    try {
+      const ws = await messagesApi.connectWebSocket(token);
+      ws.send(JSON.stringify(message));
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      throw error;
     }
-
-    const message = {
-      channelName,
-      type: 0,
-      text,
-    };
-    ws.send(JSON.stringify(message));
   },
 
   closeConnection: () => {

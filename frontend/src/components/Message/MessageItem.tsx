@@ -1,8 +1,8 @@
-import { Message } from '../../types/interfaces';
+import { IncomingMessage } from '../../types/interfaces';
 import helpers from '../../utils/helpers';
 
 type MessageItemProps = {
-  message: Message;
+  message: IncomingMessage;
 };
 
 export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {

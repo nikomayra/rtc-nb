@@ -19,12 +19,28 @@ export const ChannelSchema = z.object({
 export type Channel = z.infer<typeof ChannelSchema>;
 export type ChannelMember = z.infer<typeof ChannelMemberSchema>;
 
-export interface Message {
-  id: string;
-  username: string;
-  content: { text: string };
-  timestamp: string;
-}
+export const OutgoingMessageSchema = z.object({
+  channelName: z.string().min(1),
+  type: z.number().int().min(0),
+  content: z.object({
+    text: z.string().min(1),
+  }),
+});
+
+export const IncomingMessageSchema = z.object({
+  id: z.string().uuid(),
+  channelName: z.string().min(1),
+  username: z.string().min(1),
+  type: z.number().int().min(0),
+  content: z.object({
+    text: z.string().min(1),
+  }),
+  timestamp: z.string().datetime(),
+});
+
+// Type definitions
+export type OutgoingMessage = z.infer<typeof OutgoingMessageSchema>;
+export type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
 
 interface APISuccessResponse<T> {
   success: true;

@@ -10,7 +10,7 @@ import (
 type Hub struct {
 	mu          sync.RWMutex
 	connections map[string]*websocket.Conn          // username -> connection
-	channels    map[string]map[*websocket.Conn]bool // channelUsername -> connection
+	channels    map[string]map[*websocket.Conn]bool // channelName -> user connections: bool
 }
 
 func NewHub() *Hub {
@@ -20,14 +20,18 @@ func NewHub() *Hub {
 	}
 }
 
-func (h *Hub) NotifyChannel(channelUsername string, message []byte) {
+func (h *Hub) NotifyChannel(channelName string, message []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	if clients, ok := h.channels[channelUsername]; ok {
+	log.Printf("NotifyChannel: channelName=%s clients=%v\n", channelName, len(h.channels[channelName]))
+	if clients, ok := h.channels[channelName]; ok {
 		for client := range clients {
-			client.WriteMessage(0, message)
+			if err := client.WriteMessage(websocket.TextMessage, message); err != nil {
+				log.Printf("Error writing message to client: %v", err)
+			}
 		}
+	} else {
+		log.Printf("No clients in channel: %s", channelName)
 	}
 }
 
@@ -36,15 +40,34 @@ func (h *Hub) NotifyUser(username string, message []byte) {
 	defer h.mu.RUnlock()
 
 	if conn, ok := h.connections[username]; ok {
-		conn.WriteMessage(0, message)
+		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+			log.Printf("Error writing message to client: %v", err)
+		}
 	}
+}
+
+func (h *Hub) AddClientToChannel(channelName string, userConn *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, ok := h.channels[channelName]; !ok {
+		h.channels[channelName] = make(map[*websocket.Conn]bool)
+	}
+	h.channels[channelName][userConn] = true
+	log.Printf("Added client to channel: %s\n", channelName)
 }
 
 func (h *Hub) AddConnection(username string, conn *websocket.Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
+	// If there's an existing connection, close it
+	if existingConn, exists := h.connections[username]; exists {
+		log.Printf("Closing existing connection for user: %s", username)
+		existingConn.Close()
+	}
+
 	h.connections[username] = conn
-	log.Printf("Client Username: %s, connected.\n", username)
+	log.Printf("Client Username: %s, connected. Total connections: %d", username, len(h.connections))
 }
 
 func (h *Hub) RemoveConnection(username string) {

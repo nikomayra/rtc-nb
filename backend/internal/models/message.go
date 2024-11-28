@@ -12,66 +12,65 @@ type MessageType int
 const (
 	MessageTypeText MessageType = iota
 	MessageTypeImage
-	MessageTypeVideo
-	MessageTypeAudio
 )
-
-type Message struct {
-	ID          string         `json:"id"`
-	ChannelName string         `json:"channelname"`
-	Username    string         `json:"username"`
-	Type        MessageType    `json:"type"`
-	Content     MessageContent `json:"content"`
-	Timestamp   time.Time      `json:"timestamp"`
-}
-
-type MessageContent interface {
-	GetType() MessageType
-	Validate() error
-}
 
 type TextContent struct {
 	Text string `json:"text"`
-}
-
-func (t *TextContent) GetType() MessageType {
-	return MessageTypeText
-}
-
-func (t *TextContent) Validate() error {
-	if t.Text == "" {
-		return errors.New("message text cannot be empty")
-	}
-	return nil
 }
 
 type ImageContent struct {
 	URL string `json:"url"`
 }
 
-func (i *ImageContent) GetType() MessageType {
-	return MessageTypeImage
+type IncomingMessage struct {
+	ChannelName string      `json:"channelname"`
+	Type        MessageType `json:"type"`
+	Content     interface{} `json:"content"`
 }
 
-func (i *ImageContent) Validate() error {
-	if i.URL == "" {
-		return errors.New("image URL cannot be empty")
+type Message struct {
+	ID          string      `json:"id"`
+	ChannelName string      `json:"channelName"`
+	Username    string      `json:"username"`
+	Type        MessageType `json:"type"`
+	Content     interface{} `json:"content"`
+	Timestamp   time.Time   `json:"timestamp"`
+}
+
+func (m *IncomingMessage) Validate() error {
+	if m.ChannelName == "" {
+		return errors.New("channelname required")
 	}
+
+	switch m.Type {
+	case MessageTypeText:
+		content, ok := m.Content.(map[string]interface{})
+		if !ok || content["text"] == "" {
+			return errors.New("invalid text content")
+		}
+	case MessageTypeImage:
+		content, ok := m.Content.(map[string]interface{})
+		if !ok || content["url"] == "" {
+			return errors.New("invalid image content")
+		}
+	default:
+		return errors.New("invalid message type")
+	}
+
 	return nil
 }
 
-// Factory method
-func NewMessage(channelName, username string, content MessageContent) (*Message, error) {
-	if err := content.Validate(); err != nil {
+func NewMessage(incoming *IncomingMessage, username string) (*Message, error) {
+	if err := incoming.Validate(); err != nil {
 		return nil, err
 	}
 
 	return &Message{
 		ID:          uuid.NewString(),
-		ChannelName: channelName,
+		ChannelName: incoming.ChannelName,
 		Username:    username,
-		Type:        content.GetType(),
-		Content:     content,
+		Type:        incoming.Type,
+		Content:     incoming.Content,
 		Timestamp:   time.Now().UTC(),
 	}, nil
 }

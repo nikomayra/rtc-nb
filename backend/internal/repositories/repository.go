@@ -26,6 +26,10 @@ func (r *Repository) CreateChannel(ctx context.Context, channel *models.Channel)
 	return r.store.CreateChannel(ctx, channel)
 }
 
+func (r *Repository) GetChannel(ctx context.Context, channelName string) (*models.Channel, error) {
+	return r.store.GetChannel(ctx, channelName)
+}
+
 func (r *Repository) GetChannels(ctx context.Context) ([]*models.Channel, error) {
 	return r.store.GetChannels(ctx)
 }

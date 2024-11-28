@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/models"
@@ -17,7 +16,7 @@ import (
 type WebSocketHandler struct {
 	upgrader websocket.Upgrader
 	hub      *Hub
-	mu       sync.RWMutex
+	//mu       sync.RWMutex
 }
 
 func NewWebSocketHandler(hub *Hub) *WebSocketHandler {
@@ -71,19 +70,25 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 			break
 		}
 
-		var msg models.Message
-		if err := json.Unmarshal(message, &msg); err != nil {
+		var incomingMsg models.IncomingMessage
+		if err := json.Unmarshal(message, &incomingMsg); err != nil {
 			log.Printf("Error unmarshaling message: %v", err)
 			continue
 		}
 
-		// Validate message sender
-		if msg.Username != claims.Username {
-			log.Printf("Message username mismatch: %s != %s", msg.Username, claims.Username)
+		outgoingMsg, err := models.NewMessage(&incomingMsg, claims.Username)
+		if err != nil {
+			log.Printf("Error creating message: %v", err)
+			continue
+		}
+
+		outgoingJSON, err := json.Marshal(outgoingMsg)
+		if err != nil {
+			log.Printf("Error marshaling message: %v", err)
 			continue
 		}
 
 		// Broadcast message to channel
-		wsh.hub.NotifyChannel(msg.ChannelName, message)
+		wsh.hub.NotifyChannel(incomingMsg.ChannelName, outgoingJSON)
 	}
 }

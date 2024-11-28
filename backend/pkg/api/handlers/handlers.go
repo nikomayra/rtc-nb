@@ -189,7 +189,7 @@ func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var hashedPassword *string
-	if req.ChannelPassword != nil {
+	if req.ChannelPassword != nil && *req.ChannelPassword != "" {
 		hashed, err := auth.HashPassword(*req.ChannelPassword)
 		if err != nil {
 			responses.SendError(w, "Error processing request", http.StatusInternalServerError)

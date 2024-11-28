@@ -12,10 +12,14 @@
   flex: 1;
   overflow-y: scroll;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   gap: var(--spacing-sm);
   padding-right: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overflow-anchor: auto;
+  justify-content: flex-end;
 }
 
 .message-item {
