@@ -16,8 +16,12 @@ type Statements struct {
 	InsertChannel        *sql.Stmt // name, is_private, description, created_by, hashed_password
 	SelectChannel        *sql.Stmt // name
 	SelectChannels       *sql.Stmt
+	UpdateChannel        *sql.Stmt // name, is_private, description, hashed_password
+	DeleteChannel        *sql.Stmt // name
 	SelectChannelMembers *sql.Stmt // channel_name
 	AddChannelMember     *sql.Stmt // channel_name, username, is_admin
+	RemoveChannelMember  *sql.Stmt // channel_name, username
+	IsUserAdmin          *sql.Stmt // channel_name, username
 
 	InsertMessage  *sql.Stmt // id, channel_name, username, message_type, content
 	SelectMessages *sql.Stmt
@@ -95,6 +99,18 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 		return nil, fmt.Errorf("prepare select channels: %w", err)
 	}
 
+	if s.DeleteChannel, err = prepare(`
+        DELETE FROM channels WHERE name = $1`); err != nil {
+		return nil, fmt.Errorf("prepare delete channel: %w", err)
+	}
+
+	if s.UpdateChannel, err = prepare(`
+        UPDATE channels 
+        SET is_private = $2, description = $3, hashed_password = $4 
+        WHERE name = $1`); err != nil {
+		return nil, fmt.Errorf("prepare update channel: %w", err)
+	}
+
 	if s.SelectChannelMembers, err = prepare(`
         SELECT username, is_admin, joined_at, last_message
         FROM channel_member WHERE channel_name = $1`); err != nil {
@@ -105,6 +121,11 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
         INSERT INTO channel_member (channel_name, username, is_admin) 
         VALUES ($1, $2, $3)`); err != nil {
 		return nil, fmt.Errorf("prepare add channel member: %w", err)
+	}
+
+	if s.RemoveChannelMember, err = prepare(`
+        DELETE FROM channel_member WHERE channel_name = $1 AND username = $2`); err != nil {
+		return nil, fmt.Errorf("prepare remove channel member: %w", err)
 	}
 
 	// Prepare message statements

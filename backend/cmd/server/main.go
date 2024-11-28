@@ -11,6 +11,8 @@ import (
 	"rtc-nb/backend/internal/store/redis"
 	"rtc-nb/backend/internal/websocket"
 	"rtc-nb/backend/pkg/api"
+
+	"github.com/gorilla/mux"
 )
 
 func main() {
@@ -37,7 +39,7 @@ func main() {
 	chatService := chat.NewService(repo, pubSub, wsHub)
 
 	// Setup router and routes
-	router := http.NewServeMux()
+	router := mux.NewRouter()
 	api.RegisterRoutes(router, wsHandler, chatService)
 
 	// TODO: serve the frontend from the dist folder for production

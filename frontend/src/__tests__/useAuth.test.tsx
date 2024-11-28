@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
-import { useAuth } from '../../hooks/useAuth';
-import { authApi } from '../../api/authApi';
+import { useAuth } from '../hooks/useAuth';
+import { authApi } from '../api/authApi';
 
 // Mock the authApi
 jest.mock('../../api/authApi', () => ({
@@ -52,14 +52,8 @@ describe('useAuth hook', () => {
     expect(result.current.isLoggedIn).toBe(true);
     expect(result.current.token).toBe('test-token');
     expect(result.current.username).toBe('testuser');
-    expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
-      'token',
-      'test-token'
-    );
-    expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
-      'username',
-      'testuser'
-    );
+    expect(mockSessionStorage.setItem).toHaveBeenCalledWith('token', 'test-token');
+    expect(mockSessionStorage.setItem).toHaveBeenCalledWith('username', 'testuser');
   });
 
   it('should handle login failure', async () => {
@@ -100,14 +94,8 @@ describe('useAuth hook', () => {
     expect(result.current.isLoggedIn).toBe(true);
     expect(result.current.token).toBe('new-user-token');
     expect(result.current.username).toBe('newuser');
-    expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
-      'token',
-      'new-user-token'
-    );
-    expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
-      'username',
-      'newuser'
-    );
+    expect(mockSessionStorage.setItem).toHaveBeenCalledWith('token', 'new-user-token');
+    expect(mockSessionStorage.setItem).toHaveBeenCalledWith('username', 'newuser');
   });
 
   it('should handle registration failure', async () => {

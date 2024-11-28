@@ -10,6 +10,7 @@ import (
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/pkg/api/responses"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
 
@@ -43,6 +44,13 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	if channelName == "" {
+		http.Error(w, "Channel name required", http.StatusBadRequest)
 		return
 	}
 
@@ -89,6 +97,6 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 		}
 
 		// Broadcast message to channel
-		wsh.hub.NotifyChannel(incomingMsg.ChannelName, outgoingJSON)
+		wsh.hub.NotifyChannel(channelName, outgoingJSON)
 	}
 }

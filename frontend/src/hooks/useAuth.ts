@@ -22,7 +22,7 @@ export const useAuth = () => {
   const login = async (username: string, password: string): Promise<void> => {
     try {
       const response = await authApi.login(username, password);
-      if (response.success && response.data) {
+      if (response.success) {
         setToken(response.data.token);
         setUsername(username);
         setIsLoggedIn(true);
@@ -41,13 +41,10 @@ export const useAuth = () => {
     }
   };
 
-  const register = async (
-    username: string,
-    password: string
-  ): Promise<void> => {
+  const register = async (username: string, password: string): Promise<void> => {
     try {
       const response = await authApi.register(username, password);
-      if (response.success && response.data) {
+      if (response.success) {
         setToken(response.data.token);
         setUsername(username);
         setIsLoggedIn(true);

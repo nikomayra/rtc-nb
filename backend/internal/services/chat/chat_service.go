@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
+	"time"
 
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/repositories"
@@ -97,16 +99,22 @@ func (cs *ChatService) JoinChannel(ctx context.Context, channelName, username st
 	// 2. Check password if required
 	// 3. Add user to channel
 	// 4. Subscribe to channel events
-	channel, err := cs.repo.GetChannel(ctx, channelName) // TODO: use redis cache?
+	channel, err := cs.repo.GetChannel(ctx, channelName)
 	if err != nil {
 		return fmt.Errorf("get channel: %w", err)
 	}
 	if channel.HashedPassword != nil && *channel.HashedPassword != *password {
 		return fmt.Errorf("invalid password")
 	}
-
+	log.Printf("Joining channel: %s for user: %s", channelName, username)
 	if conn, ok := cs.hub.GetConnection(username); ok {
 		cs.hub.AddClientToChannel(channelName, conn)
+	}
+	if err := cs.repo.AddChannelMember(ctx, channelName, &models.ChannelMember{
+		Username: username,
+		JoinedAt: time.Now(),
+	}); err != nil {
+		return fmt.Errorf("add channel member: %w", err)
 	}
 	return nil
 }
@@ -120,6 +128,12 @@ func (cs *ChatService) LeaveChannel(ctx context.Context, channelName, username s
 	// 1. Verify user is in channel
 	// 2. Remove user from channel
 	// 3. Unsubscribe from channel events
+	if conn, ok := cs.hub.GetConnection(username); ok {
+		cs.hub.RemoveClientFromChannel(channelName, conn)
+	}
+	if err := cs.repo.RemoveChannelMember(ctx, channelName, username); err != nil {
+		return fmt.Errorf("remove channel member: %w", err)
+	}
 	return nil
 }
 
@@ -148,14 +162,11 @@ func (cs *ChatService) DeleteChannel(ctx context.Context, channelName, username 
 	// 3. Delete channel
 	// 4. Notify all members
 	// 5. Clean up subscriptions
+	if isAdmin, err := cs.repo.IsUserAdmin(ctx, channelName, username); err != nil || !isAdmin {
+		return fmt.Errorf("user is not admin")
+	}
+	if err := cs.repo.DeleteChannel(ctx, channelName); err != nil {
+		return fmt.Errorf("delete channel: %w", err)
+	}
 	return nil
-}
-
-// IsUserAdmin checks if a user is an admin of a channel
-func (cs *ChatService) IsUserAdmin(ctx context.Context, channelName, username string) (bool, error) {
-	cs.mu.RLock()
-	defer cs.mu.RUnlock()
-
-	// TODO: Implement admin check
-	return false, nil
 }

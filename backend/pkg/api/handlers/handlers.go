@@ -9,6 +9,8 @@ import (
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/services/chat"
 	"rtc-nb/backend/pkg/api/responses"
+
+	"github.com/gorilla/mux"
 )
 
 type Handlers struct {
@@ -226,16 +228,9 @@ func (h *Handlers) GetChannelsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) DeleteChannelHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ChannelName string `json:"channelName"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		responses.SendError(w, "Invalid request format", http.StatusBadRequest)
-		return
-	}
-
-	if req.ChannelName == "" {
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	if channelName == "" {
 		responses.SendError(w, "Channel name required", http.StatusBadRequest)
 		return
 	}
@@ -247,26 +242,19 @@ func (h *Handlers) DeleteChannelHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ctx := r.Context()
-	if err := h.chatService.DeleteChannel(ctx, req.ChannelName, claims.Username); err != nil {
+	if err := h.chatService.DeleteChannel(ctx, channelName, claims.Username); err != nil {
 		log.Printf("Error deleting channel: %v", err)
 		responses.SendError(w, "Failed to delete channel", http.StatusInternalServerError)
 		return
 	}
 
-	responses.SendSuccess(w, fmt.Sprintf("Deleted channel: %s", req.ChannelName), http.StatusOK)
+	responses.SendSuccess(w, fmt.Sprintf("Deleted channel: %s", channelName), http.StatusOK)
 }
 
 func (h *Handlers) LeaveChannelHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ChannelName string `json:"channelName"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		responses.SendError(w, "Invalid request format", http.StatusBadRequest)
-		return
-	}
-
-	if req.ChannelName == "" {
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	if channelName == "" {
 		responses.SendError(w, "Channel name required", http.StatusBadRequest)
 		return
 	}
@@ -278,11 +266,11 @@ func (h *Handlers) LeaveChannelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	if err := h.chatService.LeaveChannel(ctx, req.ChannelName, claims.Username); err != nil {
+	if err := h.chatService.LeaveChannel(ctx, channelName, claims.Username); err != nil {
 		log.Printf("Error leaving channel: %v", err)
 		responses.SendError(w, "Failed to leave channel", http.StatusInternalServerError)
 		return
 	}
 
-	responses.SendSuccess(w, fmt.Sprintf("Left channel: %s", req.ChannelName), http.StatusOK)
+	responses.SendSuccess(w, fmt.Sprintf("Left channel: %s", channelName), http.StatusOK)
 }

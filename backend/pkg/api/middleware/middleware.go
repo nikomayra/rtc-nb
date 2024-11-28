@@ -18,14 +18,6 @@ import (
 // Middleware function type
 type Middleware func(http.Handler) http.Handler
 
-// Chain applies middlewares in reverse order for correct execution
-func Chain(handler http.Handler, middlewares ...Middleware) http.Handler {
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		handler = middlewares[i](handler)
-	}
-	return handler
-}
-
 // Logger wraps http.ResponseWriter to capture status code
 type responseLogger struct {
 	http.ResponseWriter
@@ -107,17 +99,4 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		ctx := auth.NewContextWithClaims(r.Context(), &claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-// MethodMiddleware ensures correct HTTP method
-func MethodMiddleware(method string) Middleware {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != method {
-				responses.SendError(w, "Method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
 }

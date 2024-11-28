@@ -70,14 +70,6 @@ func (s *Store) CreateChannel(ctx context.Context, channel *models.Channel) erro
 	if user == nil {
 		return fmt.Errorf("creator user does not exist")
 	}
-
-	// Insert channel
-	// fmt.Printf("channel.Name: %s\n", channel.Name)
-	// fmt.Printf("channel.IsPrivate: %v\n", channel.IsPrivate)
-	// fmt.Printf("channel.Description: %s\n", *channel.Description)
-	// fmt.Printf("channel.HashedPassword: %s\n", *channel.HashedPassword)
-	// fmt.Printf("channel.CreatedBy: %s\n", channel.CreatedBy)
-	// fmt.Printf("channel.CreatedAt: %v\n", channel.CreatedAt)
 	_, err = tx.StmtContext(ctx, s.statements.InsertChannel).ExecContext(ctx,
 		channel.Name,
 		channel.IsPrivate,
@@ -192,4 +184,30 @@ func (s *Store) loadChannelMembers(ctx context.Context, channel *models.Channel)
 		channel.Members[member.Username] = member
 	}
 	return nil
+}
+
+func (s *Store) DeleteChannel(ctx context.Context, channelName string) error {
+	_, err := s.statements.DeleteChannel.ExecContext(ctx, channelName)
+	return err
+}
+
+func (s *Store) UpdateChannel(ctx context.Context, channel *models.Channel) error {
+	_, err := s.statements.UpdateChannel.ExecContext(ctx, channel.Name, channel.IsPrivate, channel.Description, channel.HashedPassword)
+	return err
+}
+
+func (s *Store) AddChannelMember(ctx context.Context, channelName string, member *models.ChannelMember) error {
+	_, err := s.statements.AddChannelMember.ExecContext(ctx, channelName, member.Username, member.IsAdmin)
+	return err
+}
+
+func (s *Store) RemoveChannelMember(ctx context.Context, channelName string, username string) error {
+	_, err := s.statements.RemoveChannelMember.ExecContext(ctx, channelName, username)
+	return err
+}
+
+func (s *Store) IsUserAdmin(ctx context.Context, channelName string, username string) (bool, error) {
+	var isAdmin bool
+	err := s.statements.IsUserAdmin.QueryRowContext(ctx, channelName, username).Scan(&isAdmin)
+	return isAdmin, err
 }

@@ -56,6 +56,13 @@ func (h *Hub) AddClientToChannel(channelName string, userConn *websocket.Conn) {
 	log.Printf("Added client to channel: %s\n", channelName)
 }
 
+func (h *Hub) RemoveClientFromChannel(channelName string, userConn *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.channels[channelName], userConn)
+	log.Printf("Removed client from channel: %s\n", channelName)
+}
+
 func (h *Hub) AddConnection(username string, conn *websocket.Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
