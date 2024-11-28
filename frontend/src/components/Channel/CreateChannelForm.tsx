@@ -1,11 +1,7 @@
 import { FormEvent } from 'react';
 
 type CreateChannelFormProps = {
-  onSubmit: (
-    name: string,
-    description?: string,
-    password?: string
-  ) => Promise<boolean>;
+  onSubmit: (name: string, description?: string, password?: string) => Promise<void>;
 };
 
 export const CreateChannelForm = ({ onSubmit }: CreateChannelFormProps) => {

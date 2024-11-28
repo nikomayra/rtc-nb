@@ -72,11 +72,15 @@ export const useAuth = () => {
   };
 
   return {
-    token,
-    username,
-    isLoggedIn,
-    login,
-    register,
-    logout,
+    state: {
+      token,
+      username,
+      isLoggedIn,
+    },
+    actions: {
+      login,
+      register,
+      logout,
+    },
   };
 };

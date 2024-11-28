@@ -80,7 +80,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 				token = token[7:]
 			}
 		}
-
+		//log.Printf("AuthMiddleware Token: %s", token)
 		// Check token presence
 		if token == "" {
 			responses.SendError(w, "No authorization token provided", http.StatusUnauthorized)

@@ -4,7 +4,9 @@ import { MessageList } from './Message/MessageList';
 import { useAuthContext } from '../hooks/useAuthContext';
 
 export const AppContent = () => {
-  const { isLoggedIn } = useAuthContext();
+  const {
+    state: { isLoggedIn },
+  } = useAuthContext();
 
   if (!isLoggedIn) {
     return <AuthContainer />;

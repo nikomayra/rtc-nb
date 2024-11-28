@@ -230,6 +230,7 @@ func (h *Handlers) GetChannelsHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) DeleteChannelHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	channelName := vars["channelName"]
+	log.Printf("Deleting channel: %s", channelName)
 	if channelName == "" {
 		responses.SendError(w, "Channel name required", http.StatusBadRequest)
 		return

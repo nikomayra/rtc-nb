@@ -1,16 +1,14 @@
-import { EventEmitter } from 'events';
-import { z } from 'zod';
-import { IncomingMessageSchema, OutgoingMessage } from '../types/interfaces';
+import { IncomingMessage, IncomingMessageSchema, OutgoingMessage } from '../types/interfaces';
+import { BASE_URL } from '../utils/constants';
 
-export class WebSocketService extends EventEmitter {
+export class WebSocketService {
   private static instance: WebSocketService;
   private ws: WebSocket | null = null;
-  private reconnectTimer: NodeJS.Timeout | null = null;
-  private token: string | null = null;
+  private reconnectTimer: number | null = null;
 
-  private constructor() {
-    super();
-  }
+  // Single callback for each type
+  private onMessage: ((message: IncomingMessage) => void) | null = null;
+  private onConnectionChange: ((isConnected: boolean) => void) | null = null;
 
   static getInstance(): WebSocketService {
     if (!WebSocketService.instance) {
@@ -19,43 +17,40 @@ export class WebSocketService extends EventEmitter {
     return WebSocketService.instance;
   }
 
-  connect(token: string): void {
-    this.token = token;
+  setCallbacks(callbacks: {
+    onMessage: (message: IncomingMessage) => void;
+    onConnectionChange: (isConnected: boolean) => void;
+  }) {
+    this.onMessage = callbacks.onMessage;
+    this.onConnectionChange = callbacks.onConnectionChange;
+  }
+
+  connect(token: string, channelName: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+    const wsUrl = `${protocol}//${window.location.host}${BASE_URL}/ws/${channelName}`;
 
     this.ws = new WebSocket(wsUrl, ['Authentication', token]);
 
     this.ws.onopen = () => {
-      this.emit('connected');
+      this.onConnectionChange?.(true);
       this.clearReconnectTimer();
     };
 
-    this.ws.onclose = (event) => {
-      this.emit('disconnected');
-      if (event.code !== 1000) {
-        this.scheduleReconnect();
-      }
+    this.ws.onclose = () => {
+      this.onConnectionChange?.(false);
+      this.scheduleReconnect(token, channelName);
     };
 
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        const incomingMessage = IncomingMessageSchema.parse(data);
-        this.emit('incoming_message', incomingMessage);
+        const message = IncomingMessageSchema.parse(data);
+        this.onMessage?.(message);
       } catch (error) {
-        if (error instanceof z.ZodError) {
-          console.error('Failed to parse message:', error.errors);
-        } else {
-          console.error('Failed to parse message:', error);
-        }
+        console.error('Failed to parse message:', error);
       }
-    };
-
-    this.ws.onerror = (error) => {
-      this.emit('error', error);
     };
   }
 
@@ -67,23 +62,23 @@ export class WebSocketService extends EventEmitter {
     this.clearReconnectTimer();
   }
 
-  send(outGoingMessage: OutgoingMessage): void {
+  send(message: OutgoingMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(outGoingMessage));
+      this.ws.send(JSON.stringify(message));
     }
   }
 
-  private scheduleReconnect(): void {
-    if (!this.reconnectTimer && this.token) {
-      this.reconnectTimer = setTimeout(() => {
-        this.connect(this.token!);
+  private scheduleReconnect(token: string, channelName: string): void {
+    if (!this.reconnectTimer) {
+      this.reconnectTimer = window.setTimeout(() => {
+        this.connect(token, channelName);
       }, 3000);
     }
   }
 
   private clearReconnectTimer(): void {
     if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
+      window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
   }

@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"database/sql"
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/store/database"
 	"sync"
@@ -28,6 +29,7 @@ func (r *Repository) CreateChannel(ctx context.Context, channel *models.Channel)
 	return r.store.CreateChannel(ctx, channel)
 }
 
+// Includes hashed password
 func (r *Repository) GetChannel(ctx context.Context, channelName string) (*models.Channel, error) {
 	return r.store.GetChannel(ctx, channelName)
 }
@@ -46,6 +48,12 @@ func (r *Repository) UpdateChannel(ctx context.Context, channel *models.Channel)
 	return r.store.UpdateChannel(ctx, channel)
 }
 
+func (r *Repository) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.store.BeginTx(ctx)
+}
+
 func (r *Repository) AddChannelMember(ctx context.Context, channelName string, member *models.ChannelMember) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -62,4 +70,10 @@ func (r *Repository) IsUserAdmin(ctx context.Context, channelName string, userna
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.store.IsUserAdmin(ctx, channelName, username)
+}
+
+func (r *Repository) GetUserChannels(ctx context.Context, username string) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.store.GetUserChannels(ctx, username)
 }

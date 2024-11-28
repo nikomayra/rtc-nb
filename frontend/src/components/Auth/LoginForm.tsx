@@ -4,11 +4,13 @@ import { useAuthContext } from '../../hooks/useAuthContext';
 export const LoginForm = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const auth = useAuthContext();
+  const {
+    actions: { login },
+  } = useAuthContext();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await auth.login(username, password);
+    await login(username, password);
   };
 
   return (

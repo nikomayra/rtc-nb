@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
+	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/repositories"
 	"rtc-nb/backend/internal/store/redis"
@@ -94,28 +94,85 @@ func (cs *ChatService) JoinChannel(ctx context.Context, channelName, username st
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	// TODO: Implement channel joining logic
-	// 1. Verify channel exists
-	// 2. Check password if required
-	// 3. Add user to channel
-	// 4. Subscribe to channel events
+	// 1. Verify channel exists and check password
 	channel, err := cs.repo.GetChannel(ctx, channelName)
 	if err != nil {
 		return fmt.Errorf("get channel: %w", err)
 	}
-	if channel.HashedPassword != nil && *channel.HashedPassword != *password {
-		return fmt.Errorf("invalid password")
+	if channel == nil {
+		return fmt.Errorf("channel not found")
 	}
-	log.Printf("Joining channel: %s for user: %s", channelName, username)
+
+	// Check password for private channels
+	if channel.IsPrivate {
+		if password == nil || *password == "" {
+			return fmt.Errorf("password required for private channel")
+		}
+		if channel.HashedPassword == nil {
+			return fmt.Errorf("channel configuration error: missing password hash")
+		}
+		// Verify password using auth package
+		if err := auth.CheckPassword(*channel.HashedPassword, *password); err != nil {
+			return fmt.Errorf("invalid password")
+		}
+	}
+
+	// 2. Get current channel membership (if any)
+	currentChannels, err := cs.repo.GetUserChannels(ctx, username)
+	if err != nil {
+		return fmt.Errorf("get user channels: %w", err)
+	}
+
+	// 3. Start a transaction for membership changes
+	tx, err := cs.repo.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Check if user is already in the target channel
+	isCurrentMember := false
+	for _, currentChannel := range currentChannels {
+		if currentChannel == channelName {
+			isCurrentMember = true
+			continue
+		}
+		// Remove from other channels
+		if err := cs.repo.RemoveChannelMember(ctx, currentChannel, username); err != nil {
+			return fmt.Errorf("remove from current channel: %w", err)
+		}
+		// Remove from websocket channel
+		if conn, ok := cs.hub.GetConnection(username); ok {
+			cs.hub.RemoveClientFromChannel(currentChannel, conn)
+		}
+	}
+
+	isAdmin, err := cs.repo.IsUserAdmin(ctx, channelName, username)
+	if err != nil {
+		return fmt.Errorf("is user admin: %w", err)
+	}
+
+	if !isCurrentMember {
+		member := &models.ChannelMember{
+			Username: username,
+			JoinedAt: time.Now(),
+			IsAdmin:  isAdmin,
+		}
+
+		if err := cs.repo.AddChannelMember(ctx, channelName, member); err != nil {
+			return fmt.Errorf("add channel member: %w", err)
+		}
+	}
+
+	// 6. Add to websocket channel
 	if conn, ok := cs.hub.GetConnection(username); ok {
 		cs.hub.AddClientToChannel(channelName, conn)
 	}
-	if err := cs.repo.AddChannelMember(ctx, channelName, &models.ChannelMember{
-		Username: username,
-		JoinedAt: time.Now(),
-	}); err != nil {
-		return fmt.Errorf("add channel member: %w", err)
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
 	}
+
 	return nil
 }
 

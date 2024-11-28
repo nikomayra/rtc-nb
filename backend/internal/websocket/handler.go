@@ -49,6 +49,7 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 
 	vars := mux.Vars(r)
 	channelName := vars["channelName"]
+	log.Printf("HandleWebSocket channelName: %s", channelName)
 	if channelName == "" {
 		http.Error(w, "Channel name required", http.StatusBadRequest)
 		return
@@ -61,10 +62,14 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Register connection
+	// Register connection for both user and channel
 	wsh.hub.AddConnection(claims.Username, conn)
+	wsh.hub.AddClientToChannel(channelName, conn)
+
+	// Cleanup on disconnect
 	defer func() {
 		wsh.hub.RemoveConnection(claims.Username)
+		wsh.hub.RemoveClientFromChannel(channelName, conn)
 		conn.Close()
 	}()
 
@@ -90,13 +95,13 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 			continue
 		}
 
-		outgoingJSON, err := json.Marshal(outgoingMsg)
+		outgoingMsgBytes, err := json.Marshal(outgoingMsg)
 		if err != nil {
 			log.Printf("Error marshaling message: %v", err)
 			continue
 		}
 
 		// Broadcast message to channel
-		wsh.hub.NotifyChannel(channelName, outgoingJSON)
+		wsh.hub.NotifyChannel(channelName, outgoingMsgBytes)
 	}
 }

@@ -34,7 +34,7 @@ axiosInstance.interceptors.response.use(
     if (response.data) {
       response.data = convertKeysToCamelCase(response.data);
     }
-    console.log('Response Data: ', response.data);
+    //console.log('Response Data: ', response.data);
     return response;
   },
   (error) => Promise.reject(error)

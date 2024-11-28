@@ -2,24 +2,22 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: auto;
+  height: calc(100vh - var(--header-height));
   width: 100%;
   margin: 0 auto;
   padding: var(--spacing-md);
+  overflow: hidden;
 }
 
 .messages-list {
   flex: 1;
-  overflow-y: scroll;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
   padding-right: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
   scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  overflow-anchor: auto;
-  justify-content: flex-end;
 }
 
 .message-item {
@@ -32,6 +30,10 @@
   border: 1px solid var(--border-dark);
   padding: var(--spacing-sm);
   border-radius: var(--border-radius);
+}
+
+.my-message {
+  background: var(--secondary-color);
 }
 
 .message-content {
@@ -80,4 +82,20 @@
 .send-message-form button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.channel-item-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.channel-item-actions button {
+  text-align: center;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .messages-container {
+    height: calc(100vh - var(--header-height));
+  }
 }

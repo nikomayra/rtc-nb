@@ -30,11 +30,11 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.WebSocketHandler, chatSer
 	protected := apiRouter.NewRoute().Subrouter()
 	protected.Use(middleware.AuthMiddleware)
 
-	protected.HandleFunc("/ws", wsh.HandleWebSocket).Methods("GET")
+	protected.HandleFunc("/ws/{channelName}", wsh.HandleWebSocket)
 	protected.HandleFunc("/joinchannel", handlers.JoinChannelHandler).Methods("PATCH")
 	protected.HandleFunc("/createchannel", handlers.CreateChannelHandler).Methods("POST")
-	protected.HandleFunc("/deletechannel", handlers.DeleteChannelHandler).Methods("DELETE")
-	protected.HandleFunc("/leavechannel", handlers.LeaveChannelHandler).Methods("PATCH")
+	protected.HandleFunc("/deletechannel/{channelName}", handlers.DeleteChannelHandler).Methods("DELETE")
+	protected.HandleFunc("/leavechannel/{channelName}", handlers.LeaveChannelHandler).Methods("PATCH")
 	protected.HandleFunc("/channels", handlers.GetChannelsHandler).Methods("GET")
 }
 

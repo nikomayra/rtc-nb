@@ -1,138 +1,105 @@
-import { useEffect, useReducer, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState, useContext } from 'react';
 import { ChatContext } from '../../contexts/chatContext';
 import { WebSocketService } from '../../services/WebsocketService';
-import { useAuthContext } from '../../hooks/useAuthContext';
-import {
-  APIResponse,
-  Channel,
-  ChannelSchema,
-  IncomingMessage,
-  OutgoingMessage,
-} from '../../types/interfaces';
+import { AuthContext } from '../../contexts/authContext';
+import { Channel, ChannelSchema, IncomingMessage, OutgoingMessage } from '../../types/interfaces';
 import { BASE_URL } from '../../utils/constants';
 import axiosInstance from '../../api/axiosInstance';
 import { isAxiosError } from 'axios';
 import { z } from 'zod';
-import { ChatAction } from '../../types/chatTypes';
-import { ChatState } from '../../types/chatTypes';
-
-const initialState: ChatState = {
-  channels: [],
-  currentChannel: null,
-  messages: {},
-  isConnected: false,
-};
-
-const chatReducer = (state: ChatState, action: ChatAction): ChatState => {
-  switch (action.type) {
-    case 'SET_CONNECTED':
-      return { ...state, isConnected: action.payload };
-
-    case 'SET_CHANNELS':
-      return { ...state, channels: action.payload };
-
-    case 'ADD_CHANNEL':
-      return { ...state, channels: [...state.channels, action.payload] };
-
-    case 'SET_CURRENT_CHANNEL':
-      return { ...state, currentChannel: action.payload };
-
-    case 'DELETE_CHANNEL':
-      return { ...state, currentChannel: null };
-
-    case 'ADD_MESSAGE':
-      return {
-        ...state,
-        messages: {
-          ...state.messages,
-          [action.payload.channelName]: [
-            ...(state.messages[action.payload.channelName] || []),
-            action.payload,
-          ],
-        },
-      };
-
-    case 'INITIALIZE_CHANNEL_MESSAGES':
-      if (state.messages[action.payload.channelName]) return state;
-      return {
-        ...state,
-        messages: {
-          ...state.messages,
-          [action.payload.channelName]: [],
-        },
-      };
-
-    default:
-      return state;
-  }
-};
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(chatReducer, initialState);
-  const { token } = useAuthContext();
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuthContext must be used within an AuthProvider');
+  }
+  const [messages, setMessages] = useState<Record<string, IncomingMessage[]>>({});
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [currentChannel, setCurrentChannel] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const token = context.state.token;
   const wsService = useMemo(() => WebSocketService.getInstance(), []);
 
   useEffect(() => {
     if (!token) return;
 
-    wsService.connect(token);
+    const callbacks = {
+      onMessage: (message: IncomingMessage) => {
+        setMessages((prev) => ({
+          ...prev,
+          [message.channelName]: [...(prev[message.channelName] || []), message],
+        }));
+      },
+      onConnectionChange: setIsConnected,
+    };
 
-    wsService.on('connected', () => dispatch({ type: 'SET_CONNECTED', payload: true }));
-    wsService.on('disconnected', () => dispatch({ type: 'SET_CONNECTED', payload: false }));
-    wsService.on('incoming_message', (incomingMessage: IncomingMessage) =>
-      dispatch({ type: 'ADD_MESSAGE', payload: incomingMessage })
-    );
+    wsService.setCallbacks(callbacks);
+    wsService.connect(token, currentChannel || '');
 
     return () => {
       wsService.disconnect();
-      wsService.removeAllListeners();
     };
-  }, [token, wsService]);
+  }, [token, wsService, currentChannel]);
+
+  const fetchChannels = useCallback(async (): Promise<void> => {
+    if (!token) return;
+
+    try {
+      const res = await axiosInstance.get(`${BASE_URL}/channels`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data.success) {
+        const validatedChannels = z.array(ChannelSchema).parse(res.data.data);
+        setChannels(validatedChannels);
+      } else {
+        console.error('Failed to get channels:', res.data.error);
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error('Invalid channel data:', error.errors);
+      }
+      if (isAxiosError(error)) {
+        console.error('Failed to get channels:', error.response?.data?.message);
+      }
+      throw error;
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      fetchChannels();
+    }
+  }, [token, fetchChannels]);
 
   const actions = {
     sendMessage: async (message: OutgoingMessage): Promise<void> => {
       if (!token) return;
-      try {
-        wsService.send(message);
-      } catch (error) {
-        console.error('Failed to send message:', error);
-        throw error;
-      }
+      wsService.send(message);
     },
-    joinChannel: async (channelName: string, password?: string): Promise<APIResponse<void>> => {
+    joinChannel: async (channelName: string, password?: string): Promise<void> => {
       try {
         const res = await axiosInstance.patch(
           `${BASE_URL}/joinchannel`,
-          { channelName: channelName, channelPassword: password },
+          { channelName, channelPassword: password },
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (res.data.success) {
-          dispatch({ type: 'SET_CURRENT_CHANNEL', payload: channelName });
-          return { success: res.data.success, data: res.data.data };
-        } else {
-          return { success: res.data.success, error: res.data.error };
+          setCurrentChannel(channelName);
+          wsService.disconnect();
+          wsService.connect(token!, channelName);
         }
       } catch (error) {
         if (isAxiosError(error)) {
-          return {
-            success: false,
-            error: {
-              message: error.response?.data?.message || 'Failed to get channel',
-              code: error.response?.status || 500,
-            },
-          };
+          console.error('Failed to join channel:', error.response?.data?.message);
         }
-        return {
-          success: false,
-          error: { message: 'Unknown error', code: 500 },
-        };
+        throw error;
       }
     },
     createChannel: async (
       channelName: string,
       description?: string,
       password?: string
-    ): Promise<APIResponse<Channel>> => {
+    ): Promise<void> => {
       try {
         const res = await axiosInstance.post(
           `${BASE_URL}/createchannel`,
@@ -145,135 +112,71 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
         if (res.data.success) {
           const validatedChannel = ChannelSchema.parse(res.data.data);
-          dispatch({ type: 'ADD_CHANNEL', payload: validatedChannel });
-          return { success: res.data.success, data: validatedChannel };
+          setChannels((prev) => [...prev, validatedChannel]);
         } else {
-          return { success: res.data.success, error: res.data.error };
+          console.error('Failed to create channel:', res.data.error);
         }
       } catch (error) {
         if (error instanceof z.ZodError) {
           console.error('Invalid channel data:', error.errors);
-          return {
-            success: false,
-            error: { message: 'Server returned invalid channel data', code: 422 },
-          };
         }
         if (isAxiosError(error)) {
-          return {
-            success: false,
-            error: {
-              message: error.response?.data?.message || 'Failed to create channel',
-              code: error.response?.status || 500,
-            },
-          };
+          console.error('Failed to create channel:', error.response?.data?.message);
         }
-        return {
-          success: false,
-          error: { message: 'Unknown error', code: 500 },
-        };
       }
     },
-    deleteChannel: async (channelName: string): Promise<APIResponse<void>> => {
+    deleteChannel: async (channelName: string): Promise<void> => {
       try {
         const res = await axiosInstance.delete(
           `${BASE_URL}/deletechannel/${encodeURIComponent(channelName)}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (res.data.success) {
-          dispatch({ type: 'DELETE_CHANNEL', payload: channelName });
-          return { success: res.data.success, data: res.data.data };
+          setChannels((prev) => prev.filter((channel) => channel.name !== channelName));
+          setCurrentChannel(null);
         } else {
-          return { success: res.data.success, error: res.data.error };
+          console.error('Failed to delete channel:', res.data.error);
         }
       } catch (error) {
         if (isAxiosError(error)) {
-          return {
-            success: false,
-            error: {
-              message: error.response?.data?.message || 'Failed to create channel',
-              code: error.response?.status || 500,
-            },
-          };
+          console.error('Failed to delete channel:', error.response?.data?.message);
         }
-        return {
-          success: false,
-          error: { message: 'Unknown error', code: 500 },
-        };
       }
     },
-    leaveChannel: async (channelName: string) => {
+    leaveChannel: async (channelName: string): Promise<void> => {
       try {
         const res = await axiosInstance.patch(
           `${BASE_URL}/leavechannel/${encodeURIComponent(channelName)}`,
+          null,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (res.data.success) {
-          dispatch({ type: 'SET_CURRENT_CHANNEL', payload: null });
-          return { success: res.data.success, data: res.data.data };
+          setCurrentChannel(null);
         } else {
-          return { success: res.data.success, error: res.data.error };
+          console.error('Failed to leave channel:', res.data.error);
         }
       } catch (error) {
         if (isAxiosError(error)) {
-          return {
-            success: false,
-            error: {
-              message: error.response?.data?.message || 'Failed to leave channel',
-              code: error.response?.status || 500,
-            },
-          };
+          console.error('Failed to leave channel:', error.response?.data?.message);
         }
-        return {
-          success: false,
-          error: { message: 'Unknown error', code: 500 },
-        };
       }
     },
-    getChannels: async (): Promise<APIResponse<Channel[]>> => {
-      try {
-        const res = await axiosInstance.get(`${BASE_URL}/channels`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.data.success) {
-          const validatedChannels = z.array(ChannelSchema).parse(res.data.data);
-          validatedChannels.forEach((channel) => {
-            dispatch({
-              type: 'INITIALIZE_CHANNEL_MESSAGES',
-              payload: { channelName: channel.name },
-            });
-          });
-          dispatch({ type: 'SET_CHANNELS', payload: validatedChannels });
-          return { success: res.data.success, data: validatedChannels };
-        } else {
-          return { success: res.data.success, error: res.data.error };
-        }
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          console.error('Invalid channels data:', error.errors);
-          return {
-            success: false,
-            error: {
-              message: 'Server returned invalid channels data',
-              code: 422,
-            },
-          };
-        }
-        if (isAxiosError(error)) {
-          return {
-            success: false,
-            error: {
-              message: error.response?.data?.message || 'Failed to get channels',
-              code: error.response?.status || 500,
-            },
-          };
-        }
-        return {
-          success: false,
-          error: { message: 'Unknown error', code: 500 },
-        };
-      }
-    },
+    getChannels: fetchChannels,
   };
 
-  return <ChatContext.Provider value={{ state, actions }}>{children}</ChatContext.Provider>;
+  return (
+    <ChatContext.Provider
+      value={{
+        state: {
+          messages,
+          channels,
+          currentChannel,
+          isConnected,
+        },
+        actions,
+      }}
+    >
+      {children}
+    </ChatContext.Provider>
+  );
 };

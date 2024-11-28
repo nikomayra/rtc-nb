@@ -19,12 +19,14 @@ type Statements struct {
 	UpdateChannel        *sql.Stmt // name, is_private, description, hashed_password
 	DeleteChannel        *sql.Stmt // name
 	SelectChannelMembers *sql.Stmt // channel_name
-	AddChannelMember     *sql.Stmt // channel_name, username, is_admin
+	AddChannelMember     *sql.Stmt // channel_name, username, is_admin, joined_at
 	RemoveChannelMember  *sql.Stmt // channel_name, username
 	IsUserAdmin          *sql.Stmt // channel_name, username
 
 	InsertMessage  *sql.Stmt // id, channel_name, username, message_type, content
 	SelectMessages *sql.Stmt
+
+	SelectUserChannels *sql.Stmt // username
 }
 
 func PrepareStatements(db *sql.DB) (*Statements, error) {
@@ -88,7 +90,7 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 	}
 
 	if s.SelectChannel, err = prepare(`
-        SELECT name, is_private, description, created_by, created_at 
+        SELECT name, is_private, description, hashed_password, created_by, created_at 
         FROM channels WHERE name = $1`); err != nil {
 		return nil, fmt.Errorf("prepare select channel: %w", err)
 	}
@@ -118,8 +120,8 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 	}
 
 	if s.AddChannelMember, err = prepare(`
-        INSERT INTO channel_member (channel_name, username, is_admin) 
-        VALUES ($1, $2, $3)`); err != nil {
+        INSERT INTO channel_member (channel_name, username, is_admin, joined_at) 
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`); err != nil {
 		return nil, fmt.Errorf("prepare add channel member: %w", err)
 	}
 
@@ -143,6 +145,23 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 		return nil, fmt.Errorf("prepare select messages: %w", err)
 	}
 
+	if s.SelectUserChannels, err = prepare(`
+        SELECT channel_name 
+        FROM channel_member 
+        WHERE username = $1`); err != nil {
+		return nil, fmt.Errorf("prepare select user channels: %w", err)
+	}
+
+	// Prepare IsUserAdmin statement
+	s.IsUserAdmin, err = db.Prepare(`
+        SELECT is_admin 
+        FROM channel_member 
+        WHERE channel_name = $1 AND username = $2
+    `)
+	if err != nil {
+		return nil, fmt.Errorf("prepare IsUserAdmin statement: %w", err)
+	}
+
 	return s, nil
 }
 
@@ -160,6 +179,8 @@ func (s *Statements) CloseStatements() error {
 		s.AddChannelMember,
 		s.InsertMessage,
 		s.SelectMessages,
+		s.SelectUserChannels,
+		s.IsUserAdmin,
 	} {
 		if stmt != nil {
 			stmt.Close()

@@ -115,6 +115,7 @@ func (s *Store) GetChannel(ctx context.Context, channelName string) (*models.Cha
 		&channel.Name,
 		&channel.IsPrivate,
 		&channel.Description,
+		&channel.HashedPassword,
 		&channel.CreatedBy,
 		&channel.CreatedAt,
 	)
@@ -207,7 +208,39 @@ func (s *Store) RemoveChannelMember(ctx context.Context, channelName string, use
 }
 
 func (s *Store) IsUserAdmin(ctx context.Context, channelName string, username string) (bool, error) {
+	if s.statements == nil || s.statements.IsUserAdmin == nil {
+		return false, fmt.Errorf("IsUserAdmin statement not initialized")
+	}
+
 	var isAdmin bool
 	err := s.statements.IsUserAdmin.QueryRowContext(ctx, channelName, username).Scan(&isAdmin)
-	return isAdmin, err
+	if err == sql.ErrNoRows {
+		return false, nil // User is not a member of the channel
+	}
+	if err != nil {
+		return false, fmt.Errorf("query IsUserAdmin: %w", err)
+	}
+	return isAdmin, nil
+}
+
+func (s *Store) GetUserChannels(ctx context.Context, username string) ([]string, error) {
+	rows, err := s.statements.SelectUserChannels.QueryContext(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var channels []string
+	for rows.Next() {
+		var channelName string
+		if err := rows.Scan(&channelName); err != nil {
+			return nil, err
+		}
+		channels = append(channels, channelName)
+	}
+	return channels, rows.Err()
+}
+
+func (s *Store) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	return s.db.BeginTx(ctx, nil)
 }
