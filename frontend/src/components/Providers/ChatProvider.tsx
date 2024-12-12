@@ -21,7 +21,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const wsService = useMemo(() => WebSocketService.getInstance(), []);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !currentChannel) {
+      wsService.disconnect();
+      return;
+    }
 
     const callbacks = {
       onMessage: (message: IncomingMessage) => {
@@ -37,6 +40,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     wsService.connect(token, currentChannel || '');
 
     return () => {
+      wsService.setCallbacks({
+        onMessage: () => {},
+        onConnectionChange: () => {},
+      });
       wsService.disconnect();
     };
   }, [token, wsService, currentChannel]);

@@ -52,7 +52,7 @@ export const useAuth = () => {
         sessionStorage.setItem('username', username);
       } else {
         const serverErrorMessage = `${response.error?.message}, Code: ${response.error?.code}`;
-        throw new Error(serverErrorMessage || 'Registration failed');
+        throw new Error(serverErrorMessage || 'Server: Registration failed');
       }
     } catch (error) {
       console.error('Registration failed:', error);
@@ -63,12 +63,26 @@ export const useAuth = () => {
     }
   };
 
-  const logout = () => {
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('username');
-    setToken('');
-    setUsername('');
-    setIsLoggedIn(false);
+  const logout = async (): Promise<void> => {
+    try {
+      const response = await authApi.logout();
+      if (response.success) {
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('username');
+        setToken('');
+        setUsername('');
+        setIsLoggedIn(false);
+      } else {
+        const serverErrorMessage = `${response.error?.message}, Code: ${response.error?.code}`;
+        throw new Error(serverErrorMessage || 'Server: Logout failed');
+      }
+    } catch (error) {
+      console.error('Logout failed:', error);
+      setToken('');
+      setUsername('');
+      setIsLoggedIn(false);
+      throw error;
+    }
   };
 
   return {

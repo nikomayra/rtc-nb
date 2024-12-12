@@ -12,6 +12,8 @@ import (
 	"rtc-nb/backend/internal/repositories"
 	"rtc-nb/backend/internal/store/redis"
 	"rtc-nb/backend/internal/websocket"
+
+	gorilla_websocket "github.com/gorilla/websocket"
 )
 
 type ChatService struct {
@@ -181,10 +183,6 @@ func (cs *ChatService) LeaveChannel(ctx context.Context, channelName, username s
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	// TODO: Implement channel leaving logic
-	// 1. Verify user is in channel
-	// 2. Remove user from channel
-	// 3. Unsubscribe from channel events
 	if conn, ok := cs.hub.GetConnection(username); ok {
 		cs.hub.RemoveClientFromChannel(channelName, conn)
 	}
@@ -213,17 +211,31 @@ func (cs *ChatService) DeleteChannel(ctx context.Context, channelName, username 
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	// TODO: Implement channel deletion logic
-	// 1. Verify channel exists
-	// 2. Verify user is admin
-	// 3. Delete channel
-	// 4. Notify all members
-	// 5. Clean up subscriptions
 	if isAdmin, err := cs.repo.IsUserAdmin(ctx, channelName, username); err != nil || !isAdmin {
 		return fmt.Errorf("user is not admin")
 	}
 	if err := cs.repo.DeleteChannel(ctx, channelName); err != nil {
 		return fmt.Errorf("delete channel: %w", err)
+	}
+	return nil
+}
+
+// GetUserConnection returns the WebSocket connection for a user
+func (cs *ChatService) GetUserConnection(username string) (*gorilla_websocket.Conn, bool) {
+	return cs.hub.GetConnection(username)
+}
+
+// ClearUserSession clears user session data
+func (cs *ChatService) ClearUserSession(ctx context.Context, username string) error {
+	if conn, exists := cs.hub.GetConnection(username); exists {
+		cs.hub.RemoveConnection(username)
+		channels, err := cs.repo.GetUserChannels(ctx, username)
+		if err != nil {
+			return err
+		}
+		for _, channel := range channels {
+			cs.hub.RemoveClientFromChannel(channel, conn)
+		}
 	}
 	return nil
 }

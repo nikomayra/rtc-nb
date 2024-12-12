@@ -136,6 +136,28 @@ func (h *Handlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}, http.StatusOK)
 }
 
+func (h *Handlers) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get WebSocket connection and disconnect if exists
+	if conn, exists := h.chatService.GetUserConnection(claims.Username); exists {
+		conn.Close()
+	}
+
+	// Clear any Redis data (if needed)
+	ctx := r.Context()
+	if err := h.chatService.ClearUserSession(ctx, claims.Username); err != nil {
+		log.Printf("Error clearing user session: %v", err)
+		// Continue anyway as this isn't critical
+	}
+
+	responses.SendSuccess(w, "Logged out successfully", http.StatusOK)
+}
+
 func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ChannelName     string  `json:"channelName"`

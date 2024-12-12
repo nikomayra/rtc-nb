@@ -33,6 +33,7 @@ func main() {
 
 	// Initialize websocket hub and handler
 	wsHub := websocket.NewHub()
+	wsHub.StartCleanupTicker() // Stale connections cleanup
 	wsHandler := websocket.NewWebSocketHandler(wsHub)
 
 	// Initialize chat service

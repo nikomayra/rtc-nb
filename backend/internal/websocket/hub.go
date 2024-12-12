@@ -3,6 +3,7 @@ package websocket
 import (
 	"log"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -59,7 +60,13 @@ func (h *Hub) AddClientToChannel(channelName string, userConn *websocket.Conn) {
 func (h *Hub) RemoveClientFromChannel(channelName string, userConn *websocket.Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if _, ok := h.channels[channelName]; !ok {
+		return
+	}
 	delete(h.channels[channelName], userConn)
+	if len(h.channels[channelName]) == 0 {
+		delete(h.channels, channelName)
+	}
 	log.Printf("Removed client from channel: %s\n", channelName)
 }
 
@@ -89,4 +96,39 @@ func (h *Hub) GetConnection(username string) (*websocket.Conn, bool) {
 	defer h.mu.RUnlock()
 	conn, ok := h.connections[username]
 	return conn, ok
+}
+
+// AUTOMATIC CLEANUP
+
+func (h *Hub) StartCleanupTicker() {
+	ticker := time.NewTicker(5 * time.Minute)
+	go func() {
+		for range ticker.C {
+			h.cleanupStaleConnections()
+		}
+	}()
+}
+
+func (h *Hub) cleanupStaleConnections() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for username, conn := range h.connections {
+		if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(3*time.Second)); err != nil {
+			h.cleanupConnection(username, conn)
+		}
+	}
+}
+
+func (h *Hub) cleanupConnection(username string, conn *websocket.Conn) {
+	conn.Close()
+	h.RemoveConnection(username)
+
+	// Clean up from channels
+	for channelName, clients := range h.channels {
+		if _, ok := clients[conn]; ok {
+			h.RemoveClientFromChannel(channelName, conn)
+		}
+	}
+	log.Printf("Cleaned up stale connection for user: %s", username)
 }

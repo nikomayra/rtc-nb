@@ -6,6 +6,7 @@ import { useAuthContext } from '../hooks/useAuthContext';
 export const AppContent = () => {
   const {
     state: { isLoggedIn },
+    actions: { logout },
   } = useAuthContext();
 
   if (!isLoggedIn) {
@@ -16,6 +17,9 @@ export const AppContent = () => {
     <div className='app-container'>
       <ChannelList />
       <MessageList />
+      <button style={{ position: 'absolute', top: 0, left: 0 }} onClick={logout}>
+        Logout
+      </button>
     </div>
   );
 };

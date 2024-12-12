@@ -24,4 +24,9 @@ export const authApi = {
     });
     return res.data;
   },
+
+  logout: async (): Promise<APIResponse<{ message: string }>> => {
+    const res = await axiosInstance.post(`${BASE_URL}/logout`);
+    return res.data;
+  },
 };

@@ -17,6 +17,7 @@ import (
 type contextKey string
 
 const ClaimsContextKey contextKey = "claims"
+const tokenLife = 9000 * time.Hour
 
 var (
 	ErrInvalidToken     = fmt.Errorf("invalid token format")
@@ -44,7 +45,7 @@ func GenerateAccessToken(username string) (string, error) {
 	claims := Claims{
 		Username:  username,
 		IssuedAt:  now,
-		ExpiresAt: now.Add(24 * time.Hour),
+		ExpiresAt: now.Add(tokenLife),
 	}
 
 	// Convert claims to JSON
