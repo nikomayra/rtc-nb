@@ -5,10 +5,10 @@ import (
 	"net/http"
 
 	"rtc-nb/backend/internal/config"
-	"rtc-nb/backend/internal/repositories"
 	"rtc-nb/backend/internal/services/chat"
 	"rtc-nb/backend/internal/store/database"
 	"rtc-nb/backend/internal/store/redis"
+	"rtc-nb/backend/internal/store/storage/local"
 	"rtc-nb/backend/internal/websocket"
 	"rtc-nb/backend/pkg/api"
 
@@ -19,17 +19,22 @@ func main() {
 	cfg := config.Load()
 
 	// Initialize store with config-provided DB
-	store, err := database.NewStore(cfg.DB)
+	dbStore, err := database.NewStore(cfg.DB)
 	if err != nil {
 		log.Fatalf("Failed to initialize store: %v", err)
 	}
-	defer store.Close()
+	defer dbStore.Close()
+
+	fileStore, err := local.NewLocalFileStore(cfg.FileStorePath)
+	if err != nil {
+		log.Fatalf("Failed to initialize file store: %v", err)
+	}
 
 	// Initialize Redis PubSub with config-provided client
 	pubSub := redis.NewPubSub(cfg.Redis)
 
 	// Initialize repository with store
-	repo := repositories.NewRepository(store)
+	// repo := repositories.NewRepository(store)
 
 	// Initialize websocket hub and handler
 	wsHub := websocket.NewHub()
@@ -37,7 +42,7 @@ func main() {
 	wsHandler := websocket.NewWebSocketHandler(wsHub)
 
 	// Initialize chat service
-	chatService := chat.NewService(repo, pubSub, wsHub)
+	chatService := chat.NewService(dbStore, fileStore, pubSub, wsHub)
 
 	// Setup router and routes
 	router := mux.NewRouter()

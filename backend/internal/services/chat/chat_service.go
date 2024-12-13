@@ -9,25 +9,28 @@ import (
 
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/models"
-	"rtc-nb/backend/internal/repositories"
+	"rtc-nb/backend/internal/store/database"
 	"rtc-nb/backend/internal/store/redis"
+	"rtc-nb/backend/internal/store/storage"
 	"rtc-nb/backend/internal/websocket"
 
 	gorilla_websocket "github.com/gorilla/websocket"
 )
 
 type ChatService struct {
-	mu     sync.RWMutex
-	repo   *repositories.Repository
-	pubsub *redis.PubSub
-	hub    *websocket.Hub
+	mu         sync.RWMutex
+	dbStore    *database.Store
+	fileStorer storage.FileStorer
+	pubsub     *redis.PubSub
+	hub        *websocket.Hub
 }
 
-func NewService(repo *repositories.Repository, pubsub *redis.PubSub, hub *websocket.Hub) *ChatService {
+func NewService(dbStore *database.Store, fileStorer storage.FileStorer, pubsub *redis.PubSub, hub *websocket.Hub) *ChatService {
 	return &ChatService{
-		repo:   repo,
-		pubsub: pubsub,
-		hub:    hub,
+		dbStore:    dbStore,
+		fileStorer: fileStorer,
+		pubsub:     pubsub,
+		hub:        hub,
 	}
 }
 
@@ -35,13 +38,13 @@ func NewService(repo *repositories.Repository, pubsub *redis.PubSub, hub *websoc
 func (cs *ChatService) GetUser(ctx context.Context, username string) (*models.User, error) {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
-	return cs.repo.GetUser(ctx, username)
+	return cs.dbStore.GetUser(ctx, username)
 }
 
 func (cs *ChatService) CreateUser(ctx context.Context, user *models.User) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	return cs.repo.CreateUser(ctx, user)
+	return cs.dbStore.CreateUser(ctx, user)
 }
 
 // Channel operations
@@ -49,7 +52,7 @@ func (cs *ChatService) CreateChannel(ctx context.Context, channel *models.Channe
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	if err := cs.repo.CreateChannel(ctx, channel); err != nil {
+	if err := cs.dbStore.CreateChannel(ctx, channel); err != nil {
 		return err
 	}
 
@@ -97,7 +100,7 @@ func (cs *ChatService) JoinChannel(ctx context.Context, channelName, username st
 	defer cs.mu.Unlock()
 
 	// 1. Verify channel exists and check password
-	channel, err := cs.repo.GetChannel(ctx, channelName)
+	channel, err := cs.dbStore.GetChannel(ctx, channelName)
 	if err != nil {
 		return fmt.Errorf("get channel: %w", err)
 	}
@@ -120,13 +123,13 @@ func (cs *ChatService) JoinChannel(ctx context.Context, channelName, username st
 	}
 
 	// 2. Get current channel membership (if any)
-	currentChannels, err := cs.repo.GetUserChannels(ctx, username)
+	currentChannels, err := cs.dbStore.GetUserChannels(ctx, username)
 	if err != nil {
 		return fmt.Errorf("get user channels: %w", err)
 	}
 
 	// 3. Start a transaction for membership changes
-	tx, err := cs.repo.BeginTx(ctx)
+	tx, err := cs.dbStore.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
@@ -140,7 +143,7 @@ func (cs *ChatService) JoinChannel(ctx context.Context, channelName, username st
 			continue
 		}
 		// Remove from other channels
-		if err := cs.repo.RemoveChannelMember(ctx, currentChannel, username); err != nil {
+		if err := cs.dbStore.RemoveChannelMember(ctx, currentChannel, username); err != nil {
 			return fmt.Errorf("remove from current channel: %w", err)
 		}
 		// Remove from websocket channel
@@ -149,7 +152,7 @@ func (cs *ChatService) JoinChannel(ctx context.Context, channelName, username st
 		}
 	}
 
-	isAdmin, err := cs.repo.IsUserAdmin(ctx, channelName, username)
+	isAdmin, err := cs.dbStore.IsUserAdmin(ctx, channelName, username)
 	if err != nil {
 		return fmt.Errorf("is user admin: %w", err)
 	}
@@ -161,7 +164,7 @@ func (cs *ChatService) JoinChannel(ctx context.Context, channelName, username st
 			IsAdmin:  isAdmin,
 		}
 
-		if err := cs.repo.AddChannelMember(ctx, channelName, member); err != nil {
+		if err := cs.dbStore.AddChannelMember(ctx, channelName, member); err != nil {
 			return fmt.Errorf("add channel member: %w", err)
 		}
 	}
@@ -186,7 +189,7 @@ func (cs *ChatService) LeaveChannel(ctx context.Context, channelName, username s
 	if conn, ok := cs.hub.GetConnection(username); ok {
 		cs.hub.RemoveClientFromChannel(channelName, conn)
 	}
-	if err := cs.repo.RemoveChannelMember(ctx, channelName, username); err != nil {
+	if err := cs.dbStore.RemoveChannelMember(ctx, channelName, username); err != nil {
 		return fmt.Errorf("remove channel member: %w", err)
 	}
 	return nil
@@ -198,7 +201,7 @@ func (cs *ChatService) GetChannels(ctx context.Context) ([]*models.Channel, erro
 	defer cs.mu.RUnlock()
 
 	// Get channels from repository
-	channels, err := cs.repo.GetChannels(ctx)
+	channels, err := cs.dbStore.GetChannels(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get channels: %w", err)
 	}
@@ -211,10 +214,10 @@ func (cs *ChatService) DeleteChannel(ctx context.Context, channelName, username 
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	if isAdmin, err := cs.repo.IsUserAdmin(ctx, channelName, username); err != nil || !isAdmin {
+	if isAdmin, err := cs.dbStore.IsUserAdmin(ctx, channelName, username); err != nil || !isAdmin {
 		return fmt.Errorf("user is not admin")
 	}
-	if err := cs.repo.DeleteChannel(ctx, channelName); err != nil {
+	if err := cs.dbStore.DeleteChannel(ctx, channelName); err != nil {
 		return fmt.Errorf("delete channel: %w", err)
 	}
 	return nil
@@ -229,7 +232,7 @@ func (cs *ChatService) GetUserConnection(username string) (*gorilla_websocket.Co
 func (cs *ChatService) ClearUserSession(ctx context.Context, username string) error {
 	if conn, exists := cs.hub.GetConnection(username); exists {
 		cs.hub.RemoveConnection(username)
-		channels, err := cs.repo.GetUserChannels(ctx, username)
+		channels, err := cs.dbStore.GetUserChannels(ctx, username)
 		if err != nil {
 			return err
 		}

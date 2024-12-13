@@ -18,16 +18,18 @@ var ctx = context.Background()
 
 // Loads env variables & initializes db & redis clients
 type Config struct {
-	DB    *sql.DB
-	Redis *goRedis.Client
+	DB            *sql.DB
+	Redis         *goRedis.Client
+	FileStorePath string
 }
 
 func Load() *Config {
 	LoadEnv()
 
 	return &Config{
-		DB:    initPostgres(),
-		Redis: initRedis(),
+		DB:            initPostgres(),
+		Redis:         initRedis(),
+		FileStorePath: os.Getenv("FILESTORE_PATH"),
 	}
 }
 

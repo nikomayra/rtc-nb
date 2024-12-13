@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"rtc-nb/backend/internal/models"
+	"sync"
 )
 
 type Store struct {
 	db         *sql.DB
 	statements *Statements
+	mu         sync.Mutex
 }
 
 func NewStore(db *sql.DB) (*Store, error) {
@@ -193,21 +195,29 @@ func (s *Store) DeleteChannel(ctx context.Context, channelName string) error {
 }
 
 func (s *Store) UpdateChannel(ctx context.Context, channel *models.Channel) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, err := s.statements.UpdateChannel.ExecContext(ctx, channel.Name, channel.IsPrivate, channel.Description, channel.HashedPassword)
 	return err
 }
 
 func (s *Store) AddChannelMember(ctx context.Context, channelName string, member *models.ChannelMember) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, err := s.statements.AddChannelMember.ExecContext(ctx, channelName, member.Username, member.IsAdmin)
 	return err
 }
 
 func (s *Store) RemoveChannelMember(ctx context.Context, channelName string, username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, err := s.statements.RemoveChannelMember.ExecContext(ctx, channelName, username)
 	return err
 }
 
 func (s *Store) IsUserAdmin(ctx context.Context, channelName string, username string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.statements == nil || s.statements.IsUserAdmin == nil {
 		return false, fmt.Errorf("IsUserAdmin statement not initialized")
 	}
@@ -224,6 +234,8 @@ func (s *Store) IsUserAdmin(ctx context.Context, channelName string, username st
 }
 
 func (s *Store) GetUserChannels(ctx context.Context, username string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	rows, err := s.statements.SelectUserChannels.QueryContext(ctx, username)
 	if err != nil {
 		return nil, err
@@ -242,5 +254,7 @@ func (s *Store) GetUserChannels(ctx context.Context, username string) ([]string,
 }
 
 func (s *Store) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.db.BeginTx(ctx, nil)
 }

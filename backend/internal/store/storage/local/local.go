@@ -1,7 +1,8 @@
 // LOCAL STORAGE OPTION -- REPLACE WITH BACKBLAZE B2
-package filestore
+package local
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -13,11 +14,11 @@ import (
 	// "github.com/nfnt/resize" -- TODO: Create resizing logic in-house
 )
 
-type FileStore struct {
+type LocalFileStore struct {
 	basePath string
 }
 
-func NewFileStore(basePath string) (*FileStore, error) {
+func NewLocalFileStore(basePath string) (*LocalFileStore, error) {
 	// Create directories if they don't exist
 	for _, dir := range []string{"images", "thumbnails"} {
 		path := filepath.Join(basePath, dir)
@@ -26,22 +27,22 @@ func NewFileStore(basePath string) (*FileStore, error) {
 		}
 	}
 
-	return &FileStore{basePath: basePath}, nil
+	return &LocalFileStore{basePath: basePath}, nil
 }
 
-func (fs *FileStore) SaveImage(file io.Reader) (string, string, error) {
+func (ls *LocalFileStore) SaveImage(ctx context.Context, file io.Reader) (string, string, error) {
 	// Generate unique filename
 	filename := uuid.New().String() + ".jpg"
 
 	// Save original
-	imgPath := filepath.Join(fs.basePath, "images", filename)
+	imgPath := filepath.Join(ls.basePath, "images", filename)
 	img, err := saveImage(file, imgPath)
 	if err != nil {
 		return "", "", fmt.Errorf("save original: %w", err)
 	}
 
 	// Generate and save thumbnail
-	thumbPath := filepath.Join(fs.basePath, "thumbnails", filename)
+	thumbPath := filepath.Join(ls.basePath, "thumbnails", filename)
 	if err := saveThumbnail(img, thumbPath); err != nil {
 		return "", "", fmt.Errorf("save thumbnail: %w", err)
 	}
@@ -79,9 +80,10 @@ func saveThumbnail(img image.Image, path string) error {
 	}
 	defer thumb.Close()
 
-	// Resize to thumbnail size (e.g., 150x150)
-	thumbnail := resize.Thumbnail(150, 150, img, resize.Lanczos3)
+	// TODO: Resize to thumbnail size (e.g., 150x150)
+	// thumbnail := resize.Thumbnail(150, 150, img, resize.Lanczos3)
 
 	// Save thumbnail
-	return jpeg.Encode(thumb, thumbnail, nil)
+	// return jpeg.Encode(thumb, thumbnail, nil)
+	return nil
 }
