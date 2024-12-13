@@ -65,3 +65,11 @@
 - [ ] Message deletion
 - [ ] Message editing
 - [ ] Message reactions
+
+### Real-time sketchpad extras:
+
+- [ ] Sketchpad history
+- [ ] Sketchpad deletion
+- [ ] Sketchpad editing
+- [ ] Sketchpad reactions
+
