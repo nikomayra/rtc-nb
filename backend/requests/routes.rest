@@ -1,0 +1,77 @@
+@baseUrl = http://localhost:8080/api
+@token = {{login.response.body.data.token}}
+
+### Register
+POST {{baseUrl}}/register
+Content-Type: application/json
+
+{
+    "username": "testuser",
+    "password": "testpass123"
+}
+
+### Login
+# @name login
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+    "username": "testuser",
+    "password": "testpass123"
+}
+
+### Logout
+POST {{baseUrl}}/logout
+Authorization: Bearer {{token}}
+
+@baseUrl = http://localhost:8080/api
+@token = {{login.response.body.data.token}}
+
+### Get All Channels
+GET {{baseUrl}}/channels
+Authorization: Bearer {{token}}
+
+### Create Channel
+POST {{baseUrl}}/createchannel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "channelName": "testchannel",
+    "channelDescription": "Test channel description",
+    "channelPassword": "optional_password"
+}
+
+### Join Channel
+PATCH {{baseUrl}}/joinchannel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "channelName": "testchannel",
+    "channelPassword": "optional_password"
+}
+
+### Leave Channel
+PATCH {{baseUrl}}/leavechannel/testchannel
+Authorization: Bearer {{token}}
+
+### Delete Channel
+DELETE {{baseUrl}}/deletechannel/testchannel
+Authorization: Bearer {{token}}
+
+### Upload Image
+POST {{baseUrl}}/upload
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="channelName"
+
+testchannel
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="test.jpg"
+Content-Type: image/jpg
+
+< ./test-files/test.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW-- 
