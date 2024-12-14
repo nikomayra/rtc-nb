@@ -3,11 +3,11 @@ package storage
 
 import (
 	"context"
-	"io"
+	"image"
 )
 
 type FileStorer interface {
-	SaveImage(ctx context.Context, file io.Reader) (string, string, error)
+	SaveImage(ctx context.Context, img image.Image) (string, string, error)
 	// GetImage(ctx context.Context, filename string) (io.ReadCloser, error)
 	// DeleteImage(ctx context.Context, filename string) error
 }

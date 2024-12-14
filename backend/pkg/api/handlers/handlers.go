@@ -9,6 +9,8 @@ import (
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/services/chat"
 	"rtc-nb/backend/pkg/api/responses"
+	"rtc-nb/backend/pkg/utils"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -296,4 +298,71 @@ func (h *Handlers) LeaveChannelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	responses.SendSuccess(w, fmt.Sprintf("Left channel: %s", channelName), http.StatusOK)
+}
+
+func (h *Handlers) UploadHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get user from context
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Max upload size ~ 10MB
+	const maxUploadSize = 10 << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+
+	// Parse multipart form with max memory
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		responses.SendError(w, "Request too large", http.StatusBadRequest)
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+
+	// Get file from form
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		responses.SendError(w, "Error retrieving file from form", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Get channel name from form
+	channelName := r.FormValue("channelName")
+	if channelName == "" {
+		responses.SendError(w, "Channel name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate content type
+	if err := utils.ValidateFile(header, file, maxUploadSize); err != nil {
+		responses.SendError(w, fmt.Sprintf("Invalid file: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Process the upload based on content type
+	var uploadResult interface{}
+	var uploadErr error
+	contentType := header.Header.Get("Content-Type")
+
+	switch {
+	case strings.HasPrefix(contentType, "image/"):
+		uploadResult, uploadErr = h.chatService.HandleImageUpload(ctx, file, header, channelName, claims.Username)
+	// Add cases for other file types as needed:
+	// case strings.HasPrefix(contentType, "video/"):
+	// case strings.HasPrefix(contentType, "audio/"):
+	default:
+		responses.SendError(w, "Unsupported content type", http.StatusBadRequest)
+		return
+	}
+
+	if uploadErr != nil {
+		log.Printf("Upload error: %v", uploadErr)
+		responses.SendError(w, "Failed to process upload", http.StatusInternalServerError)
+		return
+	}
+
+	responses.SendSuccess(w, uploadResult, http.StatusOK)
 }

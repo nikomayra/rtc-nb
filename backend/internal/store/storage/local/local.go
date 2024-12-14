@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/google/uuid"
-	// "github.com/nfnt/resize" -- TODO: Create resizing logic in-house
+	"golang.org/x/image/draw"
+)
+
+const (
+	THUMBNAIL_WIDTH = 150
+	STANDARD_WIDTH  = 1280
 )
 
 type LocalFileStore struct {
@@ -30,13 +34,14 @@ func NewLocalFileStore(basePath string) (*LocalFileStore, error) {
 	return &LocalFileStore{basePath: basePath}, nil
 }
 
-func (ls *LocalFileStore) SaveImage(ctx context.Context, file io.Reader) (string, string, error) {
+// Returns the path to the original image and the path to the thumbnail
+func (ls *LocalFileStore) SaveImage(ctx context.Context, img image.Image) (string, string, error) {
 	// Generate unique filename
 	filename := uuid.New().String() + ".jpg"
 
 	// Save original
 	imgPath := filepath.Join(ls.basePath, "images", filename)
-	img, err := saveImage(file, imgPath)
+	img, err := saveImage(img, imgPath)
 	if err != nil {
 		return "", "", fmt.Errorf("save original: %w", err)
 	}
@@ -47,10 +52,11 @@ func (ls *LocalFileStore) SaveImage(ctx context.Context, file io.Reader) (string
 		return "", "", fmt.Errorf("save thumbnail: %w", err)
 	}
 
-	return filename, filename, nil
+	return imgPath, thumbPath, nil
 }
 
-func saveImage(file io.Reader, path string) (image.Image, error) {
+// Resizes the image to standard width, keep aspect ratio
+func saveImage(img image.Image, path string) (image.Image, error) {
 	// Create destination file
 	dst, err := os.Create(path)
 	if err != nil {
@@ -58,14 +64,17 @@ func saveImage(file io.Reader, path string) (image.Image, error) {
 	}
 	defer dst.Close()
 
-	// Decode image
-	img, _, err := image.Decode(file)
-	if err != nil {
-		return nil, err
-	}
+	// Calculate height maintaining aspect ratio
+	bounds := img.Bounds()
+	ratio := float64(bounds.Dx()) / float64(bounds.Dy())
+	newHeight := int(float64(STANDARD_WIDTH) / ratio)
 
-	// Save original
-	if err := jpeg.Encode(dst, img, nil); err != nil {
+	// Resize image to standard width with calculated height
+	dstImg := image.NewRGBA(image.Rect(0, 0, STANDARD_WIDTH, newHeight))
+	draw.ApproxBiLinear.Scale(dstImg, dstImg.Rect, img, img.Bounds(), draw.Over, nil)
+
+	// Save resized image
+	if err := jpeg.Encode(dst, dstImg, nil); err != nil {
 		return nil, err
 	}
 
@@ -80,10 +89,17 @@ func saveThumbnail(img image.Image, path string) error {
 	}
 	defer thumb.Close()
 
-	// TODO: Resize to thumbnail size (e.g., 150x150)
-	// thumbnail := resize.Thumbnail(150, 150, img, resize.Lanczos3)
+	// Calculate height maintaining aspect ratio
+	bounds := img.Bounds()
+	ratio := float64(bounds.Dx()) / float64(bounds.Dy())
+	newHeight := int(float64(THUMBNAIL_WIDTH) / ratio)
+
+	// Destination thumbnail image
+	thumbnail := image.NewRGBA(image.Rect(0, 0, THUMBNAIL_WIDTH, newHeight))
+
+	// Scale image to thumbnail size
+	draw.ApproxBiLinear.Scale(thumbnail, thumbnail.Rect, img, img.Bounds(), draw.Over, nil)
 
 	// Save thumbnail
-	// return jpeg.Encode(thumb, thumbnail, nil)
-	return nil
+	return jpeg.Encode(thumb, thumbnail, nil)
 }

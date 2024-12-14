@@ -1,0 +1,26 @@
+@baseUrl = http://localhost:8080/api
+@token = {{login.response.body.data.token}}
+
+### Register
+# @name register
+POST {{baseUrl}}/register
+Content-Type: application/json
+
+{
+    "username": "testuser",
+    "password": "testpass123"
+}
+
+### Login
+# @name login
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+    "username": "testuser",
+    "password": "testpass123"
+}
+
+### Logout
+POST {{baseUrl}}/logout
+Authorization: Bearer {{token}} 

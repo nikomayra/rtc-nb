@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"mime/multipart"
 	"sync"
 	"time"
 
@@ -15,6 +17,12 @@ import (
 	"rtc-nb/backend/internal/websocket"
 
 	gorilla_websocket "github.com/gorilla/websocket"
+)
+
+const (
+	maxImageSize = 2 << 20 // 2MB
+	maxVideoSize = 8 << 20 // 8MB
+	maxAudioSize = 5 << 20 // 5MB
 )
 
 type ChatService struct {
@@ -241,4 +249,30 @@ func (cs *ChatService) ClearUserSession(ctx context.Context, username string) er
 		}
 	}
 	return nil
+}
+
+func (cs *ChatService) HandleImageUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error) {
+
+	// Check image-specific size limit
+	// TODO: Maybe we don't care since we resize before savings anyways...?
+	// if header.Size > maxImageSize {
+	// 	return nil, fmt.Errorf("image too large: %d > %d bytes", header.Size, maxImageSize)
+	// }
+
+	// Validate image format
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return nil, fmt.Errorf("invalid image format: %w", err)
+	}
+
+	// Reset file pointer
+	if _, err := file.Seek(0, 0); err != nil {
+		return nil, fmt.Errorf("error resetting file: %w", err)
+	}
+
+	imgPath, thumbPath, err := cs.fileStorer.SaveImage(ctx, img)
+	if err != nil {
+		return nil, fmt.Errorf("save image: %w", err)
+	}
+	return map[string]string{"imagePath": imgPath, "thumbnailPath": thumbPath}, nil
 }

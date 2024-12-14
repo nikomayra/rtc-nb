@@ -1,0 +1,36 @@
+@baseUrl = http://localhost:8080/api
+@token = {{login.response.body.token}}
+
+### Get All Channels
+GET {{baseUrl}}/channels
+Authorization: Bearer {{token}}
+
+### Create Channel
+# @name createChannel
+POST {{baseUrl}}/createchannel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "channelName": "testchannel",
+    "channelDescription": "Test channel description",
+    "channelPassword": "optional_password"
+}
+
+### Join Channel
+PATCH {{baseUrl}}/joinchannel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "channelName": "testchannel",
+    "channelPassword": "optional_password"
+}
+
+### Leave Channel
+PATCH {{baseUrl}}/leavechannel/testchannel
+Authorization: Bearer {{token}}
+
+### Delete Channel
+DELETE {{baseUrl}}/deletechannel/testchannel
+Authorization: Bearer {{token}} 

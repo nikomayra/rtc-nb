@@ -33,9 +33,6 @@ func main() {
 	// Initialize Redis PubSub with config-provided client
 	pubSub := redis.NewPubSub(cfg.Redis)
 
-	// Initialize repository with store
-	// repo := repositories.NewRepository(store)
-
 	// Initialize websocket hub and handler
 	wsHub := websocket.NewHub()
 	wsHub.StartCleanupTicker() // Stale connections cleanup

@@ -38,7 +38,7 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.WebSocketHandler, chatSer
 	protected.HandleFunc("/leavechannel/{channelName}", handlers.LeaveChannelHandler).Methods("PATCH")
 	protected.HandleFunc("/channels", handlers.GetChannelsHandler).Methods("GET")
 
-	// protected.HandleFunc("/upload", handlers.UploadHandler).Methods("POST")
+	protected.HandleFunc("/upload", handlers.UploadHandler).Methods("POST")
 	// protected.HandleFunc("/images/{filename}", handlers.ServeImageHandler).Methods("GET")
 	// protected.HandleFunc("/thumbnails/{filename}", handlers.ServeThumbnailHandler).Methods("GET")
 }

@@ -73,3 +73,19 @@
 - [ ] Sketchpad editing
 - [ ] Sketchpad reactions
 
+## Refactor Improvements:
+
+- [ ] Add context everywhere it makes sense
+- [ ] Add logging everywhere it makes sense, upgrade to slog?
+- [ ] Add error handling everywhere it makes sense
+
+## Ideas:
+
+### Context:
+
+- Request tracing for debugging
+- Rate limiting information
+- User preferences (like message formatting)
+- Channel-specific settings
+
+- *Remember*: Context values should be immutable and used sparingly. They're not for passing optional parameters or storing application state.

@@ -1,22 +1,22 @@
 services:
-  api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: rtc_api
-    environment:
-      - POSTGRES_HOST=db
-      - REDIS_ADDR=redis:6379
-      - FILESTORE_PATH=/app/filestore
-    volumes:
-      - filestore:/app/filestore
-    ports:
-      - '8080:8080'
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+  # api:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: rtc_api
+  #   environment:
+  #     - POSTGRES_HOST=db
+  #     - REDIS_ADDR=redis:6379
+  #     - FILESTORE_PATH=${FILESTORE_PATH}
+  #   volumes:
+  #     - filestore:${FILESTORE_PATH}
+  #   ports:
+  #     - '8080:8080'
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
 
   db:
     image: postgres:15
