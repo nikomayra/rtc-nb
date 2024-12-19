@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 	"golang.org/x/image/draw"
@@ -19,7 +21,8 @@ const (
 )
 
 type LocalFileStore struct {
-	basePath string
+	basePath   string // Absolute path to the base directory
+	publicPath string // URL for serving files
 }
 
 func NewLocalFileStore(basePath string) (*LocalFileStore, error) {
@@ -31,11 +34,12 @@ func NewLocalFileStore(basePath string) (*LocalFileStore, error) {
 		}
 	}
 
-	return &LocalFileStore{basePath: basePath}, nil
+	return &LocalFileStore{basePath: basePath, publicPath: "/files"}, nil
 }
 
 // Returns the path to the original image and the path to the thumbnail
 func (ls *LocalFileStore) SaveImage(ctx context.Context, img image.Image) (string, string, error) {
+	slog.Info("Saving image to local storage")
 	// Generate unique filename
 	filename := uuid.New().String() + ".jpg"
 
@@ -52,7 +56,11 @@ func (ls *LocalFileStore) SaveImage(ctx context.Context, img image.Image) (strin
 		return "", "", fmt.Errorf("save thumbnail: %w", err)
 	}
 
-	return imgPath, thumbPath, nil
+	// Return public paths
+	imgURL := strings.Join([]string{ls.publicPath, "images", filename}, "/")
+	thumbURL := strings.Join([]string{ls.publicPath, "thumbnails", filename}, "/")
+
+	return imgURL, thumbURL, nil
 }
 
 // Resizes the image to standard width, keep aspect ratio

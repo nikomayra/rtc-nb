@@ -8,7 +8,7 @@ import (
 type Statements struct {
 	InsertUser *sql.Stmt // username, hashed_password
 	SelectUser *sql.Stmt // username
-	UpdateUser *sql.Stmt // username, hashed_password
+	DeleteUser *sql.Stmt // username
 
 	UpsertUserStatus *sql.Stmt // username, is_online
 	SelectUserStatus *sql.Stmt // username
@@ -60,11 +60,9 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 		return nil, fmt.Errorf("prepare select user: %w", err)
 	}
 
-	if s.UpdateUser, err = prepare(`
-        UPDATE users 
-        SET hashed_password = $2, last_seen = CURRENT_TIMESTAMP 
-        WHERE username = $1`); err != nil {
-		return nil, fmt.Errorf("prepare update user: %w", err)
+	if s.DeleteUser, err = prepare(`
+        DELETE FROM users WHERE username = $1`); err != nil {
+		return nil, fmt.Errorf("prepare delete user: %w", err)
 	}
 
 	// Prepare user status statements
@@ -169,7 +167,7 @@ func (s *Statements) CloseStatements() error {
 	for _, stmt := range []*sql.Stmt{
 		s.InsertUser,
 		s.SelectUser,
-		s.UpdateUser,
+		s.DeleteUser,
 		s.UpsertUserStatus,
 		s.SelectUserStatus,
 		s.InsertChannel,

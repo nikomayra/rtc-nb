@@ -14,27 +14,25 @@ const (
 	MessageTypeImage
 )
 
-type TextContent struct {
-	Text string `json:"text"`
-}
-
-type ImageContent struct {
-	URL string `json:"url"`
+type MessageContent struct {
+	Text         string `json:"text,omitempty"`
+	ImageURL     string `json:"imageurl,omitempty"`
+	ThumbnailURL string `json:"thumbnailurl,omitempty"`
 }
 
 type IncomingMessage struct {
-	ChannelName string      `json:"channelname"`
-	Type        MessageType `json:"type"`
-	Content     interface{} `json:"content"`
+	ChannelName string         `json:"channelname"`
+	Type        MessageType    `json:"type"`
+	Content     MessageContent `json:"content"`
 }
 
 type Message struct {
-	ID          string      `json:"id"`
-	ChannelName string      `json:"channelName"`
-	Username    string      `json:"username"`
-	Type        MessageType `json:"type"`
-	Content     interface{} `json:"content"`
-	Timestamp   time.Time   `json:"timestamp"`
+	ID          string         `json:"id"`
+	ChannelName string         `json:"channelName"`
+	Username    string         `json:"username"`
+	Type        MessageType    `json:"type"`
+	Content     MessageContent `json:"content"`
+	Timestamp   time.Time      `json:"timestamp"`
 }
 
 func (m *IncomingMessage) Validate() error {
@@ -42,16 +40,19 @@ func (m *IncomingMessage) Validate() error {
 		return errors.New("channelname required")
 	}
 
+	if m.Type != MessageTypeText && m.Type != MessageTypeImage {
+		return errors.New("invalid message type")
+	}
+
+	// Validate content based on type
 	switch m.Type {
 	case MessageTypeText:
-		content, ok := m.Content.(map[string]interface{})
-		if !ok || content["text"] == "" {
-			return errors.New("invalid text content")
+		if m.Content.Text == "" {
+			return errors.New("text content required for text message")
 		}
 	case MessageTypeImage:
-		content, ok := m.Content.(map[string]interface{})
-		if !ok || content["url"] == "" {
-			return errors.New("invalid image content")
+		if m.Content.ImageURL == "" || m.Content.ThumbnailURL == "" {
+			return errors.New("image and thumbnail URLs required for image message")
 		}
 	default:
 		return errors.New("invalid message type")

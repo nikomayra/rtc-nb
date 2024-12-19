@@ -5,8 +5,6 @@ export class WebSocketService {
   private static instance: WebSocketService;
   private ws: WebSocket | null = null;
   private reconnectTimer: number | null = null;
-  private heartbeatTimer: number | null = null;
-  private heartbeatInterval = 30000;
   private currentChannel: string | null = null;
 
   // Single callback for each type
@@ -28,28 +26,6 @@ export class WebSocketService {
     this.onConnectionChange = callbacks.onConnectionChange;
   }
 
-  private startHeartbeat(token: string): void {
-    this.heartbeatTimer = window.setInterval(() => {
-      if (!this.currentChannel) {
-        this.stopHeartbeat();
-        return;
-      }
-
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'ping' }));
-      } else {
-        this.reconnect(token, this.currentChannel, true);
-      }
-    }, this.heartbeatInterval);
-  }
-
-  private stopHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      window.clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-  }
-
   connect(token: string, channelName: string): void {
     if (this.ws?.readyState === WebSocket.OPEN && this.currentChannel === channelName) return;
 
@@ -67,14 +43,12 @@ export class WebSocketService {
       console.log('WebSocket connection established');
       this.onConnectionChange?.(true);
       this.clearReconnectTimer();
-      this.startHeartbeat(token);
     };
 
     this.ws.onclose = (event) => {
       console.log(`WebSocket connection closed: ${event.code}`);
       this.onConnectionChange?.(false);
-      this.stopHeartbeat();
-
+      
       if (event.code !== 1000) {
         this.reconnect(token, channelName);
       }
@@ -102,7 +76,6 @@ export class WebSocketService {
   }
 
   disconnect(): void {
-    this.stopHeartbeat();
     this.clearReconnectTimer();
 
     if (this.ws) {
@@ -135,20 +108,6 @@ export class WebSocketService {
       this.reconnectTimer = window.setTimeout(attemptReconnect, 3000);
     }
   }
-
-  // private reconnect(token: string): void {
-  //   if (this.currentChannel) {
-  //     this.connect(token, this.currentChannel);
-  //   }
-  // }
-
-  // private scheduleReconnect(token: string, channelName: string): void {
-  //   if (!this.reconnectTimer) {
-  //     this.reconnectTimer = window.setTimeout(() => {
-  //       this.connect(token, channelName);
-  //     }, 3000);
-  //   }
-  // }
 
   private clearReconnectTimer(): void {
     if (this.reconnectTimer) {

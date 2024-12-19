@@ -9,6 +9,11 @@ import (
 	"sync"
 	"time"
 
+	// Image packages for decoding
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/store/database"
@@ -275,4 +280,8 @@ func (cs *ChatService) HandleImageUpload(ctx context.Context, file multipart.Fil
 		return nil, fmt.Errorf("save image: %w", err)
 	}
 	return map[string]string{"imagePath": imgPath, "thumbnailPath": thumbPath}, nil
+}
+
+func (cs *ChatService) DeleteUser(ctx context.Context, username string) error {
+	return cs.dbStore.DeleteUser(ctx, username)
 }

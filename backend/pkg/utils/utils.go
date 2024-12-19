@@ -43,6 +43,7 @@ func IsAllowedContentType(contentType string) bool {
 	return allowedTypes[contentType]
 }
 
+// Validate file size and content type
 func ValidateFile(header *multipart.FileHeader, file multipart.File, maxFileSize int64) error {
 	// Check file size
 	if header.Size > maxFileSize {

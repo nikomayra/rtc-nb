@@ -73,7 +73,7 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 		conn.Close()
 	}()
 
-	// Handle incoming messages
+	// TODO: Proper error handling
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {

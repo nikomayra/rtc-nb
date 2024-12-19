@@ -366,3 +366,20 @@ func (h *Handlers) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	responses.SendSuccess(w, uploadResult, http.StatusOK)
 }
+
+func (h *Handlers) DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.chatService.DeleteUser(ctx, claims.Username); err != nil {
+		log.Printf("Error deleting user: %v", err)
+		responses.SendError(w, "Failed to delete user", http.StatusInternalServerError)
+		return
+	}
+
+	responses.SendSuccess(w, "User deleted successfully", http.StatusOK)
+}

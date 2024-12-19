@@ -1,91 +1,132 @@
-# Base feature list:
+# Feature List
 
-## Authentication:
+## Authentication
 
-- [x] Login
-- [x] Register
-- [x] Logout
-- [ ] Idle Account Deletion
-- [ ] Delete account
+### Backend
+- [x] Login endpoint
+- [x] Register endpoint
+- [x] Logout endpoint
+- [ ] Account deletion endpoint
+- [ ] Automated idle account cleanup service
+- [ ] Password reset endpoints
+- [ ] Password change endpoint
 
-## Real-time chat:
+### Frontend
+- [x] Login form & validation
+- [x] Registration form & validation
+- [x] Logout functionality
+- [ ] Account settings page
+- [ ] Password reset flow
+- [ ] Password change form
 
-- [x] Send message
-- [x] Receive message
-- [ ] Delete message (All/Self)
-- [ ] Edit message (Self)
+## Real-time Chat
 
-## Uploads (General):
+### Backend
+- [x] WebSocket message handling
+- [x] Message persistence in database
+- [ ] Message deletion endpoints
+- [ ] Message edit endpoints
+- [ ] Message history pagination
+- [ ] Message reaction system
 
-- [ ] Content-type validation
-- [ ] File size limits
-- [ ] File cleanup (unused/idle)
-- [ ] Rate-limiting
+### Frontend
+- [x] Message sending UI
+- [x] Real-time message reception
+- [ ] Message deletion UI
+- [ ] Message editing UI
+- [ ] Message history infinite scroll
+- [ ] Reaction picker UI
 
-## Image Attachments:
+## File Management
 
-- [ ] Upload image
-- [ ] Generate thumbnail
-- [ ] Download image
-- [ ] View image (modal)
+### Backend
+- [x] File upload validation service
+- [x] Content-type verification
+- [ ] File cleanup service
+- [ ] Rate limiting middleware
+- [ ] File download endpoints
 
-## Video Attachments:
+### Shared
+- [ ] File size constraints
+- [ ] Supported format definitions
+- [ ] Rate limit configurations
 
-- [ ] Upload video
-- [ ] Generate thumbnail
-- [ ] Download video
-- [ ] View video (modal)
+## Image Attachments
 
-## Audio Attachments:
+### Backend
+- [x] Image upload handling
+- [x] Thumbnail generation service
+- [ ] Image serving endpoints
+- [ ] Image deletion cleanup
 
-- [ ] Upload audio
-- [ ] Download audio
-- [ ] Play audio (in-chat)
+### Frontend
+- [x] Image upload UI
+- [ ] Image preview modal
+- [ ] Image download button
+- [ ] Thumbnail display in chat
 
-## Real-time Sketchpad:
+## Video Attachments
 
-- [ ] Draw
-- [ ] Erase
-- [ ] Undo
-- [ ] Redo
-- [ ] Save
-- [ ] Download
-- [ ] Clear
+### Backend
+- [ ] Video upload handling
+- [ ] Video thumbnail generation
+- [ ] Video streaming endpoints
+- [ ] Video format validation
 
-## Extras:
+### Frontend
+- [ ] Video upload UI
+- [ ] Video player modal
+- [ ] Video thumbnail display
+- [ ] Video download button
 
-### Authentication extras:
+## Audio Attachments
 
-- [ ] Reset password
-- [ ] Change password
+### Backend
+- [ ] Audio upload handling
+- [ ] Audio format validation
+- [ ] Audio streaming endpoints
 
-### Real-time chat extras:
+### Frontend
+- [ ] Audio upload UI
+- [ ] Audio player component
+- [ ] Audio download button
 
-- [ ] Message history
-- [ ] Message deletion
-- [ ] Message editing
-- [ ] Message reactions
+## Real-time Sketchpad
 
-### Real-time sketchpad extras:
+### Backend
+- [ ] WebSocket drawing events
+- [ ] Drawing state persistence
+- [ ] Drawing history service
 
-- [ ] Sketchpad history
-- [ ] Sketchpad deletion
-- [ ] Sketchpad editing
-- [ ] Sketchpad reactions
+### Frontend
+- [ ] Canvas drawing implementation
+- [ ] Drawing tools (pen, eraser)
+- [ ] Undo/Redo functionality
+- [ ] Drawing download
+- [ ] Clear canvas function
 
-## Refactor Improvements:
+## Infrastructure Improvements
 
-- [ ] Add context everywhere it makes sense
-- [ ] Add logging everywhere it makes sense, upgrade to slog?
-- [ ] Add error handling everywhere it makes sense
+### Logging & Monitoring
+- [ ] Implement structured logging (slog)
+- [ ] Request tracing system
+- [ ] Error monitoring
+- [ ] Performance metrics
 
-## Ideas:
+### Context Implementation
+- [ ] Request tracing context
+- [ ] User preferences context
+- [ ] Rate limiting context
+- [ ] Channel settings context
 
-### Context:
+### Security
+- [ ] Rate limiting implementation
+- [ ] Input validation
+- [ ] Security headers
+- [ ] CSRF protection
 
-- Request tracing for debugging
-- Rate limiting information
-- User preferences (like message formatting)
-- Channel-specific settings
-
-- *Remember*: Context values should be immutable and used sparingly. They're not for passing optional parameters or storing application state.
+## Notes
+- Context values should be immutable
+- Use context for cross-cutting concerns, not for business logic
+- Implement proper error handling at all layers
+- Consider monitoring and observability from the start

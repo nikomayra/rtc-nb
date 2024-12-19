@@ -45,6 +45,10 @@ func main() {
 	router := mux.NewRouter()
 	api.RegisterRoutes(router, wsHandler, chatService)
 
+	// Serve static files from the filestore
+	fs := http.FileServer(http.Dir(cfg.FileStorePath))
+	router.PathPrefix("/files/").Handler(http.StripPrefix("/files/", fs))
+
 	// TODO: serve the frontend from the dist folder for production
 	// fs := http.FileServer(http.Dir("./dist"))
 	// router.Handle("/", fs)

@@ -57,6 +57,11 @@ func (s *Store) GetUser(ctx context.Context, username string) (*models.User, err
 	return user, err
 }
 
+func (s *Store) DeleteUser(ctx context.Context, username string) error {
+	_, err := s.statements.DeleteUser.ExecContext(ctx, username)
+	return err
+}
+
 // Channel operations
 func (s *Store) CreateChannel(ctx context.Context, channel *models.Channel) error {
 	tx, err := s.db.BeginTx(ctx, nil)

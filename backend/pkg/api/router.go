@@ -25,7 +25,6 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.WebSocketHandler, chatSer
 	apiRouter.HandleFunc("/", defaultRoute).Methods("GET")
 	apiRouter.HandleFunc("/register", handlers.RegisterHandler).Methods("POST")
 	apiRouter.HandleFunc("/login", handlers.LoginHandler).Methods("POST")
-	apiRouter.HandleFunc("/logout", handlers.LogoutHandler).Methods("POST")
 
 	// Protected routes - create a subrouter with auth middleware
 	protected := apiRouter.NewRoute().Subrouter()
@@ -37,6 +36,9 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.WebSocketHandler, chatSer
 	protected.HandleFunc("/deletechannel/{channelName}", handlers.DeleteChannelHandler).Methods("DELETE")
 	protected.HandleFunc("/leavechannel/{channelName}", handlers.LeaveChannelHandler).Methods("PATCH")
 	protected.HandleFunc("/channels", handlers.GetChannelsHandler).Methods("GET")
+
+	protected.HandleFunc("/logout", handlers.LogoutHandler).Methods("POST")
+	protected.HandleFunc("/deleteaccount", handlers.DeleteAccountHandler).Methods("DELETE")
 
 	protected.HandleFunc("/upload", handlers.UploadHandler).Methods("POST")
 	// protected.HandleFunc("/images/{filename}", handlers.ServeImageHandler).Methods("GET")

@@ -101,7 +101,7 @@ func (h *Hub) GetConnection(username string) (*websocket.Conn, bool) {
 // AUTOMATIC CLEANUP
 
 func (h *Hub) StartCleanupTicker() {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(45 * time.Second)
 	go func() {
 		for range ticker.C {
 			h.cleanupStaleConnections()

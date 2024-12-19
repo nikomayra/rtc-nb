@@ -1,3 +1,5 @@
+import { API_URL } from './constants';
+
 const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
 
@@ -10,4 +12,9 @@ const formatTimestamp = (timestamp: string) => {
   });
 };
 
-export default { formatTimestamp };
+const getFullURL = (partialURL: string) => {
+  if (partialURL.startsWith('http')) return partialURL;
+  return `${API_URL}${partialURL}`;
+};
+
+export default { formatTimestamp, getFullURL };
