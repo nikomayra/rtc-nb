@@ -31,15 +31,15 @@ func main() {
 	}
 
 	// Initialize Redis PubSub with config-provided client
-	pubSub := redis.NewPubSub(cfg.Redis)
+	cache := redis.NewCache(cfg.Redis)
 
 	// Initialize websocket hub and handler
 	wsHub := websocket.NewHub()
 	wsHub.StartCleanupTicker() // Stale connections cleanup
-	wsHandler := websocket.NewWebSocketHandler(wsHub)
+	wsHandler := websocket.NewWebSocketHandler(wsHub, dbStore, cache)
 
-	// Initialize chat service
-	chatService := chat.NewService(dbStore, fileStore, pubSub, wsHub)
+	// Initialize services
+	chatService := chat.NewService(dbStore, fileStore, wsHub, cache)
 
 	// Setup router and routes
 	router := mux.NewRouter()

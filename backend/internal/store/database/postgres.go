@@ -26,6 +26,27 @@ func NewStore(db *sql.DB) (*Store, error) {
 	}, nil
 }
 
+func (s *Store) BatchInsertMessages(ctx context.Context, messages []*models.Message) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, msg := range messages {
+		_, err := tx.StmtContext(ctx, s.statements.InsertMessage).ExecContext(ctx, msg.ID, msg.ChannelName, msg.Username, msg.Type, msg.Content, msg.Timestamp)
+		if err != nil {
+			return fmt.Errorf("failed to insert message: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (s *Store) Close() error {
 	s.statements.CloseStatements()
 	return s.db.Close()

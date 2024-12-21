@@ -37,12 +37,6 @@ type ChannelMember struct {
 }
 
 func NewChannel(name string, creator string, description, password *string) (*Channel, error) {
-	if name == "" {
-		return nil, ErrEmptyChannelName
-	}
-	if creator == "" {
-		return nil, ErrEmptyCreator
-	}
 	var isPrivate bool
 	if password == nil {
 		isPrivate = false
@@ -64,6 +58,17 @@ func NewChannel(name string, creator string, description, password *string) (*Ch
 		return nil, err
 	}
 	return ch, nil
+}
+
+func (c *Channel) Validate() error {
+	if c.Name == "" {
+		return ErrEmptyChannelName
+	}
+	if c.CreatedBy == "" {
+		return ErrEmptyCreator
+	}
+
+	return nil
 }
 
 func (c *Channel) AddMember(username string, isAdmin bool) error {

@@ -6,7 +6,7 @@
 - [x] Login endpoint
 - [x] Register endpoint
 - [x] Logout endpoint
-- [ ] Account deletion endpoint
+- [x] Account deletion endpoint
 - [ ] Automated idle account cleanup service
 - [ ] Password reset endpoints
 - [ ] Password change endpoint
@@ -28,6 +28,9 @@
 - [ ] Message edit endpoints
 - [ ] Message history pagination
 - [ ] Message reaction system
+- [ ] Session Redis persistence for message history
+- [x] Message queue/buffer postgres persistence //TODO: Tune values for production
+- [ ] User status (online/idle/offline, etc) Redis persistence
 
 ### Frontend
 - [x] Message sending UI
@@ -47,8 +50,8 @@
 - [ ] File download endpoints
 
 ### Shared
-- [ ] File size constraints
-- [ ] Supported format definitions
+- [x] File size constraints
+- [x] Supported format definitions
 - [ ] Rate limit configurations
 
 ## Image Attachments
@@ -56,14 +59,14 @@
 ### Backend
 - [x] Image upload handling
 - [x] Thumbnail generation service
-- [ ] Image serving endpoints
+- [x] Image serving endpoints
 - [ ] Image deletion cleanup
 
 ### Frontend
 - [x] Image upload UI
-- [ ] Image preview modal
+- [x] Image preview modal // TODO: Make Modal window hook
 - [ ] Image download button
-- [ ] Thumbnail display in chat
+- [x] Thumbnail display in chat
 
 ## Video Attachments
 
@@ -130,3 +133,5 @@
 - Use context for cross-cutting concerns, not for business logic
 - Implement proper error handling at all layers
 - Consider monitoring and observability from the start
+- Note in git writeup about how I'd use pubsub for a larger scale application and its
+- Note in git writeup about benefits of redis cache for larger scale appliacation.

@@ -16,10 +16,10 @@ import (
 )
 
 type Handlers struct {
-	chatService *chat.ChatService
+	chatService chat.ChatManager
 }
 
-func NewHandlers(chatService *chat.ChatService) *Handlers {
+func NewHandlers(chatService chat.ChatManager) *Handlers {
 	return &Handlers{
 		chatService: chatService,
 	}
@@ -351,8 +351,10 @@ func (h *Handlers) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(contentType, "image/"):
 		uploadResult, uploadErr = h.chatService.HandleImageUpload(ctx, file, header, channelName, claims.Username)
 	// Add cases for other file types as needed:
-	// case strings.HasPrefix(contentType, "video/"):
-	// case strings.HasPrefix(contentType, "audio/"):
+	case strings.HasPrefix(contentType, "video/"):
+		uploadResult, uploadErr = h.chatService.HandleVideoUpload(ctx, file, header, channelName, claims.Username)
+	case strings.HasPrefix(contentType, "audio/"):
+		uploadResult, uploadErr = h.chatService.HandleAudioUpload(ctx, file, header, channelName, claims.Username)
 	default:
 		responses.SendError(w, "Unsupported content type", http.StatusBadRequest)
 		return

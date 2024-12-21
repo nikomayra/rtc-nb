@@ -12,7 +12,7 @@ import (
 	"rtc-nb/backend/pkg/api/middleware"
 )
 
-func RegisterRoutes(router *mux.Router, wsh *websocket.WebSocketHandler, chatService *chat.ChatService) {
+func RegisterRoutes(router *mux.Router, wsh *websocket.WebSocketHandler, chatService chat.ChatManager) {
 	// Create a subrouter for /api with common middleware
 	apiRouter := router.PathPrefix("/api").Subrouter()
 

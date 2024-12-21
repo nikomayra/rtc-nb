@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -19,6 +20,16 @@ func NewHub() *Hub {
 		connections: make(map[string]*websocket.Conn),
 		channels:    make(map[string]map[*websocket.Conn]bool),
 	}
+}
+
+func (h *Hub) InitializeChannel(channelName string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, ok := h.channels[channelName]; !ok {
+		return fmt.Errorf("channel already exists: %s", channelName)
+	}
+	h.channels[channelName] = make(map[*websocket.Conn]bool)
+	return nil
 }
 
 func (h *Hub) NotifyChannel(channelName string, message []byte) {

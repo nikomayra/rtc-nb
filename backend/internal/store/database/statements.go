@@ -23,8 +23,8 @@ type Statements struct {
 	RemoveChannelMember  *sql.Stmt // channel_name, username
 	IsUserAdmin          *sql.Stmt // channel_name, username
 
-	InsertMessage  *sql.Stmt // id, channel_name, username, message_type, content
-	SelectMessages *sql.Stmt
+	InsertMessage  *sql.Stmt // id, channel_name, username, message_type, content, timestamp
+	SelectMessages *sql.Stmt // channel_name
 
 	SelectUserChannels *sql.Stmt // username
 }
@@ -130,8 +130,8 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 
 	// Prepare message statements
 	if s.InsertMessage, err = prepare(`
-        INSERT INTO messages (id, channel_name, username, message_type, content) 
-        VALUES ($1, $2, $3, $4, $5)`); err != nil {
+        INSERT INTO messages (id, channel_name, username, message_type, content, timestamp) 
+        VALUES ($1, $2, $3, $4, $5, $6)`); err != nil {
 		return nil, fmt.Errorf("prepare insert message: %w", err)
 	}
 

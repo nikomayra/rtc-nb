@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/models"
+	"rtc-nb/backend/internal/store/database"
+	"rtc-nb/backend/internal/store/redis"
 	"rtc-nb/backend/pkg/api/responses"
 
 	"github.com/gorilla/mux"
@@ -15,12 +16,13 @@ import (
 )
 
 type WebSocketHandler struct {
-	upgrader websocket.Upgrader
-	hub      *Hub
+	upgrader      websocket.Upgrader
+	hub           *Hub
+	messageBuffer *MessageBuffer
 	//mu       sync.RWMutex
 }
 
-func NewWebSocketHandler(hub *Hub) *WebSocketHandler {
+func NewWebSocketHandler(hub *Hub, db *database.Store, cache *redis.Cache) *WebSocketHandler {
 	return &WebSocketHandler{
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -30,7 +32,8 @@ func NewWebSocketHandler(hub *Hub) *WebSocketHandler {
 			},
 			Subprotocols: []string{"Authentication"},
 		},
-		hub: hub,
+		hub:           hub,
+		messageBuffer: NewMessageBuffer(db),
 	}
 }
 
@@ -100,6 +103,9 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 			log.Printf("Error marshaling message: %v", err)
 			continue
 		}
+
+		// Add to message buffer
+		wsh.messageBuffer.Add(outgoingMsg)
 
 		// Broadcast message to channel
 		wsh.hub.NotifyChannel(channelName, outgoingMsgBytes)
