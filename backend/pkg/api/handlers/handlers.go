@@ -8,6 +8,7 @@ import (
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/services/chat"
+	"rtc-nb/backend/internal/services/sketch"
 	"rtc-nb/backend/pkg/api/responses"
 	"rtc-nb/backend/pkg/utils"
 	"strings"
@@ -16,12 +17,14 @@ import (
 )
 
 type Handlers struct {
-	chatService chat.ChatManager
+	chatService   chat.ChatManager
+	sketchService *sketch.SketchService
 }
 
-func NewHandlers(chatService chat.ChatManager) *Handlers {
+func NewHandlers(chatService chat.ChatManager, sketchService *sketch.SketchService) *Handlers {
 	return &Handlers{
-		chatService: chatService,
+		chatService:   chatService,
+		sketchService: sketchService,
 	}
 }
 
@@ -371,7 +374,7 @@ func (h *Handlers) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	claims, ok := auth.ClaimsFromContext(r.Context())
+	claims, ok := auth.ClaimsFromContext(ctx)
 	if !ok {
 		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -384,4 +387,126 @@ func (h *Handlers) DeleteAccountHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	responses.SendSuccess(w, "User deleted successfully", http.StatusOK)
+}
+
+func (h *Handlers) CreateSketchHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ChannelName string `json:"channelName"`
+		DisplayName string `json:"displayName"`
+		Width       int    `json:"width"`
+		Height      int    `json:"height"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.SendError(w, "Invalid request format", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if req.ChannelName == "" {
+		responses.SendError(w, "Channel name required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.sketchService.CreateSketch(ctx, req.ChannelName, req.DisplayName, req.Width, req.Height, claims.Username); err != nil {
+		log.Printf("Error creating sketch: %v", err)
+		responses.SendError(w, "Failed to create sketch", http.StatusInternalServerError)
+		return
+	}
+
+	responses.SendSuccess(w, "Sketch created successfully", http.StatusCreated)
+}
+
+func (h *Handlers) GetSketchHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID          string `json:"id"`
+		ChannelName string `json:"channelName"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.SendError(w, "Invalid request format", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if req.ChannelName == "" {
+		responses.SendError(w, "Channel name required", http.StatusBadRequest)
+		return
+	}
+
+	sketch, err := h.sketchService.GetSketch(ctx, req.ChannelName, claims.Username, req.ID)
+	if err != nil {
+		log.Printf("Error getting sketch: %v", err)
+		responses.SendError(w, "Failed to get sketch", http.StatusInternalServerError)
+		return
+	}
+
+	responses.SendSuccess(w, sketch, http.StatusOK)
+}
+
+func (h *Handlers) GetSketchesHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	if channelName == "" {
+		responses.SendError(w, "Channel name required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	sketches, err := h.sketchService.GetSketches(ctx, channelName, claims.Username)
+	if err != nil {
+		log.Printf("Error getting sketches: %v", err)
+		responses.SendError(w, "Failed to get sketches", http.StatusInternalServerError)
+		return
+	}
+
+	responses.SendSuccess(w, sketches, http.StatusOK)
+}
+
+func (h *Handlers) DeleteSketchHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID          string `json:"id"`
+		ChannelName string `json:"channelName"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.SendError(w, "Invalid request format", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if req.ChannelName == "" {
+		responses.SendError(w, "Channel name required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.sketchService.DeleteSketch(ctx, req.ID, req.ChannelName, claims.Username); err != nil {
+		log.Printf("Error deleting sketch: %v", err)
+		responses.SendError(w, "Failed to delete sketch", http.StatusInternalServerError)
+		return
+	}
+
+	responses.SendSuccess(w, "Sketch deleted successfully", http.StatusOK)
 }

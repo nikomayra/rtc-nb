@@ -25,7 +25,7 @@ func NewHub() *Hub {
 func (h *Hub) InitializeChannel(channelName string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if _, ok := h.channels[channelName]; !ok {
+	if _, ok := h.channels[channelName]; ok {
 		return fmt.Errorf("channel already exists: %s", channelName)
 	}
 	h.channels[channelName] = make(map[*websocket.Conn]bool)

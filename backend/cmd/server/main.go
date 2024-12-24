@@ -6,6 +6,7 @@ import (
 
 	"rtc-nb/backend/internal/config"
 	"rtc-nb/backend/internal/services/chat"
+	"rtc-nb/backend/internal/services/sketch"
 	"rtc-nb/backend/internal/store/database"
 	"rtc-nb/backend/internal/store/redis"
 	"rtc-nb/backend/internal/store/storage/local"
@@ -40,10 +41,11 @@ func main() {
 
 	// Initialize services
 	chatService := chat.NewService(dbStore, fileStore, wsHub, cache)
+	sketchService := sketch.NewSketchService(dbStore)
 
 	// Setup router and routes
 	router := mux.NewRouter()
-	api.RegisterRoutes(router, wsHandler, chatService)
+	api.RegisterRoutes(router, wsHandler, chatService, sketchService)
 
 	// Serve static files from the filestore
 	fs := http.FileServer(http.Dir(cfg.FileStorePath))

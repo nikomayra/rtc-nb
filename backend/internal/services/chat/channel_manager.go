@@ -64,7 +64,6 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	// 1. Verify channel exists and check password
 	channel, err := cm.db.GetChannel(ctx, channelName)
 	if err != nil {
 		return fmt.Errorf("get channel: %w", err)
@@ -73,7 +72,6 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 		return fmt.Errorf("channel not found")
 	}
 
-	// Check password for private channels
 	if channel.IsPrivate {
 		if password == nil || *password == "" {
 			return fmt.Errorf("password required for private channel")
@@ -87,26 +85,18 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 		}
 	}
 
-	// 2. Get current channel membership (if any)
-	currentChannels, err := cm.db.GetUserChannels(ctx, username)
+	currentChannel, err := cm.db.GetUserChannel(ctx, username)
 	if err != nil {
-		return fmt.Errorf("get user channels: %w", err)
+		return fmt.Errorf("get user channel: %w", err)
 	}
 
-	// 3. Start a transaction for membership changes
 	tx, err := cm.db.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Check if user is already in the target channel
-	isCurrentMember := false
-	for _, currentChannel := range currentChannels {
-		if currentChannel == channelName {
-			isCurrentMember = true
-			continue
-		}
+	if currentChannel != "" && currentChannel != channelName {
 		// Remove from other channels
 		if err := cm.db.RemoveChannelMember(ctx, currentChannel, username); err != nil {
 			return fmt.Errorf("remove from current channel: %w", err)
@@ -117,12 +107,12 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 		}
 	}
 
-	isAdmin, err := cm.db.IsUserAdmin(ctx, channelName, username)
-	if err != nil {
-		return fmt.Errorf("is user admin: %w", err)
-	}
+	if currentChannel != channelName {
+		isAdmin, err := cm.db.IsUserAdmin(ctx, channelName, username)
+		if err != nil {
+			return fmt.Errorf("is user admin: %w", err)
+		}
 
-	if !isCurrentMember {
 		member := &models.ChannelMember{
 			Username: username,
 			JoinedAt: time.Now(),
@@ -134,7 +124,6 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 		}
 	}
 
-	// 6. Add to websocket channel
 	if conn, ok := cm.hub.GetConnection(username); ok {
 		cm.hub.AddClientToChannel(channelName, conn)
 	}

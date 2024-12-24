@@ -28,9 +28,8 @@
 - [ ] Message edit endpoints
 - [ ] Message history pagination
 - [ ] Message reaction system
-- [ ] Session Redis persistence for message history
 - [x] Message queue/buffer postgres persistence //TODO: Tune values for production
-- [ ] User status (online/idle/offline, etc) Redis persistence
+- [ ] User status (online/idle/offline, etc)
 
 ### Frontend
 - [x] Message sending UI
@@ -97,8 +96,13 @@
 ## Real-time Sketchpad
 
 ### Backend
+- [x] Sketchpad creation endpoint
+- [x] Sketchpad deletion endpoint
+- [x] Sketchpad get endpoints
+- [x] Sketch data structures
+- [ ] Sketch buffer for sketch messages
 - [ ] WebSocket drawing events
-- [ ] Drawing state persistence
+- [x] Drawing state persistence
 - [ ] Drawing history service
 
 ### Frontend

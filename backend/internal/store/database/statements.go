@@ -10,6 +10,7 @@ type Statements struct {
 	SelectUser *sql.Stmt // username
 	DeleteUser *sql.Stmt // username
 
+	// TODO: Implement for idle system maybe
 	UpsertUserStatus *sql.Stmt // username, is_online
 	SelectUserStatus *sql.Stmt // username
 
@@ -26,7 +27,13 @@ type Statements struct {
 	InsertMessage  *sql.Stmt // id, channel_name, username, message_type, content, timestamp
 	SelectMessages *sql.Stmt // channel_name
 
-	SelectUserChannels *sql.Stmt // username
+	SelectUserChannel *sql.Stmt // username
+
+	InsertSketch     *sql.Stmt // id, channel_name, width, height, pixels
+	SelectSketchByID *sql.Stmt // id
+	SelectSketches   *sql.Stmt // channel_name
+	UpdateSketch     *sql.Stmt // id, width, height, pixels
+	DeleteSketch     *sql.Stmt // id
 }
 
 func PrepareStatements(db *sql.DB) (*Statements, error) {
@@ -65,7 +72,7 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 		return nil, fmt.Errorf("prepare delete user: %w", err)
 	}
 
-	// Prepare user status statements
+	// // Prepare user status statements
 	if s.UpsertUserStatus, err = prepare(`
         INSERT INTO user_status (username, is_online, last_seen)
         VALUES ($1, $2, CURRENT_TIMESTAMP)
@@ -143,21 +150,53 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 		return nil, fmt.Errorf("prepare select messages: %w", err)
 	}
 
-	if s.SelectUserChannels, err = prepare(`
+	if s.SelectUserChannel, err = prepare(`
         SELECT channel_name 
         FROM channel_member 
-        WHERE username = $1`); err != nil {
-		return nil, fmt.Errorf("prepare select user channels: %w", err)
+        WHERE username = $1
+		LIMIT 1`); err != nil {
+		return nil, fmt.Errorf("prepare select user channel: %w", err)
 	}
 
 	// Prepare IsUserAdmin statement
-	s.IsUserAdmin, err = db.Prepare(`
+	if s.IsUserAdmin, err = prepare(`
         SELECT is_admin 
         FROM channel_member 
-        WHERE channel_name = $1 AND username = $2
-    `)
-	if err != nil {
+        WHERE channel_name = $1 AND username = $2`); err != nil {
 		return nil, fmt.Errorf("prepare IsUserAdmin statement: %w", err)
+	}
+
+	// Prepare sketch statements
+	if s.InsertSketch, err = prepare(`
+        INSERT INTO sketches (id, channel_name, width, height, pixels, created_by) 
+        VALUES ($1, $2, $3, $4, $5, $6)`); err != nil {
+		return nil, fmt.Errorf("prepare insert sketch: %w", err)
+	}
+
+	if s.SelectSketchByID, err = prepare(`
+        SELECT id, channel_name, width, height, pixels, created_at, created_by 
+        FROM sketches 
+        WHERE id = $1`); err != nil {
+		return nil, fmt.Errorf("prepare select sketch: %w", err)
+	}
+
+	if s.SelectSketches, err = prepare(`
+        SELECT id, channel_name, width, height, created_at, created_by 
+        FROM sketches
+		WHERE channel_name = $1`); err != nil {
+		return nil, fmt.Errorf("prepare select sketches: %w", err)
+	}
+
+	if s.UpdateSketch, err = prepare(`
+        UPDATE sketches 
+        SET pixels = $2
+        WHERE id = $1`); err != nil {
+		return nil, fmt.Errorf("prepare update sketch: %w", err)
+	}
+
+	if s.DeleteSketch, err = prepare(`
+        DELETE FROM sketches WHERE id = $1`); err != nil {
+		return nil, fmt.Errorf("prepare delete sketch: %w", err)
 	}
 
 	return s, nil
@@ -177,8 +216,13 @@ func (s *Statements) CloseStatements() error {
 		s.AddChannelMember,
 		s.InsertMessage,
 		s.SelectMessages,
-		s.SelectUserChannels,
+		s.SelectUserChannel,
 		s.IsUserAdmin,
+		s.InsertSketch,
+		s.SelectSketchByID,
+		s.SelectSketches,
+		s.UpdateSketch,
+		s.DeleteSketch,
 	} {
 		if stmt != nil {
 			stmt.Close()

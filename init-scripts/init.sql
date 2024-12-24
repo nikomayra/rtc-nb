@@ -2,6 +2,7 @@
 CREATE TABLE users (
     username VARCHAR(50) PRIMARY KEY,
     hashed_password VARCHAR(100) NOT NULL,
+    is_online BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -41,6 +42,17 @@ CREATE TABLE messages (
     message_type INTEGER NOT NULL,
     content JSONB NOT NULL,
     timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Sketch table
+CREATE TABLE sketches (
+    id UUID PRIMARY KEY,
+    channel_name VARCHAR(50) REFERENCES channels(name) ON DELETE CASCADE,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    pixels BYTEA NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(50) REFERENCES users(username) ON DELETE CASCADE
 );
 
 -- Indexes to speed up queries

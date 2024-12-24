@@ -54,13 +54,11 @@ func (cs *Service) GetUserConnection(username string) (*gorilla_websocket.Conn, 
 func (cs *Service) ClearUserSession(ctx context.Context, username string) error {
 	if conn, exists := cs.hub.GetConnection(username); exists {
 		cs.hub.RemoveConnection(username)
-		channels, err := cs.dbStore.GetUserChannels(ctx, username)
+		userChannel, err := cs.dbStore.GetUserChannel(ctx, username)
 		if err != nil {
 			return err
 		}
-		for _, channel := range channels {
-			cs.hub.RemoveClientFromChannel(channel, conn)
-		}
+		cs.hub.RemoveClientFromChannel(userChannel, conn)
 	}
 	return nil
 }

@@ -75,3 +75,39 @@ Content-Type: image/jpg
 
 < ./test-files/test.jpg
 ------WebKitFormBoundary7MA4YWxkTrZu0gW-- 
+
+### Create Sketch
+POST {{baseUrl}}/createSketch
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "channelName": "testchannel",
+    "displayName": "testsketch",
+    "width": 1280,
+    "height": 720
+}
+
+### Get Sketches
+GET {{baseUrl}}/getSketches/testchannel
+Authorization: Bearer {{token}}
+
+### Get Sketch
+GET {{baseUrl}}/getSketch
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "channelName": "testchannel",
+    "id": "123"
+}
+
+### Delete Sketch
+DELETE {{baseUrl}}/deleteSketch/testchannel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "id": "123",
+    "channelName": "testchannel"
+}

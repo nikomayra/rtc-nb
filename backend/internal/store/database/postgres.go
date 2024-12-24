@@ -34,6 +34,9 @@ func (s *Store) BatchInsertMessages(ctx context.Context, messages []*models.Mess
 	defer tx.Rollback()
 
 	for _, msg := range messages {
+		if msg.Type == models.MessageTypeSketch {
+			continue
+		}
 		_, err := tx.StmtContext(ctx, s.statements.InsertMessage).ExecContext(ctx, msg.ID, msg.ChannelName, msg.Username, msg.Type, msg.Content, msg.Timestamp)
 		if err != nil {
 			return fmt.Errorf("failed to insert message: %w", err)
@@ -259,24 +262,83 @@ func (s *Store) IsUserAdmin(ctx context.Context, channelName string, username st
 	return isAdmin, nil
 }
 
-func (s *Store) GetUserChannels(ctx context.Context, username string) ([]string, error) {
+func (s *Store) GetUserChannel(ctx context.Context, username string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rows, err := s.statements.SelectUserChannels.QueryContext(ctx, username)
+	var channelName string
+	err := s.statements.SelectUserChannel.QueryRowContext(ctx, username).Scan(&channelName)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get user channel: %w", err)
+	}
+	return channelName, nil
+}
+
+// Sketch operations
+func (s *Store) CreateSketch(ctx context.Context, sketch *models.Sketch) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.statements.InsertSketch.ExecContext(ctx, sketch.ID, sketch.ChannelName, sketch.Width, sketch.Height, sketch.ToBytes(), sketch.CreatedBy)
+	return err
+}
+
+func (s *Store) UpdateSketch(ctx context.Context, sketch *models.Sketch) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.statements.UpdateSketch.ExecContext(ctx, sketch.ID, sketch.ToBytes())
+	return err
+}
+
+func (s *Store) GetSketch(ctx context.Context, sketchID string) (*models.Sketch, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sketch := &models.Sketch{}
+	var pixels []byte
+	err := s.statements.SelectSketchByID.QueryRowContext(ctx, sketchID).Scan(
+		&sketch.ID,
+		&sketch.ChannelName,
+		&sketch.Width,
+		&sketch.Height,
+		&pixels,
+		&sketch.CreatedAt,
+		&sketch.CreatedBy,
+	)
+	if err != nil {
+		return nil, err
+	}
+	sketch.FromBytes(pixels)
+	return sketch, nil
+}
+
+// Returns all sketches for a channel without the pixels
+func (s *Store) GetSketches(ctx context.Context, channelName string) ([]*models.Sketch, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.statements.SelectSketches.QueryContext(ctx, channelName)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var channels []string
+	sketches := []*models.Sketch{}
 	for rows.Next() {
-		var channelName string
-		if err := rows.Scan(&channelName); err != nil {
+		sketch := &models.Sketch{}
+		err := rows.Scan(&sketch.ID, &sketch.ChannelName, &sketch.Width, &sketch.Height, &sketch.CreatedAt, &sketch.CreatedBy)
+		if err != nil {
 			return nil, err
 		}
-		channels = append(channels, channelName)
+		sketches = append(sketches, sketch)
 	}
-	return channels, rows.Err()
+	return sketches, nil
+}
+
+func (s *Store) DeleteSketch(ctx context.Context, sketchID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.statements.DeleteSketch.ExecContext(ctx, sketchID)
+	return err
 }
 
 func (s *Store) BeginTx(ctx context.Context) (*sql.Tx, error) {

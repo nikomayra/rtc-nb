@@ -28,6 +28,10 @@ func NewMessageBuffer(db *database.Store) *MessageBuffer {
 }
 
 func (mb *MessageBuffer) Add(msg *models.Message) {
+	if msg.Type == models.MessageTypeSketch {
+		//TODO: Pass to sketch buffer for batching and more...
+		return // Don't want to save sketch messages to db
+	}
 	select {
 	case mb.messages <- msg:
 	default:

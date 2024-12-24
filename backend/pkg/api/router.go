@@ -7,19 +7,20 @@ import (
 	"github.com/gorilla/mux"
 
 	"rtc-nb/backend/internal/services/chat"
+	"rtc-nb/backend/internal/services/sketch"
 	"rtc-nb/backend/internal/websocket"
 	"rtc-nb/backend/pkg/api/handlers"
 	"rtc-nb/backend/pkg/api/middleware"
 )
 
-func RegisterRoutes(router *mux.Router, wsh *websocket.WebSocketHandler, chatService chat.ChatManager) {
+func RegisterRoutes(router *mux.Router, wsh *websocket.WebSocketHandler, chatService chat.ChatManager, sketchService *sketch.SketchService) {
 	// Create a subrouter for /api with common middleware
 	apiRouter := router.PathPrefix("/api").Subrouter()
 
 	// Apply global middleware to all routes
 	apiRouter.Use(middleware.LoggingMiddleware)
 
-	handlers := handlers.NewHandlers(chatService)
+	handlers := handlers.NewHandlers(chatService, sketchService)
 
 	// Unprotected routes
 	apiRouter.HandleFunc("/", defaultRoute).Methods("GET")
@@ -43,6 +44,11 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.WebSocketHandler, chatSer
 	protected.HandleFunc("/upload", handlers.UploadHandler).Methods("POST")
 	// protected.HandleFunc("/images/{filename}", handlers.ServeImageHandler).Methods("GET")
 	// protected.HandleFunc("/thumbnails/{filename}", handlers.ServeThumbnailHandler).Methods("GET")
+
+	protected.HandleFunc("/createSketch", handlers.CreateSketchHandler).Methods("POST")
+	protected.HandleFunc("/getSketch", handlers.GetSketchHandler).Methods("GET")
+	protected.HandleFunc("/getSketches/{channelName}", handlers.GetSketchesHandler).Methods("GET")
+	protected.HandleFunc("/deleteSketch", handlers.DeleteSketchHandler).Methods("DELETE")
 }
 
 func defaultRoute(w http.ResponseWriter, r *http.Request) {

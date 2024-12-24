@@ -1,14 +1,14 @@
 package chat
 
 import (
-	"sync"
+	// "sync"
 
 	"rtc-nb/backend/internal/store/database"
 	"rtc-nb/backend/internal/websocket"
 )
 
 type messageManager struct {
-	mu  sync.Mutex
+	// mu  sync.Mutex
 	db  *database.Store
 	hub *websocket.Hub
 }

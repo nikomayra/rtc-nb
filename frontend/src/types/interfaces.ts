@@ -19,12 +19,24 @@ export const ChannelSchema = z.object({
 export type Channel = z.infer<typeof ChannelSchema>;
 export type ChannelMember = z.infer<typeof ChannelMemberSchema>;
 
+export const SketchSchema = z.object({
+  id: z.string().uuid(),
+  channelName: z.string().min(1),
+  width: z.number().min(1),
+  height: z.number().min(1),
+  pixels: z.array(z.array(z.boolean())),
+  createdAt: z.string().min(1).datetime(),
+});
+
+export type Sketch = z.infer<typeof SketchSchema>;
+
 export enum MessageType {
   Text = 0,
   Image = 1,
   Video = 2,
   Audio = 3,
-  File = 4,
+  Document = 4,
+  Sketch = 5,
 }
 
 const URLSchema = z.string().refine((val) => {
@@ -33,10 +45,11 @@ const URLSchema = z.string().refine((val) => {
 
 const messageContentSchema = z.object({
   text: z.string().optional(),
-  imageurl: URLSchema.optional(),
+  fileurl: URLSchema.optional(),
   thumbnailurl: URLSchema.optional(),
-}).refine((data) => data.text !== undefined || data.imageurl !== undefined, {
-  message: "At least one of 'text' or 'imageurl' must be provided",
+  sketchcoords: z.array(z.array(z.boolean())).optional(),
+}).refine((data) => data.text !== undefined || data.fileurl !== undefined, {
+  message: "At least one of 'text' or 'fileurl' must be provided",
 });
 
 export const OutgoingMessageSchema = z.object({

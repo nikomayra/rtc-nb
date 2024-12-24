@@ -19,7 +19,7 @@ type WebSocketHandler struct {
 	upgrader      websocket.Upgrader
 	hub           *Hub
 	messageBuffer *MessageBuffer
-	//mu       sync.RWMutex
+	db            *database.Store
 }
 
 func NewWebSocketHandler(hub *Hub, db *database.Store, cache *redis.Cache) *WebSocketHandler {
@@ -34,6 +34,7 @@ func NewWebSocketHandler(hub *Hub, db *database.Store, cache *redis.Cache) *WebS
 		},
 		hub:           hub,
 		messageBuffer: NewMessageBuffer(db),
+		db:            db,
 	}
 }
 
@@ -52,9 +53,20 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 
 	vars := mux.Vars(r)
 	channelName := vars["channelName"]
-	log.Printf("HandleWebSocket channelName: %s", channelName)
 	if channelName == "" {
 		http.Error(w, "Channel name required", http.StatusBadRequest)
+		return
+	}
+
+	// channel membership validation
+	userChannel, err := wsh.db.GetUserChannel(r.Context(), claims.Username)
+	if err != nil {
+		http.Error(w, "Error validating channel membership", http.StatusInternalServerError)
+		return
+	}
+
+	if userChannel != channelName {
+		http.Error(w, "Not a member of this channel", http.StatusForbidden)
 		return
 	}
 

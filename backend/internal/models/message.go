@@ -12,12 +12,17 @@ type MessageType int
 const (
 	MessageTypeText MessageType = iota
 	MessageTypeImage
+	MessageTypeVideo
+	MessageTypeAudio
+	MessageTypeDocument
+	MessageTypeSketch
 )
 
 type MessageContent struct {
-	Text         string `json:"text,omitempty"`
-	ImageURL     string `json:"imageurl,omitempty"`
-	ThumbnailURL string `json:"thumbnailurl,omitempty"`
+	Text         string   `json:"text,omitempty"`
+	FileURL      string   `json:"fileurl,omitempty"`
+	ThumbnailURL string   `json:"thumbnailurl,omitempty"`
+	SketchCoords [][]bool `json:"sketchcoords,omitempty"`
 }
 
 type IncomingMessage struct {
@@ -50,9 +55,17 @@ func (m *IncomingMessage) Validate() error {
 		if m.Content.Text == "" {
 			return errors.New("text content required for text message")
 		}
-	case MessageTypeImage:
-		if m.Content.ImageURL == "" || m.Content.ThumbnailURL == "" {
-			return errors.New("image and thumbnail URLs required for image message")
+	case MessageTypeImage, MessageTypeVideo:
+		if m.Content.FileURL == "" || m.Content.ThumbnailURL == "" {
+			return errors.New("file and thumbnail URLs required for file message")
+		}
+	case MessageTypeAudio, MessageTypeDocument:
+		if m.Content.FileURL == "" {
+			return errors.New("file URL required for audio or document message")
+		}
+	case MessageTypeSketch:
+		if m.Content.SketchCoords == nil {
+			return errors.New("sketch coordinates required for sketch message")
 		}
 	default:
 		return errors.New("invalid message type")
