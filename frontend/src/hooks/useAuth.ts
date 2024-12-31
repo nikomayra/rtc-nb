@@ -85,6 +85,22 @@ export const useAuth = () => {
     }
   };
 
+  const deleteAccount = async (): Promise<void> => {
+    try {
+      const response = await authApi.deleteAccount();
+      if (response.success) {
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('username');
+        setToken('');
+        setUsername('');
+        setIsLoggedIn(false);
+      }
+    } catch (error) {
+      console.error('Delete account failed:', error);
+      throw error;
+    }
+  };
+
   return {
     state: {
       token,
@@ -95,6 +111,7 @@ export const useAuth = () => {
       login,
       register,
       logout,
+      deleteAccount,
     },
   };
 };

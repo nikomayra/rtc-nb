@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"rtc-nb/backend/internal/auth"
+	"rtc-nb/backend/internal/connections"
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/store/database"
-	"rtc-nb/backend/internal/websocket"
 
 	gorilla_websocket "github.com/gorilla/websocket"
 )
@@ -17,14 +17,14 @@ import (
 type channelManager struct {
 	mu       sync.RWMutex
 	db       *database.Store
-	hub      *websocket.Hub
+	connMgr  connections.ConnectionManager
 	channels map[string]map[*gorilla_websocket.Conn]bool
 }
 
-func NewChannelManager(db *database.Store, hub *websocket.Hub) *channelManager {
+func NewChannelManager(db *database.Store, connMgr connections.ConnectionManager) *channelManager {
 	return &channelManager{
 		db:       db,
-		hub:      hub,
+		connMgr:  connMgr,
 		channels: make(map[string]map[*gorilla_websocket.Conn]bool),
 	}
 }
@@ -51,7 +51,7 @@ func (cm *channelManager) CreateChannel(ctx context.Context, channel *models.Cha
 	}
 
 	// 4. Initialize websocket hub channel
-	err = cm.hub.InitializeChannel(channel.Name)
+	err = cm.connMgr.InitializeChannel(channel.Name)
 	if err != nil {
 		return err
 	}
@@ -102,8 +102,8 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 			return fmt.Errorf("remove from current channel: %w", err)
 		}
 		// Remove from websocket channel
-		if conn, ok := cm.hub.GetConnection(username); ok {
-			cm.hub.RemoveClientFromChannel(currentChannel, conn)
+		if conn, ok := cm.connMgr.GetConnection(username); ok {
+			cm.connMgr.RemoveClientFromChannel(currentChannel, conn)
 		}
 	}
 
@@ -124,8 +124,8 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 		}
 	}
 
-	if conn, ok := cm.hub.GetConnection(username); ok {
-		cm.hub.AddClientToChannel(channelName, conn)
+	if conn, ok := cm.connMgr.GetConnection(username); ok {
+		cm.connMgr.AddClientToChannel(channelName, conn)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -140,8 +140,8 @@ func (cm *channelManager) LeaveChannel(ctx context.Context, channelName, usernam
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	if conn, ok := cm.hub.GetConnection(username); ok {
-		cm.hub.RemoveClientFromChannel(channelName, conn)
+	if conn, ok := cm.connMgr.GetConnection(username); ok {
+		cm.connMgr.RemoveClientFromChannel(channelName, conn)
 	}
 	if err := cm.db.RemoveChannelMember(ctx, channelName, username); err != nil {
 		return fmt.Errorf("remove channel member: %w", err)

@@ -18,10 +18,10 @@ import (
 
 type Handlers struct {
 	chatService   chat.ChatManager
-	sketchService *sketch.SketchService
+	sketchService *sketch.Service
 }
 
-func NewHandlers(chatService chat.ChatManager, sketchService *sketch.SketchService) *Handlers {
+func NewHandlers(chatService chat.ChatManager, sketchService *sketch.Service) *Handlers {
 	return &Handlers{
 		chatService:   chatService,
 		sketchService: sketchService,

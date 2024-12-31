@@ -60,7 +60,7 @@ export const SendMessageForm = ({ onSend, isConnected }: SendMessageFormProps) =
             type: MessageType.Image,
             content: {
               text: message, // Optional message
-              imageurl: response.data.data.imagePath,
+              fileurl: response.data.data.imagePath,
               thumbnailurl: response.data.data.thumbnailPath
             }
           };

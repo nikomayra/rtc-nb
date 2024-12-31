@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef } from 'react';
 import { ChatContext } from '../../contexts/chatContext';
 import { MessageItem } from './MessageItem';
 import { SendMessageForm } from './SendMessageForm';
+import '../../styles/components/messages.css';
 
 export const MessageList = () => {
   const context = useContext(ChatContext);

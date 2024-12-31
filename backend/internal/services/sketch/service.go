@@ -10,22 +10,22 @@ import (
 )
 
 // TODO: More sophisticated error & context handling
-type SketchService struct {
+type Service struct {
 	dbStore *database.Store
 }
 
-func NewSketchService(dbStore *database.Store) *SketchService {
-	return &SketchService{dbStore: dbStore}
+func NewService(dbStore *database.Store) *Service {
+	return &Service{dbStore: dbStore}
 }
 
-func (s *SketchService) CreateSketch(ctx context.Context, channelName, displayName string, width, height int, createdBy string) error {
+func (s *Service) CreateSketch(ctx context.Context, channelName, displayName string, width, height int, createdBy string) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	sketch := models.NewSketch(channelName, displayName, width, height, createdBy)
 	return s.dbStore.CreateSketch(ctx, sketch)
 }
 
-func (s *SketchService) GetSketch(ctx context.Context, channelName, username, ID string) (*models.Sketch, error) {
+func (s *Service) GetSketch(ctx context.Context, channelName, username, ID string) (*models.Sketch, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -43,7 +43,7 @@ func (s *SketchService) GetSketch(ctx context.Context, channelName, username, ID
 }
 
 // Returns all sketches for a channel without the pixels
-func (s *SketchService) GetSketches(ctx context.Context, channelName, username string) ([]*models.Sketch, error) {
+func (s *Service) GetSketches(ctx context.Context, channelName, username string) ([]*models.Sketch, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	log.Printf("username: %s, channelName: %s", username, channelName)
@@ -60,13 +60,13 @@ func (s *SketchService) GetSketches(ctx context.Context, channelName, username s
 	return s.dbStore.GetSketches(ctx, channelName)
 }
 
-// func (s *SketchService) UpdateSketch(ctx context.Context, sketch *models.Sketch) error {
-// 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-// 	defer cancel()
-// 	return s.dbStore.UpdateSketch(ctx, sketch)
-// }
+func (s *Service) UpdateSketch(ctx context.Context, sketch *models.Sketch) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return s.dbStore.UpdateSketch(ctx, sketch)
+}
 
-func (s *SketchService) DeleteSketch(ctx context.Context, ID, channelName, username string) error {
+func (s *Service) DeleteSketch(ctx context.Context, ID, channelName, username string) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 

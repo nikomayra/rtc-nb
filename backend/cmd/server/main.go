@@ -5,10 +5,11 @@ import (
 	"net/http"
 
 	"rtc-nb/backend/internal/config"
+	"rtc-nb/backend/internal/connections"
+	"rtc-nb/backend/internal/messaging"
 	"rtc-nb/backend/internal/services/chat"
 	"rtc-nb/backend/internal/services/sketch"
 	"rtc-nb/backend/internal/store/database"
-	"rtc-nb/backend/internal/store/redis"
 	"rtc-nb/backend/internal/store/storage/local"
 	"rtc-nb/backend/internal/websocket"
 	"rtc-nb/backend/pkg/api"
@@ -32,16 +33,19 @@ func main() {
 	}
 
 	// Initialize Redis PubSub with config-provided client
-	cache := redis.NewCache(cfg.Redis)
+	// cache := redis.NewCache(cfg.Redis)
 
 	// Initialize websocket hub and handler
-	wsHub := websocket.NewHub()
-	wsHub.StartCleanupTicker() // Stale connections cleanup
-	wsHandler := websocket.NewWebSocketHandler(wsHub, dbStore, cache)
+	connManager := connections.NewHub()
+	connManager.StartCleanupTicker() // Stale connections cleanup
 
 	// Initialize services
-	chatService := chat.NewService(dbStore, fileStore, wsHub, cache)
-	sketchService := sketch.NewSketchService(dbStore)
+	chatService := chat.NewService(dbStore, fileStore, connManager)
+	sketchService := sketch.NewService(dbStore)
+
+	msgProcessor := messaging.NewProcessor(connManager, chatService, sketchService)
+	
+	wsHandler := websocket.NewHandler(connManager, msgProcessor)
 
 	// Setup router and routes
 	router := mux.NewRouter()

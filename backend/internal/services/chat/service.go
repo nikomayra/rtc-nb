@@ -8,10 +8,9 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 
+	"rtc-nb/backend/internal/connections"
 	"rtc-nb/backend/internal/store/database"
-	"rtc-nb/backend/internal/store/redis"
 	"rtc-nb/backend/internal/store/storage"
-	"rtc-nb/backend/internal/websocket"
 
 	gorilla_websocket "github.com/gorilla/websocket"
 )
@@ -29,36 +28,34 @@ type Service struct {
 	attachmentManager
 	dbStore    *database.Store
 	fileStorer storage.FileStorer
-	hub        *websocket.Hub
-	cache      *redis.Cache
+	connMgr    connections.ConnectionManager
 }
 
-func NewService(dbStore *database.Store, fileStorer storage.FileStorer, hub *websocket.Hub, cache *redis.Cache) *Service {
+func NewService(dbStore *database.Store, fileStorer storage.FileStorer, connMgr connections.ConnectionManager) *Service {
 	return &Service{
-		channelManager:    *NewChannelManager(dbStore, hub),
-		userManager:       *NewUserManager(dbStore, hub),
-		messageManager:    *NewMessageManager(dbStore, hub),
+		channelManager:    *NewChannelManager(dbStore, connMgr),
+		userManager:       *NewUserManager(dbStore, connMgr),
+		messageManager:    *NewMessageManager(dbStore, connMgr),
 		attachmentManager: *NewAttachmentManager(dbStore, fileStorer),
 		dbStore:           dbStore,
 		fileStorer:        fileStorer,
-		hub:               hub,
-		cache:             cache,
+		connMgr:           connMgr,
 	}
 }
 
 func (cs *Service) GetUserConnection(username string) (*gorilla_websocket.Conn, bool) {
-	return cs.hub.GetConnection(username)
+	return cs.connMgr.GetConnection(username)
 }
 
 // ClearUserSession clears user session data
 func (cs *Service) ClearUserSession(ctx context.Context, username string) error {
-	if conn, exists := cs.hub.GetConnection(username); exists {
-		cs.hub.RemoveConnection(username)
+	if conn, exists := cs.connMgr.GetConnection(username); exists {
+		cs.connMgr.RemoveConnection(username)
 		userChannel, err := cs.dbStore.GetUserChannel(ctx, username)
 		if err != nil {
 			return err
 		}
-		cs.hub.RemoveClientFromChannel(userChannel, conn)
+		cs.connMgr.RemoveClientFromChannel(userChannel, conn)
 	}
 	return nil
 }

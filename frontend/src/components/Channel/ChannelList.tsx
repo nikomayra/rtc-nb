@@ -1,16 +1,23 @@
 import { useContext } from 'react';
 import { ChatContext } from '../../contexts/chatContext';
+import { useAuthContext } from '../../hooks/useAuthContext';
 import { ChannelItem } from './ChannelItem';
 import { CreateChannelForm } from './CreateChannelForm';
+import '../../styles/components/channels.css';
 
 export const ChannelList = () => {
-  const context = useContext(ChatContext);
-  if (!context) return null;
+  const chatContext = useContext(ChatContext);
+  const authContext = useAuthContext();
+  if (!chatContext || !authContext) return null;
 
   const {
     state: { channels, currentChannel },
     actions: { joinChannel, createChannel, deleteChannel, leaveChannel },
-  } = context;
+  } = chatContext;
+
+  const {
+    actions: { logout },
+  } = authContext;
 
   return (
     <div className='channels-container'>
@@ -25,6 +32,7 @@ export const ChannelList = () => {
         />
       ))}
       <CreateChannelForm onSubmit={createChannel} />
+      <button onClick={logout}>Logout</button>
     </div>
   );
 };

@@ -1,21 +1,25 @@
 package chat
 
 import (
-	// "sync"
+	"context"
 
+	"rtc-nb/backend/internal/connections"
+	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/store/database"
-	"rtc-nb/backend/internal/websocket"
 )
 
 type messageManager struct {
-	// mu  sync.Mutex
 	db  *database.Store
-	hub *websocket.Hub
+	connMgr connections.ConnectionManager
 }
 
-func NewMessageManager(db *database.Store, hub *websocket.Hub) *messageManager {
+func NewMessageManager(db *database.Store, connMgr connections.ConnectionManager) *messageManager {
 	return &messageManager{
 		db:  db,
-		hub: hub,
+		connMgr: connMgr,
 	}
+}
+
+func (mm *messageManager) BatchInsertMessages(ctx context.Context, messages []*models.Message) error {
+	return mm.db.BatchInsertMessages(ctx, messages)
 }

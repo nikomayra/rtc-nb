@@ -32,7 +32,7 @@ type Statements struct {
 	InsertSketch     *sql.Stmt // id, channel_name, width, height, pixels
 	SelectSketchByID *sql.Stmt // id
 	SelectSketches   *sql.Stmt // channel_name
-	UpdateSketch     *sql.Stmt // id, width, height, pixels
+	UpdateSketch     *sql.Stmt // id, pixels
 	DeleteSketch     *sql.Stmt // id
 }
 

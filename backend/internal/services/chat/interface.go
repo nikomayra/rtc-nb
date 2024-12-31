@@ -31,4 +31,7 @@ type ChatManager interface {
 	HandleImageUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error)
 	HandleVideoUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error)
 	HandleAudioUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error)
+
+	// Message operations
+	BatchInsertMessages(ctx context.Context, messages []*models.Message) error
 }

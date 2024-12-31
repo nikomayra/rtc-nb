@@ -2,11 +2,11 @@ import { AuthContainer } from './Auth/AuthContainer';
 import { ChannelList } from './Channel/ChannelList';
 import { MessageList } from './Message/MessageList';
 import { useAuthContext } from '../hooks/useAuthContext';
+import { SketchContainer } from './Sketch/SketchContainer';
 
 export const AppContent = () => {
   const {
     state: { isLoggedIn },
-    actions: { logout },
   } = useAuthContext();
 
   if (!isLoggedIn) {
@@ -17,9 +17,7 @@ export const AppContent = () => {
     <div className='app-container'>
       <ChannelList />
       <MessageList />
-      <button style={{ position: 'absolute', top: 0, left: 0 }} onClick={logout}>
-        Logout
-      </button>
+      <SketchContainer />
     </div>
   );
 };

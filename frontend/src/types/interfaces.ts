@@ -22,10 +22,12 @@ export type ChannelMember = z.infer<typeof ChannelMemberSchema>;
 export const SketchSchema = z.object({
   id: z.string().uuid(),
   channelName: z.string().min(1),
+  displayName: z.string().min(1),
   width: z.number().min(1),
   height: z.number().min(1),
   pixels: z.array(z.array(z.boolean())),
   createdAt: z.string().min(1).datetime(),
+  createdBy: z.string().min(1),
 });
 
 export type Sketch = z.infer<typeof SketchSchema>;
@@ -48,9 +50,24 @@ const messageContentSchema = z.object({
   fileurl: URLSchema.optional(),
   thumbnailurl: URLSchema.optional(),
   sketchcoords: z.array(z.array(z.boolean())).optional(),
-}).refine((data) => data.text !== undefined || data.fileurl !== undefined, {
-  message: "At least one of 'text' or 'fileurl' must be provided",
-});
+  sketchid: z.string().uuid().optional(),
+}).refine(
+  (data) => {
+    // For sketch messages
+    if (data.sketchid !== undefined || data.sketchcoords !== undefined) {
+      return data.sketchid !== undefined && data.sketchcoords !== undefined;
+    }
+    // For file messages
+    if (data.fileurl !== undefined) {
+      return true; // text is optional for file messages
+    }
+    // For text-only messages
+    return data.text !== undefined;
+  },
+  {
+    message: "Message must be either: (1) text message with optional file, (2) file message with optional text, or (3) sketch message with both sketchid and sketchcoords"
+  }
+);
 
 export const OutgoingMessageSchema = z.object({
   channelName: z.string().min(1),

@@ -23,6 +23,7 @@ type MessageContent struct {
 	FileURL      string   `json:"fileurl,omitempty"`
 	ThumbnailURL string   `json:"thumbnailurl,omitempty"`
 	SketchCoords [][]bool `json:"sketchcoords,omitempty"`
+	SketchID     string   `json:"sketchid,omitempty"`
 }
 
 type IncomingMessage struct {
@@ -87,4 +88,9 @@ func NewMessage(incoming *IncomingMessage, username string) (*Message, error) {
 		Content:     incoming.Content,
 		Timestamp:   time.Now().UTC(),
 	}, nil
+}
+
+func (m *Message) RequiresPersistence() bool {
+	// TODO: TBD, no persistence for private messages between users.
+	return true
 }

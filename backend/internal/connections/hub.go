@@ -1,4 +1,4 @@
-package websocket
+package connections
 
 import (
 	"fmt"
@@ -13,12 +13,14 @@ type Hub struct {
 	mu          sync.RWMutex
 	connections map[string]*websocket.Conn          // username -> connection
 	channels    map[string]map[*websocket.Conn]bool // channelName -> user connections: bool
+	connToChannel map[*websocket.Conn]string
 }
 
 func NewHub() *Hub {
 	return &Hub{
 		connections: make(map[string]*websocket.Conn),
 		channels:    make(map[string]map[*websocket.Conn]bool),
+		connToChannel: make(map[*websocket.Conn]string),
 	}
 }
 
@@ -29,6 +31,7 @@ func (h *Hub) InitializeChannel(channelName string) error {
 		return fmt.Errorf("channel already exists: %s", channelName)
 	}
 	h.channels[channelName] = make(map[*websocket.Conn]bool)
+	h.connToChannel = make(map[*websocket.Conn]string)
 	return nil
 }
 
@@ -58,6 +61,20 @@ func (h *Hub) NotifyUser(username string, message []byte) {
 	}
 }
 
+func (h *Hub) GetUserChannel(username string) (string, error) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	userConn, ok := h.connections[username]
+	if !ok {
+		return "", fmt.Errorf("user not connected: %s", username)
+	}
+	channelName, ok := h.connToChannel[userConn]
+	if !ok {
+		return "", fmt.Errorf("user not in any channel: %s", username)
+	}
+	return channelName, nil
+}
+
 func (h *Hub) AddClientToChannel(channelName string, userConn *websocket.Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -65,18 +82,17 @@ func (h *Hub) AddClientToChannel(channelName string, userConn *websocket.Conn) {
 		h.channels[channelName] = make(map[*websocket.Conn]bool)
 	}
 	h.channels[channelName][userConn] = true
+	h.connToChannel[userConn] = channelName
 	log.Printf("Added client to channel: %s\n", channelName)
 }
 
 func (h *Hub) RemoveClientFromChannel(channelName string, userConn *websocket.Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if _, ok := h.channels[channelName]; !ok {
-		return
-	}
-	delete(h.channels[channelName], userConn)
-	if len(h.channels[channelName]) == 0 {
-		delete(h.channels, channelName)
+
+	if conns, ok := h.channels[channelName]; ok {
+		delete(conns, userConn)
+		delete(h.connToChannel, userConn)
 	}
 	log.Printf("Removed client from channel: %s\n", channelName)
 }

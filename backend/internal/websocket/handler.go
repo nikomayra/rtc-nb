@@ -6,24 +6,23 @@ import (
 	"log"
 	"net/http"
 	"rtc-nb/backend/internal/auth"
+	"rtc-nb/backend/internal/connections"
+	"rtc-nb/backend/internal/messaging"
 	"rtc-nb/backend/internal/models"
-	"rtc-nb/backend/internal/store/database"
-	"rtc-nb/backend/internal/store/redis"
 	"rtc-nb/backend/pkg/api/responses"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
 
-type WebSocketHandler struct {
+type Handler struct {
 	upgrader      websocket.Upgrader
-	hub           *Hub
-	messageBuffer *MessageBuffer
-	db            *database.Store
+	connMgr       connections.ConnectionManager
+	msgProcessor  *messaging.Processor
 }
 
-func NewWebSocketHandler(hub *Hub, db *database.Store, cache *redis.Cache) *WebSocketHandler {
-	return &WebSocketHandler{
+func NewHandler(connMgr connections.ConnectionManager, msgProcessor *messaging.Processor) *Handler {
+	return &Handler{
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -32,13 +31,12 @@ func NewWebSocketHandler(hub *Hub, db *database.Store, cache *redis.Cache) *WebS
 			},
 			Subprotocols: []string{"Authentication"},
 		},
-		hub:           hub,
-		messageBuffer: NewMessageBuffer(db),
-		db:            db,
+		connMgr:       connMgr,
+		msgProcessor:  msgProcessor,
 	}
 }
 
-func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+func (wsh *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	if _, ok := w.(http.Hijacker); !ok {
 		responses.SendError(w, "WebSocket not supported", http.StatusInternalServerError)
@@ -59,7 +57,7 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 
 	// channel membership validation
-	userChannel, err := wsh.db.GetUserChannel(r.Context(), claims.Username)
+	userChannel, err := wsh.connMgr.GetUserChannel(claims.Username)
 	if err != nil {
 		http.Error(w, "Error validating channel membership", http.StatusInternalServerError)
 		return
@@ -78,13 +76,13 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Register connection for both user and channel
-	wsh.hub.AddConnection(claims.Username, conn)
-	wsh.hub.AddClientToChannel(channelName, conn)
+	wsh.connMgr.AddConnection(claims.Username, conn)
+	wsh.connMgr.AddClientToChannel(channelName, conn)
 
 	// Cleanup on disconnect
 	defer func() {
-		wsh.hub.RemoveConnection(claims.Username)
-		wsh.hub.RemoveClientFromChannel(channelName, conn)
+		wsh.connMgr.RemoveConnection(claims.Username)
+		wsh.connMgr.RemoveClientFromChannel(channelName, conn)
 		conn.Close()
 	}()
 
@@ -110,16 +108,9 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 			continue
 		}
 
-		outgoingMsgBytes, err := json.Marshal(outgoingMsg)
+		err = wsh.msgProcessor.ProcessMessage(outgoingMsg)
 		if err != nil {
-			log.Printf("Error marshaling message: %v", err)
-			continue
+			log.Printf("Error processing message: %v", err)
 		}
-
-		// Add to message buffer
-		wsh.messageBuffer.Add(outgoingMsg)
-
-		// Broadcast message to channel
-		wsh.hub.NotifyChannel(channelName, outgoingMsgBytes)
 	}
 }

@@ -11,7 +11,8 @@ interface AuthContextType {
   actions: {
     login: (username: string, password: string) => Promise<void>;
     register: (username: string, password: string) => Promise<void>;
-    logout: () => void;
+    logout: () => Promise<void>;
+    deleteAccount: () => Promise<void>;
   };
 }
 

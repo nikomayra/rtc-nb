@@ -29,4 +29,9 @@ export const authApi = {
     const res = await axiosInstance.post(`${BASE_URL}/logout`);
     return res.data;
   },
+
+  deleteAccount: async (): Promise<APIResponse<{ message: string }>> => {
+    const res = await axiosInstance.delete(`${BASE_URL}/deleteaccount`);
+    return res.data;
+  },
 };

@@ -4,9 +4,11 @@
   flex-direction: column;
   height: calc(100vh - var(--header-height));
   width: 100%;
+  min-width: 500px;
   margin: 0 auto;
   padding: var(--spacing-md);
   overflow: hidden;
+  border: 1px solid greenyellow; /* TODO: Just for dev */
 }
 
 .messages-list {
