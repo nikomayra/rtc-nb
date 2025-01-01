@@ -34,7 +34,7 @@ func (s *Store) BatchInsertMessages(ctx context.Context, messages []*models.Mess
 	defer tx.Rollback()
 
 	for _, msg := range messages {
-		if msg.Type == models.MessageTypeSketch {
+		if msg.Type == models.MessageTypeSketchUpdate {
 			continue
 		}
 		_, err := tx.StmtContext(ctx, s.statements.InsertMessage).ExecContext(ctx, msg.ID, msg.ChannelName, msg.Username, msg.Type, msg.Content, msg.Timestamp)
@@ -280,39 +280,63 @@ func (s *Store) GetUserChannel(ctx context.Context, username string) (string, er
 func (s *Store) CreateSketch(ctx context.Context, sketch *models.Sketch) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.statements.InsertSketch.ExecContext(ctx, sketch.ID, sketch.ChannelName, sketch.Width, sketch.Height, sketch.ToBytes(), sketch.CreatedBy)
+	_, err := s.statements.InsertSketch.ExecContext(ctx, sketch.ID, sketch.ChannelName, sketch.DisplayName, sketch.Width, sketch.Height, sketch.Regions, sketch.CreatedBy)
 	return err
 }
 
-func (s *Store) UpdateSketch(ctx context.Context, sketch *models.Sketch) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.statements.UpdateSketch.ExecContext(ctx, sketch.ID, sketch.ToBytes())
-	return err
+func (s *Store) UpdateSketchWithTx(ctx context.Context, tx *sql.Tx, sketch *models.Sketch) error {
+	var currentSketch models.Sketch
+    err := tx.StmtContext(ctx, s.statements.SelectSketchByID).
+        QueryRowContext(ctx, sketch.ID).
+        Scan(
+            &currentSketch.ID,
+            &currentSketch.ChannelName,
+            &currentSketch.DisplayName,
+            &currentSketch.Width,
+            &currentSketch.Height,
+            &currentSketch.Regions,
+            &currentSketch.CreatedAt,
+            &currentSketch.CreatedBy,
+        )
+    if err != nil {
+        return fmt.Errorf("select sketch: %w", err)
+    }
+
+    // Merge regions
+    for k, v := range sketch.Regions {
+        currentSketch.Regions[k] = v
+    }
+
+    _, err = tx.StmtContext(ctx, s.statements.UpdateSketchRegions).
+        ExecContext(ctx, sketch.ID, currentSketch.Regions)
+    if err != nil {
+        return fmt.Errorf("update sketch regions: %w", err)
+    }
+
+    return nil
 }
 
 func (s *Store) GetSketch(ctx context.Context, sketchID string) (*models.Sketch, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sketch := &models.Sketch{}
-	var pixels []byte
 	err := s.statements.SelectSketchByID.QueryRowContext(ctx, sketchID).Scan(
 		&sketch.ID,
 		&sketch.ChannelName,
+		&sketch.DisplayName,
 		&sketch.Width,
 		&sketch.Height,
-		&pixels,
+		&sketch.Regions,
 		&sketch.CreatedAt,
 		&sketch.CreatedBy,
 	)
 	if err != nil {
 		return nil, err
 	}
-	sketch.FromBytes(pixels)
 	return sketch, nil
 }
 
-// Returns all sketches for a channel without the pixels
+// Returns all sketches for a channel without the regions
 func (s *Store) GetSketches(ctx context.Context, channelName string) ([]*models.Sketch, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -325,7 +349,7 @@ func (s *Store) GetSketches(ctx context.Context, channelName string) ([]*models.
 	sketches := []*models.Sketch{}
 	for rows.Next() {
 		sketch := &models.Sketch{}
-		err := rows.Scan(&sketch.ID, &sketch.ChannelName, &sketch.Width, &sketch.Height, &sketch.CreatedAt, &sketch.CreatedBy)
+		err := rows.Scan(&sketch.ID, &sketch.ChannelName, &sketch.DisplayName, &sketch.Width, &sketch.Height, &sketch.CreatedAt, &sketch.CreatedBy)
 		if err != nil {
 			return nil, err
 		}

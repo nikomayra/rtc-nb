@@ -17,11 +17,11 @@ import (
 
 type Handler struct {
 	upgrader      websocket.Upgrader
-	connMgr       connections.ConnectionManager
+	connMgr       connections.Manager
 	msgProcessor  *messaging.Processor
 }
 
-func NewHandler(connMgr connections.ConnectionManager, msgProcessor *messaging.Processor) *Handler {
+func NewHandler(connMgr connections.Manager, msgProcessor *messaging.Processor) *Handler {
 	return &Handler{
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,

@@ -1,8 +1,13 @@
 import { Sketch } from "../../types/interfaces";
 
-const SketchItem = ({ sketch }: { sketch: Sketch }) => {
+interface SketchItemProps {
+  sketch: Sketch;
+  onSelect: (sketch: Sketch) => void;
+}
+
+const SketchItem = ({ sketch, onSelect }: SketchItemProps) => {
   const handleClick = () => {
-    console.log(sketch);
+    onSelect(sketch);
   };
 
   return (

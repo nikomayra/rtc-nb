@@ -15,15 +15,19 @@ const (
 	MessageTypeVideo
 	MessageTypeAudio
 	MessageTypeDocument
-	MessageTypeSketch
+	MessageTypeSketchUpdate
 )
 
+type SketchUpdate struct {
+	SketchID string `json:"sketchid"`
+	Region Region `json:"region"`
+}
+
 type MessageContent struct {
-	Text         string   `json:"text,omitempty"`
-	FileURL      string   `json:"fileurl,omitempty"`
-	ThumbnailURL string   `json:"thumbnailurl,omitempty"`
-	SketchCoords [][]bool `json:"sketchcoords,omitempty"`
-	SketchID     string   `json:"sketchid,omitempty"`
+	Text         *string   `json:"text,omitempty"`
+	FileURL      *string   `json:"fileurl,omitempty"`
+	ThumbnailURL *string   `json:"thumbnailurl,omitempty"`
+	SketchUpdate *SketchUpdate `json:"sketchupdate,omitempty"`
 }
 
 type IncomingMessage struct {
@@ -53,20 +57,20 @@ func (m *IncomingMessage) Validate() error {
 	// Validate content based on type
 	switch m.Type {
 	case MessageTypeText:
-		if m.Content.Text == "" {
+		if m.Content.Text == nil {
 			return errors.New("text content required for text message")
 		}
 	case MessageTypeImage, MessageTypeVideo:
-		if m.Content.FileURL == "" || m.Content.ThumbnailURL == "" {
+		if m.Content.FileURL == nil || m.Content.ThumbnailURL == nil {
 			return errors.New("file and thumbnail URLs required for file message")
 		}
 	case MessageTypeAudio, MessageTypeDocument:
-		if m.Content.FileURL == "" {
+		if m.Content.FileURL == nil {
 			return errors.New("file URL required for audio or document message")
 		}
-	case MessageTypeSketch:
-		if m.Content.SketchCoords == nil {
-			return errors.New("sketch coordinates required for sketch message")
+	case MessageTypeSketchUpdate:
+		if m.Content.SketchUpdate.SketchID == "" && len(m.Content.SketchUpdate.Region.Paths) == 0 {
+			return errors.New("sketch ID and region paths required for sketch message")
 		}
 	default:
 		return errors.New("invalid message type")

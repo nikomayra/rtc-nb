@@ -2,7 +2,7 @@ package connections
 
 import "github.com/gorilla/websocket"
 
-type ConnectionManager interface {
+type Manager interface {
 	// Connection Management
 	AddConnection(username string, conn *websocket.Conn)
     RemoveConnection(username string)

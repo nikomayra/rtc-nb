@@ -50,7 +50,7 @@ CREATE TABLE sketches (
     channel_name VARCHAR(50) REFERENCES channels(name) ON DELETE CASCADE,
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
-    pixels BYTEA NOT NULL,
+    regions JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(50) REFERENCES users(username) ON DELETE CASCADE
 );

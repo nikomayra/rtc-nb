@@ -41,7 +41,7 @@ func main() {
 
 	// Initialize services
 	chatService := chat.NewService(dbStore, fileStore, connManager)
-	sketchService := sketch.NewService(dbStore)
+	sketchService := sketch.NewService(dbStore, connManager)
 
 	msgProcessor := messaging.NewProcessor(connManager, chatService, sketchService)
 	
@@ -49,7 +49,7 @@ func main() {
 
 	// Setup router and routes
 	router := mux.NewRouter()
-	api.RegisterRoutes(router, wsHandler, chatService, sketchService)
+	api.RegisterRoutes(router, wsHandler, connManager, chatService, sketchService)
 
 	// Serve static files from the filestore
 	fs := http.FileServer(http.Dir(cfg.FileStorePath))

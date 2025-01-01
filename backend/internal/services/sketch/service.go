@@ -3,7 +3,8 @@ package sketch
 import (
 	"context"
 	"fmt"
-	"log"
+	"rtc-nb/backend/internal/auth"
+	"rtc-nb/backend/internal/connections"
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/store/database"
 	"time"
@@ -12,10 +13,11 @@ import (
 // TODO: More sophisticated error & context handling
 type Service struct {
 	dbStore *database.Store
+	connMgr connections.Manager
 }
 
-func NewService(dbStore *database.Store) *Service {
-	return &Service{dbStore: dbStore}
+func NewService(dbStore *database.Store, connMgr connections.Manager) *Service {
+	return &Service{dbStore: dbStore, connMgr: connMgr}
 }
 
 func (s *Service) CreateSketch(ctx context.Context, channelName, displayName string, width, height int, createdBy string) error {
@@ -25,48 +27,52 @@ func (s *Service) CreateSketch(ctx context.Context, channelName, displayName str
 	return s.dbStore.CreateSketch(ctx, sketch)
 }
 
-func (s *Service) GetSketch(ctx context.Context, channelName, username, ID string) (*models.Sketch, error) {
+func (s *Service) GetSketch(ctx context.Context, ID string) (*models.Sketch, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	// Validate channel membership
-	userChannel, err := s.dbStore.GetUserChannel(ctx, username)
+	sketch, err := s.dbStore.GetSketch(ctx, ID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get sketch: %w", err)
 	}
 
-	if userChannel != channelName {
-		return nil, fmt.Errorf("not a member of this channel")
+	// Convert regions to pixels & decompress
+	for key, region := range sketch.Regions {
+		width := region.End.X - region.Start.X + 1
+		height := region.End.Y - region.Start.Y + 1
+		region.Pixels = sketch.DecompressRegion(region.Compressed, width, height)
+		sketch.Regions[key] = region
 	}
 
-	return s.dbStore.GetSketch(ctx, ID)
+	return sketch, nil
 }
 
 // Returns all sketches for a channel without the pixels
-func (s *Service) GetSketches(ctx context.Context, channelName, username string) ([]*models.Sketch, error) {
+func (s *Service) GetSketches(ctx context.Context, channelName string) ([]*models.Sketch, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	log.Printf("username: %s, channelName: %s", username, channelName)
-	// Validate channel membership
-	userChannel, err := s.dbStore.GetUserChannel(ctx, username)
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("userChannel: %s, channelName: %s", userChannel, channelName)
-	if userChannel != channelName {
-		return nil, fmt.Errorf("not a member of this channel")
-	}
 
 	return s.dbStore.GetSketches(ctx, channelName)
 }
 
 func (s *Service) UpdateSketch(ctx context.Context, sketch *models.Sketch) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	return s.dbStore.UpdateSketch(ctx, sketch)
+    defer cancel()
+
+    tx, err := s.dbStore.BeginTx(ctx)
+    if err != nil {
+        return fmt.Errorf("begin transaction: %w", err)
+    }
+    defer tx.Rollback()
+
+    if err := s.dbStore.UpdateSketchWithTx(ctx, tx, sketch); err != nil {
+        return fmt.Errorf("update sketch: %w", err)
+    }
+
+    return tx.Commit()
 }
 
-func (s *Service) DeleteSketch(ctx context.Context, ID, channelName, username string) error {
+func (s *Service) DeleteSketch(ctx context.Context, channelName, ID string) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -76,13 +82,18 @@ func (s *Service) DeleteSketch(ctx context.Context, ID, channelName, username st
 		return fmt.Errorf("failed to get sketch: %w", err)
 	}
 
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		return fmt.Errorf("unauthorized")
+	}
+
 	// Check if user is the creator
-	if sketch.CreatedBy == username {
+	if sketch.CreatedBy == claims.Username {
 		return s.dbStore.DeleteSketch(ctx, ID)
 	}
 
 	// If not creator, check if user is channel admin
-	isAdmin, err := s.dbStore.IsUserAdmin(ctx, channelName, username)
+	isAdmin, err := s.dbStore.IsUserAdmin(ctx, channelName, claims.Username)
 	if err != nil {
 		return fmt.Errorf("failed to check admin status: %w", err)
 	}

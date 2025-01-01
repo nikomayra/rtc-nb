@@ -28,13 +28,13 @@ type Service struct {
 	attachmentManager
 	dbStore    *database.Store
 	fileStorer storage.FileStorer
-	connMgr    connections.ConnectionManager
+	connMgr    connections.Manager
 }
 
-func NewService(dbStore *database.Store, fileStorer storage.FileStorer, connMgr connections.ConnectionManager) *Service {
+func NewService(dbStore *database.Store, fileStorer storage.FileStorer, connMgr connections.Manager) *Service {
 	return &Service{
 		channelManager:    *NewChannelManager(dbStore, connMgr),
-		userManager:       *NewUserManager(dbStore, connMgr),
+		userManager:       *NewUserManager(dbStore),
 		messageManager:    *NewMessageManager(dbStore, connMgr),
 		attachmentManager: *NewAttachmentManager(dbStore, fileStorer),
 		dbStore:           dbStore,

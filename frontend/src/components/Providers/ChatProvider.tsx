@@ -1,28 +1,40 @@
-import { useCallback, useEffect, useMemo, useState, useContext } from 'react';
-import { ChatContext } from '../../contexts/chatContext';
-import { WebSocketService } from '../../services/WebsocketService';
-import { AuthContext } from '../../contexts/authContext';
-import { Channel, ChannelSchema, IncomingMessage, OutgoingMessage } from '../../types/interfaces';
-import { BASE_URL } from '../../utils/constants';
-import axiosInstance from '../../api/axiosInstance';
-import { isAxiosError } from 'axios';
-import { z } from 'zod';
+import { useCallback, useEffect, useMemo, useState, useContext } from "react";
+import { ChatContext } from "../../contexts/chatContext";
+import { WebSocketService } from "../../services/WebsocketService";
+import { AuthContext } from "../../contexts/authContext";
+import {
+  Channel,
+  ChannelSchema,
+  IncomingMessage,
+  OutgoingMessage,
+} from "../../types/interfaces";
+import { BASE_URL } from "../../utils/constants";
+import axiosInstance from "../../api/axiosInstance";
+import { isAxiosError } from "axios";
+import { z } from "zod";
+import { WebSocketContext } from "../../contexts/webSocketContext";
 
-export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuthContext must be used within an AuthProvider');
-  }
-  const [messages, setMessages] = useState<Record<string, IncomingMessage[]>>({});
+export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const authContext = useContext(AuthContext);
+  const wsContext = useContext(WebSocketContext);
+  if (!authContext)
+    throw new Error("useAuthContext must be used within an AuthProvider");
+  if (!wsContext)
+    throw new Error("ChatProvider must be used within a WebSocketProvider");
+
+  const [messages, setMessages] = useState<Record<string, IncomingMessage[]>>(
+    {}
+  );
   const [channels, setChannels] = useState<Channel[]>([]);
   const [currentChannel, setCurrentChannel] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const token = context.state.token;
-  const wsService = useMemo(() => WebSocketService.getInstance(), []);
+  const token = authContext.state.token;
 
   useEffect(() => {
     if (!token || !currentChannel) {
-      wsService.disconnect();
+      wsContext.actions.disconnect();
       return;
     }
 
@@ -30,23 +42,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       onMessage: (message: IncomingMessage) => {
         setMessages((prev) => ({
           ...prev,
-          [message.channelName]: [...(prev[message.channelName] || []), message],
+          [message.channelName]: [
+            ...(prev[message.channelName] || []),
+            message,
+          ],
         }));
       },
       onConnectionChange: setIsConnected,
     };
 
-    wsService.setCallbacks(callbacks);
-    wsService.connect(token, currentChannel || '');
+    wsContext.actions.handleMessage(callbacks.onMessage);
+    wsContext.actions.connect(token, currentChannel || "");
 
     return () => {
-      wsService.setCallbacks({
-        onMessage: () => {},
-        onConnectionChange: () => {},
-      });
-      wsService.disconnect();
+      wsContext.actions.disconnect();
     };
-  }, [token, wsService, currentChannel]);
+  }, [token, wsContext, currentChannel]);
 
   const fetchChannels = useCallback(async (): Promise<void> => {
     if (!token) return;
@@ -59,14 +70,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const validatedChannels = z.array(ChannelSchema).parse(res.data.data);
         setChannels(validatedChannels);
       } else {
-        console.error('Failed to get channels:', res.data.error);
+        console.error("Failed to get channels:", res.data.error);
       }
     } catch (error) {
       if (error instanceof z.ZodError) {
-        console.error('Invalid channel data:', error.errors);
+        console.error("Invalid channel data:", error.errors);
       }
       if (isAxiosError(error)) {
-        console.error('Failed to get channels:', error.response?.data?.message);
+        console.error("Failed to get channels:", error.response?.data?.message);
       }
       throw error;
     }
@@ -81,9 +92,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const actions = {
     sendMessage: async (message: OutgoingMessage): Promise<void> => {
       if (!token) return;
-      wsService.send(message);
+      wsContext.send(message);
     },
-    joinChannel: async (channelName: string, password?: string): Promise<void> => {
+    joinChannel: async (
+      channelName: string,
+      password?: string
+    ): Promise<void> => {
       try {
         const res = await axiosInstance.patch(
           `${BASE_URL}/joinchannel`,
@@ -92,12 +106,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
         if (res.data.success) {
           setCurrentChannel(channelName);
-          wsService.disconnect();
-          wsService.connect(token!, channelName);
+          wsContext.disconnect();
+          wsContext.connect(token!, channelName);
         }
       } catch (error) {
         if (isAxiosError(error)) {
-          console.error('Failed to join channel:', error.response?.data?.message);
+          console.error(
+            "Failed to join channel:",
+            error.response?.data?.message
+          );
         }
         throw error;
       }
@@ -121,14 +138,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const validatedChannel = ChannelSchema.parse(res.data.data);
           setChannels((prev) => [...prev, validatedChannel]);
         } else {
-          console.error('Failed to create channel:', res.data.error);
+          console.error("Failed to create channel:", res.data.error);
         }
       } catch (error) {
         if (error instanceof z.ZodError) {
-          console.error('Invalid channel data:', error.errors);
+          console.error("Invalid channel data:", error.errors);
         }
         if (isAxiosError(error)) {
-          console.error('Failed to create channel:', error.response?.data?.message);
+          console.error(
+            "Failed to create channel:",
+            error.response?.data?.message
+          );
         }
       }
     },
@@ -139,14 +159,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (res.data.success) {
-          setChannels((prev) => prev.filter((channel) => channel.name !== channelName));
+          setChannels((prev) =>
+            prev.filter((channel) => channel.name !== channelName)
+          );
           setCurrentChannel(null);
         } else {
-          console.error('Failed to delete channel:', res.data.error);
+          console.error("Failed to delete channel:", res.data.error);
         }
       } catch (error) {
         if (isAxiosError(error)) {
-          console.error('Failed to delete channel:', error.response?.data?.message);
+          console.error(
+            "Failed to delete channel:",
+            error.response?.data?.message
+          );
         }
       }
     },
@@ -160,11 +185,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (res.data.success) {
           setCurrentChannel(null);
         } else {
-          console.error('Failed to leave channel:', res.data.error);
+          console.error("Failed to leave channel:", res.data.error);
         }
       } catch (error) {
         if (isAxiosError(error)) {
-          console.error('Failed to leave channel:', error.response?.data?.message);
+          console.error(
+            "Failed to leave channel:",
+            error.response?.data?.message
+          );
         }
       }
     },

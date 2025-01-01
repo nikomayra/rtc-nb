@@ -1,15 +1,15 @@
-import { IncomingMessage, IncomingMessageSchema, OutgoingMessage } from '../types/interfaces';
-import { BASE_URL } from '../utils/constants';
+import {
+  IncomingMessage,
+  IncomingMessageSchema,
+  OutgoingMessage,
+} from "../types/interfaces";
+import { BASE_URL } from "../utils/constants";
 
 export class WebSocketService {
   private static instance: WebSocketService;
   private ws: WebSocket | null = null;
   private reconnectTimer: number | null = null;
-  private currentChannel: string | null = null;
-
-  // Single callback for each type
-  private onMessage: ((message: IncomingMessage) => void) | null = null;
-  private onConnectionChange: ((isConnected: boolean) => void) | null = null;
+  private messageHandler: ((message: IncomingMessage) => void) | null = null;
 
   static getInstance(): WebSocketService {
     if (!WebSocketService.instance) {
@@ -18,53 +18,43 @@ export class WebSocketService {
     return WebSocketService.instance;
   }
 
-  setCallbacks(callbacks: {
-    onMessage: (message: IncomingMessage) => void;
-    onConnectionChange: (isConnected: boolean) => void;
-  }) {
-    this.onMessage = callbacks.onMessage;
-    this.onConnectionChange = callbacks.onConnectionChange;
+  setMessageHandler(handler: (message: IncomingMessage) => void) {
+    this.messageHandler = handler;
   }
 
   connect(token: string, channelName: string): void {
-    if (this.ws?.readyState === WebSocket.OPEN && this.currentChannel === channelName) return;
-
-    if (this.currentChannel && this.currentChannel !== channelName) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
       this.disconnect();
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}${BASE_URL}/ws/${channelName}`;
 
-    this.ws = new WebSocket(wsUrl, ['Authentication', token]);
-    this.currentChannel = channelName;
+    this.ws = new WebSocket(wsUrl, ["Authentication", token]);
 
     this.ws.onopen = () => {
-      console.log('WebSocket connection established');
-      this.onConnectionChange?.(true);
+      console.log("WebSocket connection established");
       this.clearReconnectTimer();
     };
 
     this.ws.onclose = (event) => {
       console.log(`WebSocket connection closed: ${event.code}`);
-      this.onConnectionChange?.(false);
-      
       if (event.code !== 1000) {
         this.reconnect(token, channelName);
       }
     };
 
     this.ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error("WebSocket error:", error);
     };
 
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         const message = IncomingMessageSchema.parse(data);
-        this.onMessage?.(message);
+        this.messageHandler?.(message);
       } catch (error) {
-        console.error('Failed to parse message:', error);
+        console.error("Failed to parse message:", error);
       }
     };
   }
@@ -82,31 +72,21 @@ export class WebSocketService {
       try {
         this.ws.close(1000);
       } catch (error) {
-        console.error('Failed to close WebSocket connection:', error);
+        console.error("Failed to close WebSocket connection:", error);
       }
       this.ws = null;
     }
-    this.currentChannel = null;
-    this.onConnectionChange?.(false);
   }
 
-  private reconnect(token: string, channelName: string, immediate: boolean = false): void {
-    if (!channelName || !token) return;
+  isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
 
+  private reconnect(token: string, channelName: string): void {
     this.clearReconnectTimer();
-
-    const attemptReconnect = () => {
-      if (this.currentChannel === channelName) {
-        this.disconnect();
-        this.connect(token, channelName);
-      }
-    };
-
-    if (immediate) {
-      attemptReconnect();
-    } else {
-      this.reconnectTimer = window.setTimeout(attemptReconnect, 3000);
-    }
+    this.reconnectTimer = window.setTimeout(() => {
+      this.connect(token, channelName);
+    }, 3000);
   }
 
   private clearReconnectTimer(): void {

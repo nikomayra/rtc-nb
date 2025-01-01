@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const ChannelMemberSchema = z.object({
   username: z.string().min(1),
@@ -16,8 +16,27 @@ export const ChannelSchema = z.object({
   members: z.record(z.string(), ChannelMemberSchema),
 });
 
-export type Channel = z.infer<typeof ChannelSchema>;
-export type ChannelMember = z.infer<typeof ChannelMemberSchema>;
+export const PointSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+});
+
+export const DrawPathSchema = z.object({
+  points: z.array(PointSchema),
+  isDrawing: z.boolean(),
+  strokeWidth: z.number().min(1).default(1),
+});
+
+export const RegionSchema = z.object({
+  start: PointSchema,
+  end: PointSchema,
+  paths: z.array(DrawPathSchema),
+});
+
+export const SketchUpdateSchema = z.object({
+  sketchId: z.string().uuid(),
+  region: RegionSchema,
+});
 
 export const SketchSchema = z.object({
   id: z.string().uuid(),
@@ -25,12 +44,10 @@ export const SketchSchema = z.object({
   displayName: z.string().min(1),
   width: z.number().min(1),
   height: z.number().min(1),
-  pixels: z.array(z.array(z.boolean())),
+  regions: z.record(z.string(), RegionSchema), // Key format: "x,y"
   createdAt: z.string().min(1).datetime(),
   createdBy: z.string().min(1),
 });
-
-export type Sketch = z.infer<typeof SketchSchema>;
 
 export enum MessageType {
   Text = 0,
@@ -38,36 +55,41 @@ export enum MessageType {
   Video = 2,
   Audio = 3,
   Document = 4,
-  Sketch = 5,
+  SketchUpdate = 5,
 }
 
 const URLSchema = z.string().refine((val) => {
-  return val.startsWith('http') || val.startsWith('/');
-}, 'Must be a valid URL or path');
+  return val.startsWith("http") || val.startsWith("/");
+}, "Must be a valid URL or path");
 
-const messageContentSchema = z.object({
-  text: z.string().optional(),
-  fileurl: URLSchema.optional(),
-  thumbnailurl: URLSchema.optional(),
-  sketchcoords: z.array(z.array(z.boolean())).optional(),
-  sketchid: z.string().uuid().optional(),
-}).refine(
-  (data) => {
-    // For sketch messages
-    if (data.sketchid !== undefined || data.sketchcoords !== undefined) {
-      return data.sketchid !== undefined && data.sketchcoords !== undefined;
+const messageContentSchema = z
+  .object({
+    text: z.string().optional(),
+    fileurl: URLSchema.optional(),
+    thumbnailurl: URLSchema.optional(),
+    sketchUpdate: SketchUpdateSchema.optional(),
+  })
+  .refine(
+    (data) => {
+      // For sketch messages
+      if (data.sketchUpdate !== undefined) {
+        return (
+          data.sketchUpdate.sketchId !== undefined &&
+          data.sketchUpdate.region !== undefined
+        );
+      }
+      // For file messages
+      if (data.fileurl !== undefined) {
+        return true; // text is optional for file messages
+      }
+      // For text-only messages
+      return data.text !== undefined;
+    },
+    {
+      message:
+        "Message must be either: (1) text message with optional file, (2) file message with optional text, or (3) sketch message with both sketchid and region",
     }
-    // For file messages
-    if (data.fileurl !== undefined) {
-      return true; // text is optional for file messages
-    }
-    // For text-only messages
-    return data.text !== undefined;
-  },
-  {
-    message: "Message must be either: (1) text message with optional file, (2) file message with optional text, or (3) sketch message with both sketchid and sketchcoords"
-  }
-);
+  );
 
 export const OutgoingMessageSchema = z.object({
   channelName: z.string().min(1),
@@ -84,10 +106,6 @@ export const IncomingMessageSchema = z.object({
   timestamp: z.string().datetime(),
 });
 
-// Type definitions
-export type OutgoingMessage = z.infer<typeof OutgoingMessageSchema>;
-export type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
-
 interface APISuccessResponse<T> {
   success: true;
   data: T;
@@ -101,4 +119,16 @@ interface APIErrorResponse {
   };
 }
 
+export type Channel = z.infer<typeof ChannelSchema>;
+export type ChannelMember = z.infer<typeof ChannelMemberSchema>;
+
 export type APIResponse<T> = APISuccessResponse<T> | APIErrorResponse;
+
+export type OutgoingMessage = z.infer<typeof OutgoingMessageSchema>;
+export type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
+
+export type Point = z.infer<typeof PointSchema>;
+export type DrawPath = z.infer<typeof DrawPathSchema>;
+export type Region = z.infer<typeof RegionSchema>;
+export type Sketch = z.infer<typeof SketchSchema>;
+export type SketchUpdate = z.infer<typeof SketchUpdateSchema>;

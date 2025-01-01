@@ -6,6 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"rtc-nb/backend/internal/connections"
 	"rtc-nb/backend/internal/services/chat"
 	"rtc-nb/backend/internal/services/sketch"
 	"rtc-nb/backend/internal/websocket"
@@ -13,14 +14,14 @@ import (
 	"rtc-nb/backend/pkg/api/middleware"
 )
 
-func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, chatService chat.ChatManager, sketchService *sketch.Service) {
+func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager connections.Manager, chatService chat.ChatManager, sketchService *sketch.Service) {
 	// Create a subrouter for /api with common middleware
 	apiRouter := router.PathPrefix("/api").Subrouter()
 
 	// Apply global middleware to all routes
 	apiRouter.Use(middleware.LoggingMiddleware)
 
-	handlers := handlers.NewHandlers(chatService, sketchService)
+	handlers := handlers.NewHandlers(connManager, chatService, sketchService)
 
 	// Unprotected routes
 	apiRouter.HandleFunc("/", defaultRoute).Methods("GET")

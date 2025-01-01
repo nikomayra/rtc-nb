@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"rtc-nb/backend/internal/auth"
+	"rtc-nb/backend/internal/connections"
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/services/chat"
 	"rtc-nb/backend/internal/services/sketch"
@@ -17,12 +18,14 @@ import (
 )
 
 type Handlers struct {
+	connMgr connections.Manager
 	chatService   chat.ChatManager
 	sketchService *sketch.Service
 }
 
-func NewHandlers(chatService chat.ChatManager, sketchService *sketch.Service) *Handlers {
+func NewHandlers(connMgr connections.Manager, chatService chat.ChatManager, sketchService *sketch.Service) *Handlers {
 	return &Handlers{
+		connMgr:   connMgr,
 		chatService:   chatService,
 		sketchService: sketchService,
 	}
@@ -413,6 +416,32 @@ func (h *Handlers) CreateSketchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate channel membership
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
+	if err != nil {
+		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
+		return
+	}
+
+	if userChannel != req.ChannelName {
+		responses.SendError(w, "Not a member of this channel", http.StatusUnauthorized)
+		return
+	}
+
+	if req.Width <= 0 || req.Height <= 0 {
+		responses.SendError(w, "Invalid width or height", http.StatusBadRequest)
+		return
+	}
+
+	if req.Width > 1280 || req.Height > 720 {
+		responses.SendError(w, "Max resolution 1280x720", http.StatusBadRequest)
+		return
+	}
+
 	if err := h.sketchService.CreateSketch(ctx, req.ChannelName, req.DisplayName, req.Width, req.Height, claims.Username); err != nil {
 		log.Printf("Error creating sketch: %v", err)
 		responses.SendError(w, "Failed to create sketch", http.StatusInternalServerError)
@@ -444,7 +473,23 @@ func (h *Handlers) GetSketchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sketch, err := h.sketchService.GetSketch(ctx, req.ChannelName, claims.Username, req.ID)
+	// Validate channel membership
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
+	if err != nil {
+		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
+		return
+	}
+
+	if userChannel != req.ChannelName {
+		responses.SendError(w, "Not a member of this channel", http.StatusUnauthorized)
+		return
+	}
+
+	sketch, err := h.sketchService.GetSketch(ctx, req.ID)
 	if err != nil {
 		log.Printf("Error getting sketch: %v", err)
 		responses.SendError(w, "Failed to get sketch", http.StatusInternalServerError)
@@ -469,7 +514,23 @@ func (h *Handlers) GetSketchesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sketches, err := h.sketchService.GetSketches(ctx, channelName, claims.Username)
+	// Validate channel membership
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
+	if err != nil {
+		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
+		return
+	}
+
+	if userChannel != channelName {
+		responses.SendError(w, "Not a member of this channel", http.StatusUnauthorized)
+		return
+	}
+
+	sketches, err := h.sketchService.GetSketches(ctx, channelName)
 	if err != nil {
 		log.Printf("Error getting sketches: %v", err)
 		responses.SendError(w, "Failed to get sketches", http.StatusInternalServerError)
@@ -491,7 +552,7 @@ func (h *Handlers) DeleteSketchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	claims, ok := auth.ClaimsFromContext(ctx)
+	_, ok := auth.ClaimsFromContext(ctx)
 	if !ok {
 		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -502,7 +563,7 @@ func (h *Handlers) DeleteSketchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.sketchService.DeleteSketch(ctx, req.ID, req.ChannelName, claims.Username); err != nil {
+	if err := h.sketchService.DeleteSketch(ctx, req.ChannelName, req.ID); err != nil {
 		log.Printf("Error deleting sketch: %v", err)
 		responses.SendError(w, "Failed to delete sketch", http.StatusInternalServerError)
 		return

@@ -11,14 +11,14 @@ import (
 )
 
 type Processor struct {
-    connManager connections.ConnectionManager
+    connManager connections.Manager
     chatService *chat.Service
     sketchService *sketch.Service
 	sketchBuffer *SketchBuffer
 	chatBuffer *ChatBuffer
 }
 
-func NewProcessor(connManager connections.ConnectionManager, chatService *chat.Service, sketchService *sketch.Service) *Processor {
+func NewProcessor(connManager connections.Manager, chatService *chat.Service, sketchService *sketch.Service) *Processor {
 	return &Processor{
 		connManager: connManager,
 		chatService: chatService,
@@ -39,7 +39,7 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
     
     //Buffer for persistence
     if msg.RequiresPersistence() {
-        if msg.Type == models.MessageTypeSketch {
+        if msg.Type == models.MessageTypeSketchUpdate {
             p.sketchBuffer.Add(msg)
         } else {
             p.chatBuffer.Add(msg)

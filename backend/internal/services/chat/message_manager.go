@@ -10,10 +10,10 @@ import (
 
 type messageManager struct {
 	db  *database.Store
-	connMgr connections.ConnectionManager
+	connMgr connections.Manager
 }
 
-func NewMessageManager(db *database.Store, connMgr connections.ConnectionManager) *messageManager {
+func NewMessageManager(db *database.Store, connMgr connections.Manager) *messageManager {
 	return &messageManager{
 		db:  db,
 		connMgr: connMgr,

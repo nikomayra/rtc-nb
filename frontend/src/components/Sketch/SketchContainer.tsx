@@ -11,8 +11,9 @@ import { SketchConfig } from "./SketchConfig";
 export const SketchContainer = () => {
   const chatContext = useContext(ChatContext);
   const [drawing, setDrawing] = useState(false);
-  const [erasing, setErasing] = useState(false);
   const [sketches, setSketches] = useState<Sketch[]>([]);
+  const [currentSketch, setCurrentSketch] = useState<Sketch | null>(null);
+  const [strokeWidth, setStrokeWidth] = useState(2);
 
   useEffect(() => {
     const getSketches = async () => {
@@ -28,14 +29,14 @@ export const SketchContainer = () => {
 
   return (
     <div className="sketch-container">
-      <SketchConfig sketches={sketches} />
-      <SketchBoard drawing={drawing} erasing={erasing} />
-      <SketchToolbar
+      <SketchConfig sketches={sketches} setCurrentSketch={setCurrentSketch} />
+      <SketchBoard
+        channelName={chatContext.state.currentChannel ?? ""}
+        sketchId={currentSketch?.id ?? ""}
         drawing={drawing}
-        erasing={erasing}
-        setDrawing={setDrawing}
-        setErasing={setErasing}
+        strokeWidth={strokeWidth}
       />
+      <SketchToolbar setDrawing={setDrawing} setStrokeWidth={setStrokeWidth} />
     </div>
   );
 };

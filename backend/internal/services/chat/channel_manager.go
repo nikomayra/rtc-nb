@@ -17,11 +17,11 @@ import (
 type channelManager struct {
 	mu       sync.RWMutex
 	db       *database.Store
-	connMgr  connections.ConnectionManager
+	connMgr  connections.Manager
 	channels map[string]map[*gorilla_websocket.Conn]bool
 }
 
-func NewChannelManager(db *database.Store, connMgr connections.ConnectionManager) *channelManager {
+func NewChannelManager(db *database.Store, connMgr connections.Manager) *channelManager {
 	return &channelManager{
 		db:       db,
 		connMgr:  connMgr,

@@ -29,10 +29,10 @@ type Statements struct {
 
 	SelectUserChannel *sql.Stmt // username
 
-	InsertSketch     *sql.Stmt // id, channel_name, width, height, pixels
+	InsertSketch     *sql.Stmt // id, channel_name, width, height, regions
 	SelectSketchByID *sql.Stmt // id
 	SelectSketches   *sql.Stmt // channel_name
-	UpdateSketch     *sql.Stmt // id, pixels
+	UpdateSketchRegions *sql.Stmt // id, regions
 	DeleteSketch     *sql.Stmt // id
 }
 
@@ -168,30 +168,30 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 
 	// Prepare sketch statements
 	if s.InsertSketch, err = prepare(`
-        INSERT INTO sketches (id, channel_name, width, height, pixels, created_by) 
+        INSERT INTO sketches (id, channel_name, display_name, width, height, regions, created_by) 
         VALUES ($1, $2, $3, $4, $5, $6)`); err != nil {
 		return nil, fmt.Errorf("prepare insert sketch: %w", err)
 	}
 
 	if s.SelectSketchByID, err = prepare(`
-        SELECT id, channel_name, width, height, pixels, created_at, created_by 
+        SELECT id, channel_name, display_name, width, height, regions, created_at, created_by 
         FROM sketches 
         WHERE id = $1`); err != nil {
 		return nil, fmt.Errorf("prepare select sketch: %w", err)
 	}
 
 	if s.SelectSketches, err = prepare(`
-        SELECT id, channel_name, width, height, created_at, created_by 
+        SELECT id, channel_name, display_name, width, height, created_at, created_by 
         FROM sketches
 		WHERE channel_name = $1`); err != nil {
 		return nil, fmt.Errorf("prepare select sketches: %w", err)
 	}
 
-	if s.UpdateSketch, err = prepare(`
+	if s.UpdateSketchRegions, err = prepare(`
         UPDATE sketches 
-        SET pixels = $2
+        SET regions = $2
         WHERE id = $1`); err != nil {
-		return nil, fmt.Errorf("prepare update sketch: %w", err)
+		return nil, fmt.Errorf("prepare update sketch regions: %w", err)
 	}
 
 	if s.DeleteSketch, err = prepare(`
@@ -221,7 +221,7 @@ func (s *Statements) CloseStatements() error {
 		s.InsertSketch,
 		s.SelectSketchByID,
 		s.SelectSketches,
-		s.UpdateSketch,
+		s.UpdateSketchRegions,
 		s.DeleteSketch,
 	} {
 		if stmt != nil {
