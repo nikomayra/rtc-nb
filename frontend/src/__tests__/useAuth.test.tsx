@@ -1,9 +1,9 @@
-import { renderHook, act } from '@testing-library/react';
-import { useAuth } from '../hooks/useAuth';
-import { authApi } from '../api/authApi';
+import { renderHook, act } from "@testing-library/react";
+import { useAuth } from "../hooks/useAuth";
+import { authApi } from "../api/authApi";
 
 // Mock the authApi
-jest.mock('../../api/authApi', () => ({
+jest.mock("../../api/authApi", () => ({
   authApi: {
     login: jest.fn(),
     register: jest.fn(),
@@ -27,111 +27,111 @@ const mockSessionStorage = (() => {
   };
 })();
 
-Object.defineProperty(window, 'sessionStorage', {
+Object.defineProperty(window, "sessionStorage", {
   value: mockSessionStorage,
 });
 
-describe('useAuth hook', () => {
+describe("useAuth hook", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSessionStorage.clear();
   });
 
-  it('should login successfully', async () => {
+  it("should login successfully", async () => {
     (authApi.login as jest.Mock).mockResolvedValue({
       success: true,
-      data: { token: 'test-token' },
+      data: { token: "test-token" },
     });
 
     const { result } = renderHook(() => useAuth());
 
     await act(async () => {
-      await result.current.login('testuser', 'password');
+      await result.current.actions.login("testuser", "password");
     });
 
-    expect(result.current.isLoggedIn).toBe(true);
-    expect(result.current.token).toBe('test-token');
-    expect(result.current.username).toBe('testuser');
-    expect(mockSessionStorage.setItem).toHaveBeenCalledWith('token', 'test-token');
-    expect(mockSessionStorage.setItem).toHaveBeenCalledWith('username', 'testuser');
+    expect(result.current.state.isLoggedIn).toBe(true);
+    expect(result.current.state.token).toBe("test-token");
+    expect(result.current.state.username).toBe("testuser");
+    expect(mockSessionStorage.setItem).toHaveBeenCalledWith("token", "test-token");
+    expect(mockSessionStorage.setItem).toHaveBeenCalledWith("username", "testuser");
   });
 
-  it('should handle login failure', async () => {
+  it("should handle login failure", async () => {
     (authApi.login as jest.Mock).mockResolvedValue({
       success: false,
-      error: { message: 'Invalid credentials', code: 401 },
+      error: { message: "Invalid credentials", code: 401 },
     });
 
     const { result } = renderHook(() => useAuth());
 
     await act(async () => {
       try {
-        await result.current.login('testuser', 'wrongpassword');
+        await result.current.actions.login("testuser", "wrongpassword");
       } catch (error: unknown) {
         if (error instanceof Error) {
-          expect(error.message).toBe('Invalid credentials, Code: 401');
+          expect(error.message).toBe("Invalid credentials, Code: 401");
         }
       }
     });
 
-    expect(result.current.isLoggedIn).toBe(false);
-    expect(result.current.token).toBe('');
-    expect(result.current.username).toBe('');
+    expect(result.current.state.isLoggedIn).toBe(false);
+    expect(result.current.state.token).toBe("");
+    expect(result.current.state.username).toBe("");
   });
 
-  it('should register successfully', async () => {
+  it("should register successfully", async () => {
     (authApi.register as jest.Mock).mockResolvedValue({
       success: true,
-      data: { token: 'new-user-token' },
+      data: { token: "new-user-token" },
     });
 
     const { result } = renderHook(() => useAuth());
 
     await act(async () => {
-      await result.current.register('newuser', 'newpassword');
+      await result.current.actions.register("newuser", "newpassword");
     });
 
-    expect(result.current.isLoggedIn).toBe(true);
-    expect(result.current.token).toBe('new-user-token');
-    expect(result.current.username).toBe('newuser');
-    expect(mockSessionStorage.setItem).toHaveBeenCalledWith('token', 'new-user-token');
-    expect(mockSessionStorage.setItem).toHaveBeenCalledWith('username', 'newuser');
+    expect(result.current.state.isLoggedIn).toBe(true);
+    expect(result.current.state.token).toBe("new-user-token");
+    expect(result.current.state.username).toBe("newuser");
+    expect(mockSessionStorage.setItem).toHaveBeenCalledWith("token", "new-user-token");
+    expect(mockSessionStorage.setItem).toHaveBeenCalledWith("username", "newuser");
   });
 
-  it('should handle registration failure', async () => {
+  it("should handle registration failure", async () => {
     (authApi.register as jest.Mock).mockResolvedValue({
       success: false,
-      error: { message: 'Registration error', code: 400 },
+      error: { message: "Registration error", code: 400 },
     });
 
     const { result } = renderHook(() => useAuth());
 
     await act(async () => {
       try {
-        await result.current.register('newuser', 'password');
+        await result.current.actions.register("newuser", "password");
       } catch (error: unknown) {
         if (error instanceof Error) {
-          expect(error.message).toBe('Registration error, Code: 400');
+          expect(error.message).toBe("Registration error, Code: 400");
         }
       }
     });
 
-    expect(result.current.isLoggedIn).toBe(false);
-    expect(result.current.token).toBe('');
-    expect(result.current.username).toBe('');
+    expect(result.current.state.isLoggedIn).toBe(false);
+    expect(result.current.state.token).toBe("");
+    expect(result.current.state.username).toBe("");
   });
 
-  it('should logout', () => {
+  it("should logout", () => {
     const { result } = renderHook(() => useAuth());
 
     act(() => {
-      result.current.logout();
+      result.current.actions.logout();
     });
 
-    expect(result.current.isLoggedIn).toBe(false);
-    expect(result.current.token).toBe('');
-    expect(result.current.username).toBe('');
-    expect(mockSessionStorage.removeItem).toHaveBeenCalledWith('token');
-    expect(mockSessionStorage.removeItem).toHaveBeenCalledWith('username');
+    expect(result.current.state.isLoggedIn).toBe(false);
+    expect(result.current.state.token).toBe("");
+    expect(result.current.state.username).toBe("");
+    expect(mockSessionStorage.removeItem).toHaveBeenCalledWith("token");
+    expect(mockSessionStorage.removeItem).toHaveBeenCalledWith("username");
   });
 });

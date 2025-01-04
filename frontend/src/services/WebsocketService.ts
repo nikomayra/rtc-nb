@@ -1,8 +1,4 @@
-import {
-  IncomingMessage,
-  IncomingMessageSchema,
-  OutgoingMessage,
-} from "../types/interfaces";
+import { IncomingMessage, IncomingMessageSchema, OutgoingMessage } from "../types/interfaces";
 import { BASE_URL } from "../utils/constants";
 
 export class WebSocketService {
@@ -26,7 +22,7 @@ export class WebSocketService {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.disconnect();
     }
-
+    // console.log("Connecting to WebSocket with token:", token, "and channel:", channelName);
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}${BASE_URL}/ws/${channelName}`;
 

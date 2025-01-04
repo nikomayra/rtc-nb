@@ -47,7 +47,7 @@ func (s *Service) GetSketch(ctx context.Context, ID string) (*models.Sketch, err
 	return sketch, nil
 }
 
-// Returns all sketches for a channel without the pixels
+// Returns all sketches for a channel without the regions
 func (s *Service) GetSketches(ctx context.Context, channelName string) ([]*models.Sketch, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -57,19 +57,19 @@ func (s *Service) GetSketches(ctx context.Context, channelName string) ([]*model
 
 func (s *Service) UpdateSketch(ctx context.Context, sketch *models.Sketch) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-    defer cancel()
+	defer cancel()
 
-    tx, err := s.dbStore.BeginTx(ctx)
-    if err != nil {
-        return fmt.Errorf("begin transaction: %w", err)
-    }
-    defer tx.Rollback()
+	tx, err := s.dbStore.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
 
-    if err := s.dbStore.UpdateSketchWithTx(ctx, tx, sketch); err != nil {
-        return fmt.Errorf("update sketch: %w", err)
-    }
+	if err := s.dbStore.UpdateSketchWithTx(ctx, tx, sketch); err != nil {
+		return fmt.Errorf("update sketch: %w", err)
+	}
 
-    return tx.Commit()
+	return tx.Commit()
 }
 
 func (s *Service) DeleteSketch(ctx context.Context, channelName, ID string) error {

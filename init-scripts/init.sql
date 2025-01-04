@@ -48,6 +48,7 @@ CREATE TABLE messages (
 CREATE TABLE sketches (
     id UUID PRIMARY KEY,
     channel_name VARCHAR(50) REFERENCES channels(name) ON DELETE CASCADE,
+    display_name VARCHAR(50) NOT NULL,
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
     regions JSONB NOT NULL DEFAULT '{}',

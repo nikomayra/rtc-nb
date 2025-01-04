@@ -17,7 +17,7 @@ import (
 type contextKey string
 
 const ClaimsContextKey contextKey = "claims"
-const tokenLife = 9000 * time.Hour
+const tokenLife = 12 * time.Hour
 
 var (
 	ErrInvalidToken     = fmt.Errorf("invalid token format")
@@ -127,12 +127,12 @@ func CheckPassword(hashedPassword, password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 }
 
-func GenerateRefreshToken(username string) (string, error) {
-	// Logic to generate refresh token
-	return "some-refresh-token", nil
-}
+// func GenerateRefreshToken(username string) (string, error) {
+// 	// Logic to generate refresh token
+// 	return "some-refresh-token", nil
+// }
 
-func RefreshAccessToken(refreshToken string) (string, error) {
-	// Logic to refresh access token
-	return "new-access-token", nil
-}
+// func RefreshAccessToken(refreshToken string) (string, error) {
+// 	// Logic to refresh access token
+// 	return "new-access-token", nil
+// }

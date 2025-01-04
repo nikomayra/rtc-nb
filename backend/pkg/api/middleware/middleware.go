@@ -54,7 +54,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 
 		// Log request details
 		log.Printf(
-			"Method: %s Path: %s Status: %d Duration: %v",
+			"%s %s %d %v",
 			r.Method,
 			r.URL.Path,
 			logger.statusCode,

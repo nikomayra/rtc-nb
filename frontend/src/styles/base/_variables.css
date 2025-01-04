@@ -2,6 +2,7 @@
   /* Colors */
   --primary-color: #24265b;
   --secondary-color: #247c4c;
+  --tertiary-color: #2ab33f;
   --primary-hover: #535bf2;
   --bg-dark: #242424;
   --bg-light: #ffffff;
@@ -9,7 +10,7 @@
   --text-light: rgba(255, 255, 255, 0.87);
   --border-light: #2c64e6;
   --border-dark: #17359f;
-  --sketch-bg-color: #020e69;
+  --sketch-bg-color: #000000;
 
   /* Spacing */
   --spacing-xs: 0.25rem;

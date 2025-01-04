@@ -9,17 +9,21 @@ import (
 )
 
 type messageManager struct {
-	db  *database.Store
+	db      *database.Store
 	connMgr connections.Manager
 }
 
 func NewMessageManager(db *database.Store, connMgr connections.Manager) *messageManager {
 	return &messageManager{
-		db:  db,
+		db:      db,
 		connMgr: connMgr,
 	}
 }
 
 func (mm *messageManager) BatchInsertMessages(ctx context.Context, messages []*models.Message) error {
 	return mm.db.BatchInsertMessages(ctx, messages)
+}
+
+func (mm *messageManager) GetMessages(ctx context.Context, channelName string) ([]*models.Message, error) {
+	return mm.db.GetMessages(ctx, channelName)
 }

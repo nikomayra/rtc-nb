@@ -2,41 +2,99 @@ import { SketchBoard } from "./SketchBoard";
 import { SketchToolbar } from "./SketchToolbar";
 import "../../styles/components/sketch.css";
 import { useEffect, useState, useContext } from "react";
-import { Sketch } from "../../types/interfaces";
-import axiosInstance from "../../api/axiosInstance";
+import { RegionlessSketch, RegionlessSketchSchema, Sketch } from "../../types/interfaces";
+import { axiosInstance, isAxiosError } from "../../api/axiosInstance";
 import { ChatContext } from "../../contexts/chatContext";
 import { BASE_URL } from "../../utils/constants";
 import { SketchConfig } from "./SketchConfig";
+import { AuthContext } from "../../contexts/authContext";
+import { z } from "zod";
 
 export const SketchContainer = () => {
   const chatContext = useContext(ChatContext);
+  const authContext = useContext(AuthContext);
   const [drawing, setDrawing] = useState(false);
-  const [sketches, setSketches] = useState<Sketch[]>([]);
+  const [sketches, setSketches] = useState<RegionlessSketch[]>([]);
   const [currentSketch, setCurrentSketch] = useState<Sketch | null>(null);
   const [strokeWidth, setStrokeWidth] = useState(2);
 
+  if (!chatContext || !authContext) throw new Error("Chat or Auth context not found");
+
   useEffect(() => {
+    if (!authContext.state.token || !chatContext.state.currentChannel) return;
+
     const getSketches = async () => {
-      const response = await axiosInstance.get(
-        `${BASE_URL}/getSketches/${chatContext?.state.currentChannel}`
-      );
-      setSketches(response.data);
+      try {
+        const response = await axiosInstance.get(
+          `${BASE_URL}/getSketches/${encodeURIComponent(chatContext.state.currentChannel!)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${authContext.state.token}`,
+            },
+          }
+        );
+        if (response.data.success) {
+          const validatedSketches = z.array(RegionlessSketchSchema).parse(response.data.data);
+          setSketches(validatedSketches);
+        } else {
+          console.error("Failed to get sketches:", response.data.error);
+        }
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          console.error("Invalid sketch data:", error.errors);
+        }
+        if (isAxiosError(error)) {
+          console.error("Failed to get sketches:", error.response?.data?.message);
+        }
+        throw error;
+      }
     };
     getSketches();
-  }, [chatContext?.state.currentChannel]);
+  }, [chatContext.state.currentChannel, authContext.state.token]);
 
-  if (!chatContext) return null;
+  const handleCurrentSketch = async (sketch: Sketch) => {
+    setCurrentSketch(sketch);
+  };
+
+  const handleDeleteSketch = async () => {
+    try {
+      const response = await axiosInstance.post(`${BASE_URL}/deleteSketch`, {
+        id: currentSketch?.id,
+        channelName: chatContext.state.currentChannel ?? "",
+      });
+      if (response.data.success) {
+        setCurrentSketch(null);
+      } else {
+        console.error("Failed to create sketch:", response.data.error);
+      }
+    } catch (error) {
+      if (isAxiosError(error)) {
+        console.error("Failed to delete sketch:", error.response?.data?.message);
+      }
+      throw error;
+    }
+  };
 
   return (
     <div className="sketch-container">
-      <SketchConfig sketches={sketches} setCurrentSketch={setCurrentSketch} />
-      <SketchBoard
+      <SketchConfig
+        sketches={sketches}
         channelName={chatContext.state.currentChannel ?? ""}
-        sketchId={currentSketch?.id ?? ""}
-        drawing={drawing}
-        strokeWidth={strokeWidth}
+        token={authContext.state.token ?? ""}
+        currentSketch={handleCurrentSketch}
+        deleteSketch={handleDeleteSketch}
       />
-      <SketchToolbar setDrawing={setDrawing} setStrokeWidth={setStrokeWidth} />
+      {currentSketch && (
+        <>
+          <SketchBoard
+            channelName={chatContext.state.currentChannel ?? ""}
+            sketchId={currentSketch.id}
+            drawing={drawing}
+            strokeWidth={strokeWidth}
+          />
+          <SketchToolbar setDrawing={setDrawing} setStrokeWidth={setStrokeWidth} />
+        </>
+      )}
     </div>
   );
 };

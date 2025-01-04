@@ -1,6 +1,6 @@
-import axios from 'axios';
-import type { AxiosResponse } from 'axios';
-import { camelCase, isObject, isArray } from 'lodash';
+import axios from "axios";
+import type { AxiosResponse } from "axios";
+import { camelCase, isObject, isArray } from "lodash";
 
 type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
 type JsonObject = { [key: string]: JsonValue };
@@ -26,7 +26,7 @@ const convertKeysToCamelCase = (data: JsonValue): JsonValue => {
 };
 
 // Export the error type checker
-export const isAxiosError = axios.isAxiosError;
+const isAxiosError = axios.isAxiosError;
 
 // Interceptor to transform responses to camelCase
 axiosInstance.interceptors.response.use(
@@ -40,4 +40,4 @@ axiosInstance.interceptors.response.use(
   (error) => Promise.reject(error)
 );
 
-export default axiosInstance;
+export { axiosInstance, isAxiosError };

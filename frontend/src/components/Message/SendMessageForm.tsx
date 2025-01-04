@@ -1,16 +1,15 @@
-import { FormEvent, useContext, useRef } from 'react';
-import { OutgoingMessage, MessageType } from '../../types/interfaces';
-import { ChatContext } from '../../contexts/chatContext';
-import { BASE_URL } from '../../utils/constants';
-import axiosInstance from '../../api/axiosInstance';
-import { AuthContext } from '../../contexts/authContext';
+import { FormEvent, useContext, useRef } from "react";
+import { OutgoingMessage, MessageType } from "../../types/interfaces";
+import { ChatContext } from "../../contexts/chatContext";
+import { BASE_URL } from "../../utils/constants";
+import { axiosInstance } from "../../api/axiosInstance";
+import { AuthContext } from "../../contexts/authContext";
 
 type SendMessageFormProps = {
-  onSend: (message: OutgoingMessage) => Promise<void>;
-  isConnected: boolean;
+  onSend: (message: OutgoingMessage) => void;
 };
 
-export const SendMessageForm = ({ onSend, isConnected }: SendMessageFormProps) => {
+export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
   const chatContext = useContext(ChatContext);
   const authContext = useContext(AuthContext);
   const messageInputRef = useRef<HTMLInputElement>(null);
@@ -26,31 +25,25 @@ export const SendMessageForm = ({ onSend, isConnected }: SendMessageFormProps) =
     state: { token },
   } = authContext;
 
-  // const axiosInstance = axios.create({
-  //   baseURL: process.env.REACT_APP_API_URL,
-  //   headers: {
-  //     'Content-Type': 'application/json',
-  //   },
-  // });
-
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!currentChannel) return;
     const formData = new FormData(e.target as HTMLFormElement);
-    const message = formData.get('message') as string;
-    const file = formData.get('file') as File;
+    const message = formData.get("message") as string;
+    const file = formData.get("file") as File;
 
-    if (file) {
+    if (file.size > 0) {
+      console.log("File found");
       // First upload the file
       const uploadFormData = new FormData();
-      uploadFormData.append('file', file);
-      uploadFormData.append('channelName', currentChannel);
+      uploadFormData.append("file", file);
+      uploadFormData.append("channelName", currentChannel);
 
       try {
         const response = await axiosInstance.post(`${BASE_URL}/upload`, uploadFormData, {
           headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data',
+            "Content-Type": "multipart/form-data",
           },
         });
         if (response.data.success) {
@@ -61,41 +54,39 @@ export const SendMessageForm = ({ onSend, isConnected }: SendMessageFormProps) =
             content: {
               text: message, // Optional message
               fileurl: response.data.data.imagePath,
-              thumbnailurl: response.data.data.thumbnailPath
-            }
+              thumbnailurl: response.data.data.thumbnailPath,
+            },
           };
-          await onSend(outgoingMessage);
+          onSend(outgoingMessage);
         }
       } catch (error) {
-        console.error('Failed to upload image:', error);
+        console.error("Failed to upload image:", error);
       }
     } else {
       // Regular text message
       const outgoingMessage: OutgoingMessage = {
         channelName: currentChannel,
         type: MessageType.Text,
-        content: { text: message }
+        content: { text: message },
       };
-      await onSend(outgoingMessage);
+      onSend(outgoingMessage);
     }
 
     // Clear form
     if (messageInputRef.current) {
-      messageInputRef.current.value = '';
+      messageInputRef.current.value = "";
     }
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
   return (
     <div>
-      <form onSubmit={handleSubmit} id='send-message-form'>
-        <input type='file' name='file' ref={fileInputRef} />
-        <input type='text' name='message' ref={messageInputRef} />
-        <button type='submit' disabled={!isConnected}>
-          Send
-        </button>
+      <form onSubmit={handleSubmit} id="send-message-form">
+        <input type="file" name="file" ref={fileInputRef} />
+        <input type="text" name="message" ref={messageInputRef} />
+        <button type="submit">Send</button>
       </form>
     </div>
   );

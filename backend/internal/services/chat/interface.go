@@ -34,4 +34,5 @@ type ChatManager interface {
 
 	// Message operations
 	BatchInsertMessages(ctx context.Context, messages []*models.Message) error
+	GetMessages(ctx context.Context, channelName string) ([]*models.Message, error)
 }

@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"rtc-nb/backend/internal/models"
 	"sync"
@@ -37,7 +38,13 @@ func (s *Store) BatchInsertMessages(ctx context.Context, messages []*models.Mess
 		if msg.Type == models.MessageTypeSketchUpdate {
 			continue
 		}
-		_, err := tx.StmtContext(ctx, s.statements.InsertMessage).ExecContext(ctx, msg.ID, msg.ChannelName, msg.Username, msg.Type, msg.Content, msg.Timestamp)
+
+		contentJSON, err := json.Marshal(msg.Content)
+		if err != nil {
+			return fmt.Errorf("failed to marshal message content: %w", err)
+		}
+
+		_, err = tx.StmtContext(ctx, s.statements.InsertMessage).ExecContext(ctx, msg.ID, msg.ChannelName, msg.Username, msg.Type, contentJSON, msg.Timestamp)
 		if err != nil {
 			return fmt.Errorf("failed to insert message: %w", err)
 		}
@@ -48,6 +55,31 @@ func (s *Store) BatchInsertMessages(ctx context.Context, messages []*models.Mess
 	}
 
 	return nil
+}
+
+func (s *Store) GetMessages(ctx context.Context, channelName string) ([]*models.Message, error) {
+	rows, err := s.statements.SelectMessages.QueryContext(ctx, channelName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query messages: %w", err)
+	}
+	defer rows.Close()
+
+	messages := []*models.Message{}
+	for rows.Next() {
+		msg := &models.Message{}
+		var contentJSON []byte
+		err := rows.Scan(&msg.ID, &msg.ChannelName, &msg.Username, &msg.Type, &contentJSON, &msg.Timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan message row: %w", err)
+		}
+		err = json.Unmarshal(contentJSON, &msg.Content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal message content: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+
+	return messages, nil
 }
 
 func (s *Store) Close() error {
@@ -219,8 +251,21 @@ func (s *Store) loadChannelMembers(ctx context.Context, channel *models.Channel)
 }
 
 func (s *Store) DeleteChannel(ctx context.Context, channelName string) error {
-	_, err := s.statements.DeleteChannel.ExecContext(ctx, channelName)
-	return err
+	result, err := s.statements.DeleteChannel.ExecContext(ctx, channelName)
+	if err != nil {
+		return fmt.Errorf("failed to execute delete channel: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no channel found with name: %s", channelName)
+	}
+
+	return nil
 }
 
 func (s *Store) UpdateChannel(ctx context.Context, channel *models.Channel) error {
@@ -280,58 +325,72 @@ func (s *Store) GetUserChannel(ctx context.Context, username string) (string, er
 func (s *Store) CreateSketch(ctx context.Context, sketch *models.Sketch) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.statements.InsertSketch.ExecContext(ctx, sketch.ID, sketch.ChannelName, sketch.DisplayName, sketch.Width, sketch.Height, sketch.Regions, sketch.CreatedBy)
-	return err
+	regionsJSON, err := json.Marshal(sketch.Regions)
+	if err != nil {
+		return fmt.Errorf("failed to marshal regions: %w", err)
+	}
+	_, err = s.statements.InsertSketch.ExecContext(ctx, sketch.ID, sketch.ChannelName, sketch.DisplayName, sketch.Width, sketch.Height, regionsJSON, sketch.CreatedBy)
+
+	if err != nil {
+		return fmt.Errorf("failed to insert sketch: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) UpdateSketchWithTx(ctx context.Context, tx *sql.Tx, sketch *models.Sketch) error {
 	var currentSketch models.Sketch
-    err := tx.StmtContext(ctx, s.statements.SelectSketchByID).
-        QueryRowContext(ctx, sketch.ID).
-        Scan(
-            &currentSketch.ID,
-            &currentSketch.ChannelName,
-            &currentSketch.DisplayName,
-            &currentSketch.Width,
-            &currentSketch.Height,
-            &currentSketch.Regions,
-            &currentSketch.CreatedAt,
-            &currentSketch.CreatedBy,
-        )
-    if err != nil {
-        return fmt.Errorf("select sketch: %w", err)
-    }
+	err := tx.StmtContext(ctx, s.statements.SelectSketchByID).
+		QueryRowContext(ctx, sketch.ID).
+		Scan(
+			&currentSketch.ID,
+			&currentSketch.ChannelName,
+			&currentSketch.DisplayName,
+			&currentSketch.Width,
+			&currentSketch.Height,
+			&currentSketch.Regions,
+			&currentSketch.CreatedAt,
+			&currentSketch.CreatedBy,
+		)
+	if err != nil {
+		return fmt.Errorf("select sketch: %w", err)
+	}
 
-    // Merge regions
-    for k, v := range sketch.Regions {
-        currentSketch.Regions[k] = v
-    }
+	// Merge regions
+	for k, v := range sketch.Regions {
+		currentSketch.Regions[k] = v
+	}
 
-    _, err = tx.StmtContext(ctx, s.statements.UpdateSketchRegions).
-        ExecContext(ctx, sketch.ID, currentSketch.Regions)
-    if err != nil {
-        return fmt.Errorf("update sketch regions: %w", err)
-    }
+	_, err = tx.StmtContext(ctx, s.statements.UpdateSketchRegions).
+		ExecContext(ctx, sketch.ID, currentSketch.Regions)
+	if err != nil {
+		return fmt.Errorf("update sketch regions: %w", err)
+	}
 
-    return nil
+	return nil
 }
 
 func (s *Store) GetSketch(ctx context.Context, sketchID string) (*models.Sketch, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sketch := &models.Sketch{}
+	sketch := &models.Sketch{
+		Regions: make(map[string]models.Region),
+	}
+	var regionsJSON []byte
 	err := s.statements.SelectSketchByID.QueryRowContext(ctx, sketchID).Scan(
 		&sketch.ID,
 		&sketch.ChannelName,
 		&sketch.DisplayName,
 		&sketch.Width,
 		&sketch.Height,
-		&sketch.Regions,
+		&regionsJSON,
 		&sketch.CreatedAt,
 		&sketch.CreatedBy,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get sketch: %w", err)
+	}
+	if err := json.Unmarshal(regionsJSON, &sketch.Regions); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal regions: %w", err)
 	}
 	return sketch, nil
 }

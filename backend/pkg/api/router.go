@@ -39,10 +39,12 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 	protected.HandleFunc("/leavechannel/{channelName}", handlers.LeaveChannelHandler).Methods("PATCH")
 	protected.HandleFunc("/channels", handlers.GetChannelsHandler).Methods("GET")
 
+	protected.HandleFunc("/validatetoken", handlers.ValidateTokenHandler).Methods("GET")
 	protected.HandleFunc("/logout", handlers.LogoutHandler).Methods("POST")
 	protected.HandleFunc("/deleteaccount", handlers.DeleteAccountHandler).Methods("DELETE")
 
 	protected.HandleFunc("/upload", handlers.UploadHandler).Methods("POST")
+	protected.HandleFunc("/getMessages/{channelName}", handlers.GetMessagesHandler).Methods("GET")
 	// protected.HandleFunc("/images/{filename}", handlers.ServeImageHandler).Methods("GET")
 	// protected.HandleFunc("/thumbnails/{filename}", handlers.ServeThumbnailHandler).Methods("GET")
 

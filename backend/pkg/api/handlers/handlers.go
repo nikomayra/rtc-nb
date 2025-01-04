@@ -18,14 +18,14 @@ import (
 )
 
 type Handlers struct {
-	connMgr connections.Manager
+	connMgr       connections.Manager
 	chatService   chat.ChatManager
 	sketchService *sketch.Service
 }
 
 func NewHandlers(connMgr connections.Manager, chatService chat.ChatManager, sketchService *sketch.Service) *Handlers {
 	return &Handlers{
-		connMgr:   connMgr,
+		connMgr:       connMgr,
 		chatService:   chatService,
 		sketchService: sketchService,
 	}
@@ -144,6 +144,16 @@ func (h *Handlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}, http.StatusOK)
 }
 
+func (h *Handlers) ValidateTokenHandler(w http.ResponseWriter, r *http.Request) {
+
+	_, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	responses.SendSuccess(w, "Validated Login", http.StatusOK)
+}
+
 func (h *Handlers) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {
@@ -260,7 +270,7 @@ func (h *Handlers) GetChannelsHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) DeleteChannelHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	channelName := vars["channelName"]
-	log.Printf("Deleting channel: %s", channelName)
+	// log.Printf("Deleting channel: %s", channelName)
 	if channelName == "" {
 		responses.SendError(w, "Channel name required", http.StatusBadRequest)
 		return
@@ -452,44 +462,30 @@ func (h *Handlers) CreateSketchHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) GetSketchHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ID          string `json:"id"`
-		ChannelName string `json:"channelName"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		responses.SendError(w, "Invalid request format", http.StatusBadRequest)
-		return
-	}
-
 	ctx := r.Context()
 	claims, ok := auth.ClaimsFromContext(ctx)
 	if !ok {
 		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if req.ChannelName == "" {
-		responses.SendError(w, "Channel name required", http.StatusBadRequest)
-		return
-	}
+
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	sketchID := vars["sketchId"]
 
 	// Validate channel membership
-	if !ok {
-		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
 	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
 	if err != nil {
 		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
 		return
 	}
 
-	if userChannel != req.ChannelName {
+	if userChannel != channelName {
 		responses.SendError(w, "Not a member of this channel", http.StatusUnauthorized)
 		return
 	}
 
-	sketch, err := h.sketchService.GetSketch(ctx, req.ID)
+	sketch, err := h.sketchService.GetSketch(ctx, sketchID)
 	if err != nil {
 		log.Printf("Error getting sketch: %v", err)
 		responses.SendError(w, "Failed to get sketch", http.StatusInternalServerError)
@@ -551,23 +547,34 @@ func (h *Handlers) DeleteSketchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	_, ok := auth.ClaimsFromContext(ctx)
-	if !ok {
-		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	if req.ChannelName == "" {
 		responses.SendError(w, "Channel name required", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.sketchService.DeleteSketch(ctx, req.ChannelName, req.ID); err != nil {
+	if err := h.sketchService.DeleteSketch(r.Context(), req.ChannelName, req.ID); err != nil {
 		log.Printf("Error deleting sketch: %v", err)
 		responses.SendError(w, "Failed to delete sketch", http.StatusInternalServerError)
 		return
 	}
 
 	responses.SendSuccess(w, "Sketch deleted successfully", http.StatusOK)
+}
+
+func (h *Handlers) GetMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	if channelName == "" {
+		responses.SendError(w, "Channel name required", http.StatusBadRequest)
+		return
+	}
+
+	messages, err := h.chatService.GetMessages(r.Context(), channelName)
+	if err != nil {
+		log.Printf("Error getting messages: %v", err)
+		responses.SendError(w, "Failed to get messages", http.StatusInternalServerError)
+		return
+	}
+
+	responses.SendSuccess(w, messages, http.StatusOK)
 }

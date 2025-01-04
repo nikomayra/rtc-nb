@@ -1,8 +1,8 @@
-import { Sketch } from "../../types/interfaces";
+import { RegionlessSketch } from "../../types/interfaces";
 
 interface SketchItemProps {
-  sketch: Sketch;
-  onSelect: (sketch: Sketch) => void;
+  sketch: RegionlessSketch;
+  onSelect: (sketch: RegionlessSketch) => void;
 }
 
 const SketchItem = ({ sketch, onSelect }: SketchItemProps) => {

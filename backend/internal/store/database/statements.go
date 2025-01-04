@@ -169,7 +169,7 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 	// Prepare sketch statements
 	if s.InsertSketch, err = prepare(`
         INSERT INTO sketches (id, channel_name, display_name, width, height, regions, created_by) 
-        VALUES ($1, $2, $3, $4, $5, $6)`); err != nil {
+        VALUES ($1, $2, $3, $4, $5, $6, $7)`); err != nil {
 		return nil, fmt.Errorf("prepare insert sketch: %w", err)
 	}
 

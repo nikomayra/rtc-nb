@@ -49,6 +49,16 @@ export const SketchSchema = z.object({
   createdBy: z.string().min(1),
 });
 
+export const RegionlessSketchSchema = z.object({
+  id: z.string().uuid(),
+  channelName: z.string().min(1),
+  displayName: z.string().min(1),
+  width: z.number().min(1),
+  height: z.number().min(1),
+  createdAt: z.string().min(1).datetime(),
+  createdBy: z.string().min(1),
+});
+
 export enum MessageType {
   Text = 0,
   Image = 1,
@@ -73,10 +83,7 @@ const messageContentSchema = z
     (data) => {
       // For sketch messages
       if (data.sketchUpdate !== undefined) {
-        return (
-          data.sketchUpdate.sketchId !== undefined &&
-          data.sketchUpdate.region !== undefined
-        );
+        return data.sketchUpdate.sketchId !== undefined && data.sketchUpdate.region !== undefined;
       }
       // For file messages
       if (data.fileurl !== undefined) {
@@ -132,3 +139,4 @@ export type DrawPath = z.infer<typeof DrawPathSchema>;
 export type Region = z.infer<typeof RegionSchema>;
 export type Sketch = z.infer<typeof SketchSchema>;
 export type SketchUpdate = z.infer<typeof SketchUpdateSchema>;
+export type RegionlessSketch = z.infer<typeof RegionlessSketchSchema>;
