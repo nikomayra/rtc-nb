@@ -19,26 +19,26 @@ const (
 )
 
 type SketchUpdate struct {
-	SketchID string `json:"sketchid"`
-	Region Region `json:"region"`
+	SketchID string `json:"sketch_id"`
+	Region   Region `json:"region"`
 }
 
 type MessageContent struct {
-	Text         *string   `json:"text,omitempty"`
-	FileURL      *string   `json:"fileurl,omitempty"`
-	ThumbnailURL *string   `json:"thumbnailurl,omitempty"`
-	SketchUpdate *SketchUpdate `json:"sketchupdate,omitempty"`
+	Text         *string       `json:"text,omitempty"`
+	FileURL      *string       `json:"file_url,omitempty"`
+	ThumbnailURL *string       `json:"thumbnail_url,omitempty"`
+	SketchUpdate *SketchUpdate `json:"sketch_update,omitempty"`
 }
 
 type IncomingMessage struct {
-	ChannelName string         `json:"channelname"`
+	ChannelName string         `json:"channel_name"`
 	Type        MessageType    `json:"type"`
 	Content     MessageContent `json:"content"`
 }
 
 type Message struct {
 	ID          string         `json:"id"`
-	ChannelName string         `json:"channelName"`
+	ChannelName string         `json:"channel_name"`
 	Username    string         `json:"username"`
 	Type        MessageType    `json:"type"`
 	Content     MessageContent `json:"content"`
@@ -47,12 +47,12 @@ type Message struct {
 
 func (m *IncomingMessage) Validate() error {
 	if m.ChannelName == "" {
-		return errors.New("channelname required")
+		return errors.New("channel name required")
 	}
 
-	if m.Type != MessageTypeText && m.Type != MessageTypeImage {
-		return errors.New("invalid message type")
-	}
+	// if m.Type != MessageTypeText && m.Type != MessageTypeImage {
+	// 	return errors.New("invalid message type")
+	// }
 
 	// Validate content based on type
 	switch m.Type {

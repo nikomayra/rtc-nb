@@ -20,13 +20,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
         return (
           <div className="message-content">
             <img
-              src={helpers.getFullURL(message.content.thumbnailurl ?? "")}
+              src={helpers.getFullURL(message.content.thumbnailUrl ?? "")}
               alt="thumbnail"
               onClick={() => setIsOpen(true)}
               className="message-thumbnail"
             />
             <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Image Preview">
-              <img src={helpers.getFullURL(message.content.fileurl ?? "")} alt="full-size" />
+              <img src={helpers.getFullURL(message.content.fileUrl ?? "")} alt="full-size" />
               {/* TODO: Add download button */}
             </Modal>
             {message.content.text && <p>{message.content.text}</p>}

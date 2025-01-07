@@ -13,8 +13,14 @@
   flex: 1 1 0%;
   width: 100%;
   min-height: 100px;
-  background-color: var(--sketch-bg-color);
   cursor: crosshair;
+  overflow: scroll;
+  background-color: var(--sketch-bg-color);
+}
+
+.sketch-board canvas {
+  background-color: var(--sketch-board-color);
+  border: 2px dashed goldenrod;
 }
 
 .sketch-toolbar {
@@ -48,4 +54,46 @@
 
 .sketch-config button {
   margin: 0 10px;
+}
+
+
+/* Style for the dropdown */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-toggle {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+.dropdown-list {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  top: 100%; /* Places the list below the button */
+  left: 0;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.dropdown-item {
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  color: black;
+}
+
+.dropdown-item:hover {
+  background-color: #f0f0f0;
 }

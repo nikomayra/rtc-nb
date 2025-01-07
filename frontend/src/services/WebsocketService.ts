@@ -1,5 +1,6 @@
 import { IncomingMessage, IncomingMessageSchema, OutgoingMessage } from "../types/interfaces";
 import { BASE_URL } from "../utils/constants";
+import { convertKeysToCamelCase, convertKeysToSnakeCase } from "../utils/dataFormatter";
 
 export class WebSocketService {
   private static instance: WebSocketService;
@@ -47,7 +48,8 @@ export class WebSocketService {
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        const message = IncomingMessageSchema.parse(data);
+        const formattedMessage = convertKeysToCamelCase(data); // Convert incoming messages to camelCase for Javascript
+        const message = IncomingMessageSchema.parse(formattedMessage);
         this.messageHandler?.(message);
       } catch (error) {
         console.error("Failed to parse message:", error);
@@ -57,7 +59,8 @@ export class WebSocketService {
 
   send(message: OutgoingMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+      const formattedMessage = convertKeysToSnakeCase(message); // Convert outgoing message to snake_case for Go Lang
+      this.ws.send(JSON.stringify(formattedMessage));
     }
   }
 

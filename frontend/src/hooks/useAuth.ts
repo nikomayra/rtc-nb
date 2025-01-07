@@ -102,7 +102,7 @@ export const useAuth = () => {
 
   const deleteAccount = async (): Promise<void> => {
     try {
-      const response = await authApi.deleteAccount();
+      const response = await authApi.deleteAccount(token);
       if (response.success) {
         sessionStorage.removeItem("token");
         sessionStorage.removeItem("username");

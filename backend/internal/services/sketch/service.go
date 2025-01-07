@@ -20,11 +20,14 @@ func NewService(dbStore *database.Store, connMgr connections.Manager) *Service {
 	return &Service{dbStore: dbStore, connMgr: connMgr}
 }
 
-func (s *Service) CreateSketch(ctx context.Context, channelName, displayName string, width, height int, createdBy string) error {
+func (s *Service) CreateSketch(ctx context.Context, channelName, displayName string, width, height int, createdBy string) (*models.Sketch, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	sketch := models.NewSketch(channelName, displayName, width, height, createdBy)
-	return s.dbStore.CreateSketch(ctx, sketch)
+	if err := s.dbStore.CreateSketch(ctx, sketch); err != nil {
+		return nil, fmt.Errorf("failed to create sketch: %w", err)
+	}
+	return sketch, nil
 }
 
 func (s *Service) GetSketch(ctx context.Context, ID string) (*models.Sketch, error) {
@@ -72,7 +75,7 @@ func (s *Service) UpdateSketch(ctx context.Context, sketch *models.Sketch) error
 	return tx.Commit()
 }
 
-func (s *Service) DeleteSketch(ctx context.Context, channelName, ID string) error {
+func (s *Service) DeleteSketch(ctx context.Context, ID string) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -93,7 +96,7 @@ func (s *Service) DeleteSketch(ctx context.Context, channelName, ID string) erro
 	}
 
 	// If not creator, check if user is channel admin
-	isAdmin, err := s.dbStore.IsUserAdmin(ctx, channelName, claims.Username)
+	isAdmin, err := s.dbStore.IsUserAdmin(ctx, sketch.ChannelName, claims.Username)
 	if err != nil {
 		return fmt.Errorf("failed to check admin status: %w", err)
 	}

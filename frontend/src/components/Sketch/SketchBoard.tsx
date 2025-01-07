@@ -1,17 +1,17 @@
 import "../../styles/components/sketch.css";
 import { useEffect, useRef, useState, useCallback, useContext } from "react";
-import { DrawPath, SketchUpdate, MessageType, IncomingMessage } from "../../types/interfaces";
+import { DrawPath, SketchUpdate, MessageType, IncomingMessage, Sketch } from "../../types/interfaces";
 import { WebSocketContext } from "../../contexts/webSocketContext";
 import { ChatContext } from "../../contexts/chatContext";
 
 interface SketchBoardProps {
   channelName: string;
-  sketchId: string;
+  currentSketch: Sketch;
   drawing: boolean;
   strokeWidth: number;
 }
 
-export const SketchBoard = ({ channelName, sketchId, drawing, strokeWidth }: SketchBoardProps) => {
+export const SketchBoard = ({ channelName, currentSketch, drawing, strokeWidth }: SketchBoardProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // const containerRef = useRef<HTMLDivElement>(null);
   const [isInteracting, setIsInteracting] = useState(drawing);
@@ -33,7 +33,7 @@ export const SketchBoard = ({ channelName, sketchId, drawing, strokeWidth }: Ske
 
     const bounds = calculateBounds(currentPath.points);
     const update: SketchUpdate = {
-      sketchId,
+      sketchId: currentSketch.id,
       region: {
         start: bounds.start,
         end: bounds.end,
@@ -51,7 +51,7 @@ export const SketchBoard = ({ channelName, sketchId, drawing, strokeWidth }: Ske
     }
 
     setCurrentPath((prev) => ({ ...prev, points: [] }));
-  }, [wsService, currentPath, sketchId, channelName]);
+  }, [wsService, currentPath, currentSketch, channelName]);
 
   useEffect(() => {
     if (currentPath.points.length === 0) return;
@@ -91,10 +91,10 @@ export const SketchBoard = ({ channelName, sketchId, drawing, strokeWidth }: Ske
   // }, [containerRef]);
 
   const calculateBounds = (points: { x: number; y: number }[]) => {
-    const minX = Math.min(...points.map((p) => p.x));
-    const minY = Math.min(...points.map((p) => p.y));
-    const maxX = Math.max(...points.map((p) => p.x));
-    const maxY = Math.max(...points.map((p) => p.y));
+    const minX = ~~Math.min(...points.map((p) => p.x)); // Fast bitwise truncation
+    const minY = ~~Math.min(...points.map((p) => p.y));
+    const maxX = ~~Math.max(...points.map((p) => p.x));
+    const maxY = ~~Math.max(...points.map((p) => p.y));
     return { start: { x: minX, y: minY }, end: { x: maxX, y: maxY } };
   };
 
@@ -121,7 +121,9 @@ export const SketchBoard = ({ channelName, sketchId, drawing, strokeWidth }: Ske
     if (!point || !isValidPoint(point)) return;
 
     const prevPoint = currentPath.points[currentPath.points.length - 1];
-    drawPath(prevPoint, point, drawing ? "white" : "black", strokeWidth); // Draw/Erase
+    if (prevPoint) {
+      drawPath(prevPoint, point, drawing ? "white" : "black", strokeWidth); // Draw/Erase
+    }
 
     setCurrentPath((prev) => ({ ...prev, points: [...prev.points, point] }));
 
@@ -146,8 +148,8 @@ export const SketchBoard = ({ channelName, sketchId, drawing, strokeWidth }: Ske
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = ~~(e.clientX - rect.left); // Fast bitwise truncation
+    const y = ~~(e.clientY - rect.top);
     return { x, y };
   };
 
@@ -179,7 +181,7 @@ export const SketchBoard = ({ channelName, sketchId, drawing, strokeWidth }: Ske
       if (message.type !== MessageType.SketchUpdate) return;
 
       const update = message.content.sketchUpdate as SketchUpdate;
-      if (update.sketchId !== sketchId) return;
+      if (update.sketchId !== currentSketch.id) return;
 
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -192,7 +194,7 @@ export const SketchBoard = ({ channelName, sketchId, drawing, strokeWidth }: Ske
         }
       });
     },
-    [sketchId, drawPath]
+    [currentSketch, drawPath]
   );
 
   useEffect(() => {
@@ -200,10 +202,45 @@ export const SketchBoard = ({ channelName, sketchId, drawing, strokeWidth }: Ske
     return () => wsService.actions.setMessageHandler(() => {});
   }, [wsService, handleSketchUpdate]);
 
+  // Init on-load draw sketch from database
+  const loadCurrentSketch = useCallback(() => {
+    console.log("Drawing selected sketch...");
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Clear the canvas before drawing
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Iterate through the regions
+    Object.keys(currentSketch.regions).forEach((regionKey) => {
+      const region = currentSketch.regions[regionKey];
+
+      // Iterate through each path in the region
+      region.paths.forEach((path) => {
+        const points = path.points;
+
+        // Draw each segment of the path
+        for (let i = 1; i < points.length; i++) {
+          drawPath(points[i - 1], points[i], path.isDrawing ? "white" : "black", path.strokeWidth);
+        }
+      });
+    });
+  }, [currentSketch.regions, drawPath]);
+
+  // Load when currentSketch changes
+  useEffect(() => {
+    loadCurrentSketch();
+  }, [currentSketch, loadCurrentSketch]);
+
   return (
     <div className="sketch-board">
       <canvas
         ref={canvasRef}
+        width={currentSketch.width}
+        height={currentSketch.height}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onMouseMove={handleMouseMove}

@@ -338,19 +338,20 @@ func (s *Store) CreateSketch(ctx context.Context, sketch *models.Sketch) error {
 }
 
 func (s *Store) UpdateSketchWithTx(ctx context.Context, tx *sql.Tx, sketch *models.Sketch) error {
-	var currentSketch models.Sketch
-	err := tx.StmtContext(ctx, s.statements.SelectSketchByID).
-		QueryRowContext(ctx, sketch.ID).
-		Scan(
-			&currentSketch.ID,
-			&currentSketch.ChannelName,
-			&currentSketch.DisplayName,
-			&currentSketch.Width,
-			&currentSketch.Height,
-			&currentSketch.Regions,
-			&currentSketch.CreatedAt,
-			&currentSketch.CreatedBy,
-		)
+	// var currentSketch models.Sketch
+	// err := tx.StmtContext(ctx, s.statements.SelectSketchByID).
+	// 	QueryRowContext(ctx, sketch.ID).
+	// 	Scan(
+	// 		&currentSketch.ID,
+	// 		&currentSketch.ChannelName,
+	// 		&currentSketch.DisplayName,
+	// 		&currentSketch.Width,
+	// 		&currentSketch.Height,
+	// 		&currentSketch.Regions,
+	// 		&currentSketch.CreatedAt,
+	// 		&currentSketch.CreatedBy,
+	// 	)
+	currentSketch, err := s.GetSketch(ctx, sketch.ID)
 	if err != nil {
 		return fmt.Errorf("select sketch: %w", err)
 	}
@@ -360,8 +361,14 @@ func (s *Store) UpdateSketchWithTx(ctx context.Context, tx *sql.Tx, sketch *mode
 		currentSketch.Regions[k] = v
 	}
 
+	var updatedRegionsJSON []byte
+	updatedRegionsJSON, err = json.Marshal(currentSketch.Regions)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated regions: %w", err)
+	}
+
 	_, err = tx.StmtContext(ctx, s.statements.UpdateSketchRegions).
-		ExecContext(ctx, sketch.ID, currentSketch.Regions)
+		ExecContext(ctx, sketch.ID, updatedRegionsJSON)
 	if err != nil {
 		return fmt.Errorf("update sketch regions: %w", err)
 	}

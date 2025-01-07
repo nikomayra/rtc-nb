@@ -45,13 +45,11 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 
 	protected.HandleFunc("/upload", handlers.UploadHandler).Methods("POST")
 	protected.HandleFunc("/getMessages/{channelName}", handlers.GetMessagesHandler).Methods("GET")
-	// protected.HandleFunc("/images/{filename}", handlers.ServeImageHandler).Methods("GET")
-	// protected.HandleFunc("/thumbnails/{filename}", handlers.ServeThumbnailHandler).Methods("GET")
 
 	protected.HandleFunc("/createSketch", handlers.CreateSketchHandler).Methods("POST")
-	protected.HandleFunc("/getSketch", handlers.GetSketchHandler).Methods("GET")
+	protected.HandleFunc("/channels/{channelName}/sketches/{sketchId}", handlers.GetSketchHandler).Methods("GET")
 	protected.HandleFunc("/getSketches/{channelName}", handlers.GetSketchesHandler).Methods("GET")
-	protected.HandleFunc("/deleteSketch", handlers.DeleteSketchHandler).Methods("DELETE")
+	protected.HandleFunc("/deleteSketch/{sketchId}", handlers.DeleteSketchHandler).Methods("DELETE")
 }
 
 func defaultRoute(w http.ResponseWriter, r *http.Request) {

@@ -52,20 +52,24 @@ export const SketchContainer = () => {
     getSketches();
   }, [chatContext.state.currentChannel, authContext.state.token]);
 
-  const handleCurrentSketch = async (sketch: Sketch) => {
+  const handleCurrentSketch = (sketch: Sketch) => {
     setCurrentSketch(sketch);
   };
 
-  const handleDeleteSketch = async () => {
+  const handleDeleteSketch = async (id: string) => {
     try {
-      const response = await axiosInstance.post(`${BASE_URL}/deleteSketch`, {
-        id: currentSketch?.id,
-        channelName: chatContext.state.currentChannel ?? "",
+      const response = await axiosInstance.delete(`${BASE_URL}/deleteSketch/${id}`, {
+        headers: {
+          Authorization: `Bearer ${authContext.state.token}`,
+        },
       });
       if (response.data.success) {
-        setCurrentSketch(null);
+        setSketches((prev) => prev.filter((sketch) => sketch.id !== id));
+        if (currentSketch?.id === id) {
+          setCurrentSketch(null);
+        }
       } else {
-        console.error("Failed to create sketch:", response.data.error);
+        console.error("Failed to delete sketch:", response.data.error);
       }
     } catch (error) {
       if (isAxiosError(error)) {
@@ -88,7 +92,7 @@ export const SketchContainer = () => {
         <>
           <SketchBoard
             channelName={chatContext.state.currentChannel ?? ""}
-            sketchId={currentSketch.id}
+            currentSketch={currentSketch}
             drawing={drawing}
             strokeWidth={strokeWidth}
           />

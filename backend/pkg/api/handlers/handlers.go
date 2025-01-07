@@ -178,8 +178,8 @@ func (h *Handlers) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ChannelName     string  `json:"channelName"`
-		ChannelPassword *string `json:"channelPassword"`
+		ChannelName     string  `json:"name"`
+		ChannelPassword *string `json:"password"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -210,9 +210,9 @@ func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ChannelName        string  `json:"channelName"`
-		ChannelDescription *string `json:"channelDescription"`
-		ChannelPassword    *string `json:"channelPassword"`
+		ChannelName        string  `json:"name"`
+		ChannelDescription *string `json:"description"`
+		ChannelPassword    *string `json:"password"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -369,8 +369,6 @@ func (h *Handlers) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	// Add cases for other file types as needed:
 	case strings.HasPrefix(contentType, "video/"):
 		uploadResult, uploadErr = h.chatService.HandleVideoUpload(ctx, file, header, channelName, claims.Username)
-	case strings.HasPrefix(contentType, "audio/"):
-		uploadResult, uploadErr = h.chatService.HandleAudioUpload(ctx, file, header, channelName, claims.Username)
 	default:
 		responses.SendError(w, "Unsupported content type", http.StatusBadRequest)
 		return
@@ -404,8 +402,8 @@ func (h *Handlers) DeleteAccountHandler(w http.ResponseWriter, r *http.Request) 
 
 func (h *Handlers) CreateSketchHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ChannelName string `json:"channelName"`
-		DisplayName string `json:"displayName"`
+		ChannelName string `json:"channel_name"`
+		DisplayName string `json:"display_name"`
 		Width       int    `json:"width"`
 		Height      int    `json:"height"`
 	}
@@ -451,14 +449,14 @@ func (h *Handlers) CreateSketchHandler(w http.ResponseWriter, r *http.Request) {
 		responses.SendError(w, "Max resolution 1280x720", http.StatusBadRequest)
 		return
 	}
-
-	if err := h.sketchService.CreateSketch(ctx, req.ChannelName, req.DisplayName, req.Width, req.Height, claims.Username); err != nil {
+	sketch, err := h.sketchService.CreateSketch(ctx, req.ChannelName, req.DisplayName, req.Width, req.Height, claims.Username)
+	if err != nil {
 		log.Printf("Error creating sketch: %v", err)
 		responses.SendError(w, "Failed to create sketch", http.StatusInternalServerError)
 		return
 	}
 
-	responses.SendSuccess(w, "Sketch created successfully", http.StatusCreated)
+	responses.SendSuccess(w, sketch, http.StatusCreated)
 }
 
 func (h *Handlers) GetSketchHandler(w http.ResponseWriter, r *http.Request) {
@@ -471,7 +469,7 @@ func (h *Handlers) GetSketchHandler(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	channelName := vars["channelName"]
-	sketchID := vars["sketchId"]
+	sketchId := vars["sketchId"]
 
 	// Validate channel membership
 	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
@@ -485,7 +483,7 @@ func (h *Handlers) GetSketchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sketch, err := h.sketchService.GetSketch(ctx, sketchID)
+	sketch, err := h.sketchService.GetSketch(ctx, sketchId)
 	if err != nil {
 		log.Printf("Error getting sketch: %v", err)
 		responses.SendError(w, "Failed to get sketch", http.StatusInternalServerError)
@@ -537,22 +535,16 @@ func (h *Handlers) GetSketchesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) DeleteSketchHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ID          string `json:"id"`
-		ChannelName string `json:"channelName"`
-	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		responses.SendError(w, "Invalid request format", http.StatusBadRequest)
+	vars := mux.Vars(r)
+	sketchId := vars["sketchId"]
+
+	if sketchId == "" {
+		responses.SendError(w, "Sketch ID required", http.StatusBadRequest)
 		return
 	}
 
-	if req.ChannelName == "" {
-		responses.SendError(w, "Channel name required", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.sketchService.DeleteSketch(r.Context(), req.ChannelName, req.ID); err != nil {
+	if err := h.sketchService.DeleteSketch(r.Context(), sketchId); err != nil {
 		log.Printf("Error deleting sketch: %v", err)
 		responses.SendError(w, "Failed to delete sketch", http.StatusInternalServerError)
 		return

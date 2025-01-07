@@ -138,7 +138,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await axiosInstance.patch(
         `${BASE_URL}/joinchannel`,
-        { channelName, channelPassword: password },
+        { name: channelName, password: password },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (res.data.success) {
@@ -158,9 +158,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await axiosInstance.post(
         `${BASE_URL}/createchannel`,
         {
-          channelName: channelName,
-          channelDescription: description,
-          channelPassword: password,
+          name: channelName,
+          description: description,
+          password: password,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );

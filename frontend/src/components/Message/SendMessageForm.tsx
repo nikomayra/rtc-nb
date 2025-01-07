@@ -53,8 +53,8 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
             type: MessageType.Image,
             content: {
               text: message, // Optional message
-              fileurl: response.data.data.imagePath,
-              thumbnailurl: response.data.data.thumbnailPath,
+              fileUrl: response.data.data.imagePath,
+              thumbnailUrl: response.data.data.thumbnailPath,
             },
           };
           onSend(outgoingMessage);

@@ -1,6 +1,6 @@
 import "../../styles/components/sketch.css";
 import { RegionlessSketch, Sketch, SketchSchema } from "../../types/interfaces";
-import SketchItem from "./SketchItem";
+import SketchList from "./SketchList";
 import { axiosInstance, isAxiosError } from "../../api/axiosInstance";
 import { BASE_URL } from "../../utils/constants";
 import { useState } from "react";
@@ -11,7 +11,7 @@ interface SketchConfigProps {
   sketches: RegionlessSketch[];
   currentSketch: (sketch: Sketch) => void;
   channelName: string;
-  deleteSketch: () => Promise<void>;
+  deleteSketch: (id: string) => Promise<void>;
   token: string;
 }
 
@@ -25,6 +25,7 @@ export const SketchConfig = ({ sketches, channelName, token, currentSketch, dele
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const handleCreateSketch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,21 +88,24 @@ export const SketchConfig = ({ sketches, channelName, token, currentSketch, dele
     }
   };
 
-  const handleDeleteSketch = async () => {
+  const handleDeleteSketch = async (id: string) => {
     console.log("Delete Sketch");
-    await deleteSketch();
+    await deleteSketch(id);
+  };
+
+  const toggleDropdown = () => {
+    setIsDropdownOpen((prev) => !prev);
   };
 
   return (
     <div className="sketch-config">
-      <select name="sketch-select" id="sketch-select" defaultValue="default">
-        <option value="default" disabled>
-          Select your Sketch...
-        </option>
-        {sketches.map((sketch) => (
-          <SketchItem key={sketch.id} sketch={sketch} onSelect={handleSelectSketch} />
-        ))}
-      </select>
+      <SketchList
+        sketches={sketches}
+        onSelect={handleSelectSketch}
+        onDelete={handleDeleteSketch}
+        toggleDropdown={toggleDropdown}
+        isOpen={isDropdownOpen}
+      />
       <button onClick={() => setIsOpen(true)}>Create Sketch</button>
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Create Sketch">
         <form onSubmit={handleCreateSketch}>
@@ -130,7 +134,6 @@ export const SketchConfig = ({ sketches, channelName, token, currentSketch, dele
           <button type="submit">Create Sketch</button>
         </form>
       </Modal>
-      <button onClick={handleDeleteSketch}>Delete Sketch</button>
     </div>
   );
 };

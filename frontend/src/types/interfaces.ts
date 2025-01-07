@@ -75,8 +75,8 @@ const URLSchema = z.string().refine((val) => {
 const messageContentSchema = z
   .object({
     text: z.string().optional(),
-    fileurl: URLSchema.optional(),
-    thumbnailurl: URLSchema.optional(),
+    fileUrl: URLSchema.optional(),
+    thumbnailUrl: URLSchema.optional(),
     sketchUpdate: SketchUpdateSchema.optional(),
   })
   .refine(
@@ -86,7 +86,7 @@ const messageContentSchema = z
         return data.sketchUpdate.sketchId !== undefined && data.sketchUpdate.region !== undefined;
       }
       // For file messages
-      if (data.fileurl !== undefined) {
+      if (data.fileUrl !== undefined) {
         return true; // text is optional for file messages
       }
       // For text-only messages

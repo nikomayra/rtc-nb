@@ -10,7 +10,10 @@
   --text-light: rgba(255, 255, 255, 0.87);
   --border-light: #2c64e6;
   --border-dark: #17359f;
-  --sketch-bg-color: #000000;
+
+  /* Sketch Feature */
+  --sketch-bg-color: #5c5c5c;
+  --sketch-board-color: #2d2d2d;
 
   /* Spacing */
   --spacing-xs: 0.25rem;
