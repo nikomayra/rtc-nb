@@ -1,103 +1,52 @@
 import "../../styles/components/sketch.css";
-import { useEffect, useRef, useState, useCallback, useContext } from "react";
+import { useEffect, useState, useCallback, useContext } from "react";
 import { DrawPath, SketchUpdate, MessageType, IncomingMessage, Sketch } from "../../types/interfaces";
 import { WebSocketContext } from "../../contexts/webSocketContext";
-import { ChatContext } from "../../contexts/chatContext";
+import { useSketchActions } from "../../hooks/useSketchActions";
+import { useCanvas } from "../../hooks/useCanvas";
 
 interface SketchBoardProps {
-  channelName: string;
   currentSketch: Sketch;
   drawing: boolean;
   strokeWidth: number;
+  sketchActions: ReturnType<typeof useSketchActions>;
+  canvasOps: ReturnType<typeof useCanvas>;
 }
 
-export const SketchBoard = ({ channelName, currentSketch, drawing, strokeWidth }: SketchBoardProps) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  // const containerRef = useRef<HTMLDivElement>(null);
-  const [isInteracting, setIsInteracting] = useState(drawing);
+export const SketchBoard = ({ currentSketch, drawing, strokeWidth, sketchActions, canvasOps }: SketchBoardProps) => {
+  const [isInteracting, setIsInteracting] = useState(false);
   const [currentPath, setCurrentPath] = useState<DrawPath>({
     points: [],
     isDrawing: drawing,
     strokeWidth: strokeWidth,
   });
-  const bufferTimeoutRef = useRef<NodeJS.Timeout>();
-  const BUFFER_INTERVAL = 100; // ms
-  const POINTS_PER_PATH = 50;
+  const POINTS_PER_PATH = 20;
 
   const wsService = useContext(WebSocketContext);
-  const chatContext = useContext(ChatContext);
-  if (!wsService || !chatContext) throw new Error("WebSocketContext or ChatContext not found");
+  if (!wsService) throw new Error("WebSocketContext not found");
+
+  // Update current path when drawing/strokeWidth changes
+  useEffect(() => {
+    setCurrentPath((prev) => ({
+      ...prev,
+      isDrawing: drawing,
+      strokeWidth: strokeWidth,
+    }));
+  }, [drawing, strokeWidth]);
 
   const flushBuffer = useCallback(() => {
     if (currentPath.points.length === 0) return;
-
-    const bounds = calculateBounds(currentPath.points);
-    const update: SketchUpdate = {
-      sketchId: currentSketch.id,
-      region: {
-        start: bounds.start,
-        end: bounds.end,
-        paths: [currentPath],
-      },
-    };
-    try {
-      wsService.actions.send({
-        channelName,
-        type: MessageType.SketchUpdate,
-        content: { sketchUpdate: update },
-      });
-    } catch (error) {
-      console.error("Error sending sketch update:", error);
-    }
-
+    sketchActions.addPath(currentPath);
     setCurrentPath((prev) => ({ ...prev, points: [] }));
-  }, [wsService, currentPath, currentSketch, channelName]);
+  }, [currentPath, sketchActions]);
 
+  // Flush buffer if points exceed limit
   useEffect(() => {
     if (currentPath.points.length === 0) return;
-
-    if (bufferTimeoutRef.current) {
-      clearTimeout(bufferTimeoutRef.current);
-    }
-
-    if (currentPath.points.length >= POINTS_PER_PATH) {
-      flushBuffer();
-    } else {
-      bufferTimeoutRef.current = setTimeout(flushBuffer, BUFFER_INTERVAL);
-    }
-
-    return () => {
-      if (bufferTimeoutRef.current) {
-        clearTimeout(bufferTimeoutRef.current);
-      }
-    };
+    if (currentPath.points.length >= POINTS_PER_PATH) flushBuffer();
   }, [currentPath.points, flushBuffer]);
 
-  // useEffect(() => {
-  //   const updateCanvasSize = () => {
-  //     if (canvasRef.current && containerRef.current) {
-  //       canvasRef.current.width = containerRef.current.clientWidth;
-  //       canvasRef.current.height = containerRef.current.clientHeight;
-  //     }
-  //   };
-  //   const resizeObserver = new ResizeObserver(updateCanvasSize);
-  //   if (containerRef.current) {
-  //     resizeObserver.observe(containerRef.current);
-  //   }
-  //   updateCanvasSize();
-  //   return () => {
-  //     resizeObserver.disconnect();
-  //   };
-  // }, [containerRef]);
-
-  const calculateBounds = (points: { x: number; y: number }[]) => {
-    const minX = ~~Math.min(...points.map((p) => p.x)); // Fast bitwise truncation
-    const minY = ~~Math.min(...points.map((p) => p.y));
-    const maxX = ~~Math.max(...points.map((p) => p.x));
-    const maxY = ~~Math.max(...points.map((p) => p.y));
-    return { start: { x: minX, y: minY }, end: { x: maxX, y: maxY } };
-  };
-
+  // Mouse events
   const handleMouseUp = () => {
     flushBuffer();
     setIsInteracting(false);
@@ -117,84 +66,43 @@ export const SketchBoard = ({ channelName, currentSketch, drawing, strokeWidth }
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isInteracting) return;
 
-    const point = getCanvasPoint(e);
-    if (!point || !isValidPoint(point)) return;
+    const point = canvasOps.getCanvasPoint(e);
+    if (!point || !canvasOps.isValidPoint(point)) return;
 
     const prevPoint = currentPath.points[currentPath.points.length - 1];
     if (prevPoint) {
-      drawPath(prevPoint, point, drawing ? "white" : "black", strokeWidth); // Draw/Erase
+      canvasOps.drawPath(prevPoint, point, drawing, strokeWidth);
     }
 
     setCurrentPath((prev) => ({ ...prev, points: [...prev.points, point] }));
-
-    // Set buffer flush timeout
-    if (bufferTimeoutRef.current) {
-      clearTimeout(bufferTimeoutRef.current);
-    }
-    if (currentPath.points.length >= 50) {
-      flushBuffer();
-    } else {
-      bufferTimeoutRef.current = setTimeout(flushBuffer, BUFFER_INTERVAL);
-    }
   };
 
-  const isValidPoint = (point: { x: number; y: number }) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return false;
-    return point.x >= 0 && point.y >= 0 && point.x < canvas.width && point.y < canvas.height;
-  };
-
-  const getCanvasPoint = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = ~~(e.clientX - rect.left); // Fast bitwise truncation
-    const y = ~~(e.clientY - rect.top);
-    return { x, y };
-  };
-
-  const drawPath = useCallback(
-    (
-      prevPoint: { x: number; y: number },
-      currentPoint: { x: number; y: number },
-      color: string,
-      strokeWidth: number
-    ) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.beginPath();
-      ctx.moveTo(prevPoint.x, prevPoint.y);
-      ctx.lineTo(currentPoint.x, currentPoint.y);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = strokeWidth;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.stroke();
-    },
-    []
-  );
-
+  // Draw received sketch updates
   const handleSketchUpdate = useCallback(
     (message: IncomingMessage) => {
-      if (message.type !== MessageType.SketchUpdate) return;
+      if (message.type === MessageType.SketchUpdate) {
+        if (message.type !== MessageType.SketchUpdate) return;
 
-      const update = message.content.sketchUpdate as SketchUpdate;
-      if (update.sketchId !== currentSketch.id) return;
+        const update = message.content.sketchUpdate as SketchUpdate;
+        if (update.sketchId !== currentSketch.id) return;
 
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+        const canvas = canvasOps.canvasRef.current;
+        if (!canvas) return;
 
-      // Draw each path in the update
-      update.region.paths.forEach((path) => {
-        const points = path.points;
-        for (let i = 1; i < points.length; i++) {
-          drawPath(points[i - 1], points[i], path.isDrawing ? "white" : "black", path.strokeWidth);
+        // Draw each path in the update
+        update.region.paths.forEach((path) => {
+          const points = path.points;
+          for (let i = 1; i < points.length; i++) {
+            canvasOps.drawPath(points[i - 1], points[i], path.isDrawing, path.strokeWidth);
+          }
+        });
+      } else if (message.type === MessageType.ClearSketch) {
+        if (message.content.clearSketch === currentSketch.id) {
+          canvasOps.clear();
         }
-      });
+      }
     },
-    [currentSketch, drawPath]
+    [currentSketch.id, canvasOps]
   );
 
   useEffect(() => {
@@ -205,14 +113,11 @@ export const SketchBoard = ({ channelName, currentSketch, drawing, strokeWidth }
   // Init on-load draw sketch from database
   const loadCurrentSketch = useCallback(() => {
     console.log("Drawing selected sketch...");
-    const canvas = canvasRef.current;
+    const canvas = canvasOps.canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
     // Clear the canvas before drawing
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvasOps.clear();
 
     // Iterate through the regions
     Object.keys(currentSketch.regions).forEach((regionKey) => {
@@ -224,11 +129,11 @@ export const SketchBoard = ({ channelName, currentSketch, drawing, strokeWidth }
 
         // Draw each segment of the path
         for (let i = 1; i < points.length; i++) {
-          drawPath(points[i - 1], points[i], path.isDrawing ? "white" : "black", path.strokeWidth);
+          canvasOps.drawPath(points[i - 1], points[i], path.isDrawing, path.strokeWidth);
         }
       });
     });
-  }, [currentSketch.regions, drawPath]);
+  }, [currentSketch.regions, canvasOps]);
 
   // Load when currentSketch changes
   useEffect(() => {
@@ -238,7 +143,7 @@ export const SketchBoard = ({ channelName, currentSketch, drawing, strokeWidth }
   return (
     <div className="sketch-board">
       <canvas
-        ref={canvasRef}
+        ref={canvasOps.canvasRef}
         width={currentSketch.width}
         height={currentSketch.height}
         onMouseDown={handleMouseDown}

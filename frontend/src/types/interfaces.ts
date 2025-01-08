@@ -62,10 +62,8 @@ export const RegionlessSketchSchema = z.object({
 export enum MessageType {
   Text = 0,
   Image = 1,
-  Video = 2,
-  Audio = 3,
-  Document = 4,
-  SketchUpdate = 5,
+  SketchUpdate = 2,
+  ClearSketch = 3,
 }
 
 const URLSchema = z.string().refine((val) => {
@@ -78,6 +76,7 @@ const messageContentSchema = z
     fileUrl: URLSchema.optional(),
     thumbnailUrl: URLSchema.optional(),
     sketchUpdate: SketchUpdateSchema.optional(),
+    clearSketch: z.string().uuid().optional(),
   })
   .refine(
     (data) => {
@@ -85,6 +84,12 @@ const messageContentSchema = z
       if (data.sketchUpdate !== undefined) {
         return data.sketchUpdate.sketchId !== undefined && data.sketchUpdate.region !== undefined;
       }
+
+      // For clear sketch messages
+      if (data.clearSketch !== undefined) {
+        return data.clearSketch !== undefined;
+      }
+
       // For file messages
       if (data.fileUrl !== undefined) {
         return true; // text is optional for file messages
@@ -94,7 +99,7 @@ const messageContentSchema = z
     },
     {
       message:
-        "Message must be either: (1) text message with optional file, (2) file message with optional text, or (3) sketch message with both sketchid and region",
+        "Message must be either: (1) text message with optional file, (2) file message with optional text, or (3) sketch message with both sketchid and region, or (4) clear sketch message with sketchid",
     }
   );
 

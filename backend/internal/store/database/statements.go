@@ -29,11 +29,12 @@ type Statements struct {
 
 	SelectUserChannel *sql.Stmt // username
 
-	InsertSketch     *sql.Stmt // id, channel_name, width, height, regions
-	SelectSketchByID *sql.Stmt // id
-	SelectSketches   *sql.Stmt // channel_name
+	InsertSketch        *sql.Stmt // id, channel_name, width, height, regions
+	SelectSketchByID    *sql.Stmt // id
+	SelectSketches      *sql.Stmt // channel_name
 	UpdateSketchRegions *sql.Stmt // id, regions
-	DeleteSketch     *sql.Stmt // id
+	DeleteSketch        *sql.Stmt // id
+	ClearSketchRegions  *sql.Stmt // id
 }
 
 func PrepareStatements(db *sql.DB) (*Statements, error) {
@@ -197,6 +198,13 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 	if s.DeleteSketch, err = prepare(`
         DELETE FROM sketches WHERE id = $1`); err != nil {
 		return nil, fmt.Errorf("prepare delete sketch: %w", err)
+	}
+
+	if s.ClearSketchRegions, err = prepare(`
+        UPDATE sketches 
+        SET regions = '{}'::jsonb 
+    	WHERE id = $1`); err != nil {
+		return nil, fmt.Errorf("prepare clear sketch regions: %w", err)
 	}
 
 	return s, nil

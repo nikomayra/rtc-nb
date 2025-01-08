@@ -338,19 +338,6 @@ func (s *Store) CreateSketch(ctx context.Context, sketch *models.Sketch) error {
 }
 
 func (s *Store) UpdateSketchWithTx(ctx context.Context, tx *sql.Tx, sketch *models.Sketch) error {
-	// var currentSketch models.Sketch
-	// err := tx.StmtContext(ctx, s.statements.SelectSketchByID).
-	// 	QueryRowContext(ctx, sketch.ID).
-	// 	Scan(
-	// 		&currentSketch.ID,
-	// 		&currentSketch.ChannelName,
-	// 		&currentSketch.DisplayName,
-	// 		&currentSketch.Width,
-	// 		&currentSketch.Height,
-	// 		&currentSketch.Regions,
-	// 		&currentSketch.CreatedAt,
-	// 		&currentSketch.CreatedBy,
-	// 	)
 	currentSketch, err := s.GetSketch(ctx, sketch.ID)
 	if err != nil {
 		return fmt.Errorf("select sketch: %w", err)
@@ -429,6 +416,27 @@ func (s *Store) DeleteSketch(ctx context.Context, sketchID string) error {
 	defer s.mu.Unlock()
 	_, err := s.statements.DeleteSketch.ExecContext(ctx, sketchID)
 	return err
+}
+
+func (s *Store) ClearSketchRegions(ctx context.Context, sketchID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	result, err := s.statements.ClearSketchRegions.ExecContext(ctx, sketchID)
+	if err != nil {
+		return fmt.Errorf("failed to clear sketch regions: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no sketch found with id: %s", sketchID)
+	}
+
+	return nil
 }
 
 func (s *Store) BeginTx(ctx context.Context) (*sql.Tx, error) {

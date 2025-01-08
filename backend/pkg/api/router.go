@@ -40,7 +40,7 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 	protected.HandleFunc("/channels", handlers.GetChannelsHandler).Methods("GET")
 
 	protected.HandleFunc("/validatetoken", handlers.ValidateTokenHandler).Methods("GET")
-	protected.HandleFunc("/logout", handlers.LogoutHandler).Methods("POST")
+	protected.HandleFunc("/logout", handlers.LogoutHandler).Methods("PATCH")
 	protected.HandleFunc("/deleteaccount", handlers.DeleteAccountHandler).Methods("DELETE")
 
 	protected.HandleFunc("/upload", handlers.UploadHandler).Methods("POST")
@@ -50,6 +50,7 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 	protected.HandleFunc("/channels/{channelName}/sketches/{sketchId}", handlers.GetSketchHandler).Methods("GET")
 	protected.HandleFunc("/getSketches/{channelName}", handlers.GetSketchesHandler).Methods("GET")
 	protected.HandleFunc("/deleteSketch/{sketchId}", handlers.DeleteSketchHandler).Methods("DELETE")
+	protected.HandleFunc("/clearSketch", handlers.ClearSketchHandler).Methods("POST")
 }
 
 func defaultRoute(w http.ResponseWriter, r *http.Request) {

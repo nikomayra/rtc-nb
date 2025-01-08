@@ -9,16 +9,27 @@ import { BASE_URL } from "../../utils/constants";
 import { SketchConfig } from "./SketchConfig";
 import { AuthContext } from "../../contexts/authContext";
 import { z } from "zod";
+import { useSketchActions } from "../../hooks/useSketchActions";
+import { useCanvas } from "../../hooks/useCanvas";
 
 export const SketchContainer = () => {
-  const chatContext = useContext(ChatContext);
-  const authContext = useContext(AuthContext);
-  const [drawing, setDrawing] = useState(false);
+  const [drawing, setDrawing] = useState<boolean>(true);
   const [sketches, setSketches] = useState<RegionlessSketch[]>([]);
   const [currentSketch, setCurrentSketch] = useState<Sketch | null>(null);
-  const [strokeWidth, setStrokeWidth] = useState(2);
+  const [strokeWidth, setStrokeWidth] = useState<number>(2);
 
+  const chatContext = useContext(ChatContext);
+  const authContext = useContext(AuthContext);
   if (!chatContext || !authContext) throw new Error("Chat or Auth context not found");
+
+  const canvasOps = useCanvas(currentSketch?.width ?? 0, currentSketch?.height ?? 0);
+
+  const sketchActions = useSketchActions(
+    chatContext.state.currentChannel ?? "",
+    currentSketch?.id ?? "",
+    canvasOps.drawFullPath,
+    canvasOps.calculateBounds
+  );
 
   useEffect(() => {
     if (!authContext.state.token || !chatContext.state.currentChannel) return;
@@ -79,6 +90,18 @@ export const SketchContainer = () => {
     }
   };
 
+  const handleDrawing = (value: boolean) => {
+    setDrawing(value);
+  };
+
+  const handleStrokeWidth = (value: number) => {
+    if (value > 10) {
+      console.error("Stroke width cannot exceed 10px");
+      return;
+    }
+    setStrokeWidth(value);
+  };
+
   return (
     <div className="sketch-container">
       <SketchConfig
@@ -91,12 +114,20 @@ export const SketchContainer = () => {
       {currentSketch && (
         <>
           <SketchBoard
-            channelName={chatContext.state.currentChannel ?? ""}
             currentSketch={currentSketch}
             drawing={drawing}
             strokeWidth={strokeWidth}
+            sketchActions={sketchActions}
+            canvasOps={canvasOps}
           />
-          <SketchToolbar setDrawing={setDrawing} setStrokeWidth={setStrokeWidth} />
+          <SketchToolbar
+            setDrawing={handleDrawing}
+            setStrokeWidth={handleStrokeWidth}
+            sketchActions={sketchActions}
+            clearCanvas={canvasOps.clear}
+            currentSketchId={currentSketch.id}
+            channelName={chatContext.state.currentChannel ?? ""}
+          />
         </>
       )}
     </div>

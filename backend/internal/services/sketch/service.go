@@ -108,6 +108,14 @@ func (s *Service) DeleteSketch(ctx context.Context, ID string) error {
 	return fmt.Errorf("unauthorized: only sketch creator or channel admin can delete sketches")
 }
 
-// func (s *SketchService) SaveSketch(ctx context.Context, sketch *models.Sketch) error {
-// 	return nil
-// }
+func (s *Service) ClearSketch(ctx context.Context, ID string) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Clear the regions in the database
+	if err := s.dbStore.ClearSketchRegions(ctx, ID); err != nil {
+		return fmt.Errorf("failed to clear sketch regions: %w", err)
+	}
+
+	return nil
+}

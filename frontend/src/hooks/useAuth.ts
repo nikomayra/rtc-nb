@@ -80,7 +80,7 @@ export const useAuth = () => {
 
   const logout = async (): Promise<void> => {
     try {
-      const response = await authApi.logout();
+      const response = await authApi.logout(token);
       if (response.success) {
         sessionStorage.removeItem("token");
         sessionStorage.removeItem("username");

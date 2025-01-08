@@ -12,10 +12,8 @@ type MessageType int
 const (
 	MessageTypeText MessageType = iota
 	MessageTypeImage
-	MessageTypeVideo
-	MessageTypeAudio
-	MessageTypeDocument
 	MessageTypeSketchUpdate
+	MessageTypeClearSketch
 )
 
 type SketchUpdate struct {
@@ -28,6 +26,7 @@ type MessageContent struct {
 	FileURL      *string       `json:"file_url,omitempty"`
 	ThumbnailURL *string       `json:"thumbnail_url,omitempty"`
 	SketchUpdate *SketchUpdate `json:"sketch_update,omitempty"`
+	ClearSketch  *string       `json:"clear_sketch,omitempty"` // id of sketch to clear
 }
 
 type IncomingMessage struct {
@@ -60,17 +59,17 @@ func (m *IncomingMessage) Validate() error {
 		if m.Content.Text == nil {
 			return errors.New("text content required for text message")
 		}
-	case MessageTypeImage, MessageTypeVideo:
+	case MessageTypeImage:
 		if m.Content.FileURL == nil || m.Content.ThumbnailURL == nil {
 			return errors.New("file and thumbnail URLs required for file message")
-		}
-	case MessageTypeAudio, MessageTypeDocument:
-		if m.Content.FileURL == nil {
-			return errors.New("file URL required for audio or document message")
 		}
 	case MessageTypeSketchUpdate:
 		if m.Content.SketchUpdate.SketchID == "" && len(m.Content.SketchUpdate.Region.Paths) == 0 {
 			return errors.New("sketch ID and region paths required for sketch message")
+		}
+	case MessageTypeClearSketch:
+		if m.Content.ClearSketch == nil {
+			return errors.New("sketch ID required for clear sketch message")
 		}
 	default:
 		return errors.New("invalid message type")
@@ -95,6 +94,10 @@ func NewMessage(incoming *IncomingMessage, username string) (*Message, error) {
 }
 
 func (m *Message) RequiresPersistence() bool {
-	// TODO: TBD, no persistence for private messages between users.
-	return true
+	switch m.Type {
+	case MessageTypeClearSketch:
+		return false
+	default:
+		return true
+	}
 }

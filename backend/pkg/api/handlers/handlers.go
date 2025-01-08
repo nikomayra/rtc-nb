@@ -367,8 +367,6 @@ func (h *Handlers) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(contentType, "image/"):
 		uploadResult, uploadErr = h.chatService.HandleImageUpload(ctx, file, header, channelName, claims.Username)
 	// Add cases for other file types as needed:
-	case strings.HasPrefix(contentType, "video/"):
-		uploadResult, uploadErr = h.chatService.HandleVideoUpload(ctx, file, header, channelName, claims.Username)
 	default:
 		responses.SendError(w, "Unsupported content type", http.StatusBadRequest)
 		return
@@ -551,6 +549,54 @@ func (h *Handlers) DeleteSketchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	responses.SendSuccess(w, "Sketch deleted successfully", http.StatusOK)
+}
+
+func (h *Handlers) ClearSketchHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ChannelName string `json:"channel_name"`
+		SketchId    string `json:"sketch_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.SendError(w, "Invalid request format", http.StatusBadRequest)
+		return
+	}
+
+	if req.SketchId == "" {
+		responses.SendError(w, "Sketch ID required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Validate channel membership
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
+	if err != nil {
+		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
+		return
+	}
+
+	if userChannel != req.ChannelName {
+		responses.SendError(w, "Not a member of this channel", http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.sketchService.ClearSketch(ctx, req.SketchId); err != nil {
+		log.Printf("Error clearing sketch: %v", err)
+		responses.SendError(w, "Failed to clear sketch", http.StatusInternalServerError)
+		return
+	}
+
+	responses.SendSuccess(w, "Sketch cleared successfully", http.StatusOK)
 }
 
 func (h *Handlers) GetMessagesHandler(w http.ResponseWriter, r *http.Request) {

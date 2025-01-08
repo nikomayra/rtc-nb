@@ -19,8 +19,10 @@ export const authApi = {
     return res.data;
   },
 
-  logout: async (): Promise<APIResponse<{ message: string }>> => {
-    const res = await axiosInstance.post(`${BASE_URL}/logout`);
+  logout: async (token: string): Promise<APIResponse<{ message: string }>> => {
+    const res = await axiosInstance.patch(`${BASE_URL}/logout`, null, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     return res.data;
   },
 
