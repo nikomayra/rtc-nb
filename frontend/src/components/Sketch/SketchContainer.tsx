@@ -1,27 +1,23 @@
 import { SketchBoard } from "./SketchBoard";
-import { SketchToolbar } from "./SketchToolbar";
 import "../../styles/components/sketch.css";
-import { useEffect, useState, useContext } from "react";
-import { RegionlessSketch, RegionlessSketchSchema, Sketch } from "../../types/interfaces";
-import { axiosInstance, isAxiosError } from "../../api/axiosInstance";
+import { useContext, useCallback, useEffect } from "react";
+import { DrawPath, SketchUpdate } from "../../types/interfaces";
 import { ChatContext } from "../../contexts/chatContext";
-import { BASE_URL } from "../../utils/constants";
-import { SketchConfig } from "./SketchConfig";
 import { AuthContext } from "../../contexts/authContext";
-import { z } from "zod";
+import { SketchConfig } from "./SketchConfig";
+
+import { useSketchWebSocket } from "../../hooks/useSketchWebSocket";
 import { useSketchActions } from "../../hooks/useSketchActions";
-import { useCanvas } from "../../hooks/useCanvas";
+import useCanvas from "../../hooks/useCanvas";
+import { SketchContext } from "../../contexts/sketchContext";
 
 export const SketchContainer = () => {
-  const [drawing, setDrawing] = useState<boolean>(true);
-  const [sketches, setSketches] = useState<RegionlessSketch[]>([]);
-  const [currentSketch, setCurrentSketch] = useState<Sketch | null>(null);
-  const [strokeWidth, setStrokeWidth] = useState<number>(2);
-
+  const sketchContext = useContext(SketchContext);
   const chatContext = useContext(ChatContext);
   const authContext = useContext(AuthContext);
-  if (!chatContext || !authContext) throw new Error("Chat or Auth context not found");
+  if (!sketchContext || !chatContext || !authContext) throw new Error("Context not found");
 
+  const currentSketch = sketchContext.state.currentSketch;
   const canvasOps = useCanvas(currentSketch?.width ?? 0, currentSketch?.height ?? 0);
 
   const sketchActions = useSketchActions(
@@ -31,105 +27,93 @@ export const SketchContainer = () => {
     canvasOps.calculateBounds
   );
 
+  console.log("SketchContainer render", {
+    currentSketchId: currentSketch?.id,
+    canvasOpsId: canvasOps?.canvasRef.current?.id,
+  });
+
   useEffect(() => {
-    if (!authContext.state.token || !chatContext.state.currentChannel) return;
+    console.log("Canvas ops changed", {
+      canvasOpsId: canvasOps?.canvasRef.current?.id,
+    });
+  }, [canvasOps]);
 
-    const getSketches = async () => {
-      try {
-        const response = await axiosInstance.get(
-          `${BASE_URL}/getSketches/${encodeURIComponent(chatContext.state.currentChannel!)}`,
-          {
-            headers: {
-              Authorization: `Bearer ${authContext.state.token}`,
-            },
-          }
-        );
-        if (response.data.success) {
-          const validatedSketches = z.array(RegionlessSketchSchema).parse(response.data.data);
-          setSketches(validatedSketches);
-        } else {
-          console.error("Failed to get sketches:", response.data.error);
-        }
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          console.error("Invalid sketch data:", error.errors);
-        }
-        if (isAxiosError(error)) {
-          console.error("Failed to get sketches:", error.response?.data?.message);
-        }
-        throw error;
-      }
-    };
-    getSketches();
-  }, [chatContext.state.currentChannel, authContext.state.token]);
+  // Handle completed paths from SketchBoard
+  const handlePathComplete = useCallback(
+    (path: DrawPath) => {
+      if (!currentSketch) return;
+      canvasOps.addPath(path); // Add to canvas state
+      sketchActions.addPath(path); // Send to backend
+    },
+    [currentSketch, canvasOps, sketchActions]
+  );
 
-  const handleCurrentSketch = (sketch: Sketch) => {
-    setCurrentSketch(sketch);
-  };
-
-  const handleDeleteSketch = async (id: string) => {
-    try {
-      const response = await axiosInstance.delete(`${BASE_URL}/deleteSketch/${id}`, {
-        headers: {
-          Authorization: `Bearer ${authContext.state.token}`,
-        },
+  // Handle WebSocket updates
+  const handleUpdate = useCallback(
+    (update: SketchUpdate) => {
+      update.region.paths.forEach((path) => {
+        canvasOps.drawFullPath(path);
       });
-      if (response.data.success) {
-        setSketches((prev) => prev.filter((sketch) => sketch.id !== id));
-        if (currentSketch?.id === id) {
-          setCurrentSketch(null);
-        }
-      } else {
-        console.error("Failed to delete sketch:", response.data.error);
-      }
-    } catch (error) {
-      if (isAxiosError(error)) {
-        console.error("Failed to delete sketch:", error.response?.data?.message);
-      }
-      throw error;
-    }
-  };
+    },
+    [canvasOps]
+  );
 
-  const handleDrawing = (value: boolean) => {
-    setDrawing(value);
-  };
+  // Setup WebSocket handling
+  useSketchWebSocket(currentSketch?.id, handleUpdate, canvasOps.clear);
 
-  const handleStrokeWidth = (value: number) => {
-    if (value > 10) {
-      console.error("Stroke width cannot exceed 10px");
+  //handle initial sketch loading
+  useEffect(() => {
+    if (!currentSketch?.regions) {
+      console.log("No regions found in sketch");
       return;
     }
-    setStrokeWidth(value);
-  };
+
+    // console.log("Loading sketch regions:", Object.keys(currentSketch.regions).length);
+
+    // Clear canvas first
+    canvasOps.clear();
+
+    // Draw all paths from all regions
+    Object.values(currentSketch.regions).forEach((region) => {
+      if (!region.paths) {
+        console.log("No paths in region");
+        return;
+      }
+      // console.log(`Drawing region with ${region.paths.length} paths`);
+      region.paths.forEach((path) => {
+        if (path.points.length > 1) {
+          // console.log(`Drawing path with ${path.points.length} points`);
+
+          for (let i = 1; i < path.points.length; i++) {
+            canvasOps.drawPath(
+              path.points[i - 1],
+              path.points[i],
+              path.isDrawing ?? true, // Default to true if undefined
+              path.strokeWidth ?? 2 // Default to 2 if undefined
+            );
+          }
+        }
+      });
+    });
+  }, [currentSketch, canvasOps]);
+
+  if (!currentSketch) {
+    return (
+      <div className="sketch-container">
+        <SketchConfig channelName={chatContext.state.currentChannel ?? ""} token={authContext.state.token ?? ""} />
+      </div>
+    );
+  }
 
   return (
     <div className="sketch-container">
-      <SketchConfig
-        sketches={sketches}
-        channelName={chatContext.state.currentChannel ?? ""}
-        token={authContext.state.token ?? ""}
-        currentSketch={handleCurrentSketch}
-        deleteSketch={handleDeleteSketch}
+      <SketchConfig channelName={chatContext.state.currentChannel ?? ""} token={authContext.state.token ?? ""} />
+      <SketchBoard
+        onPathComplete={handlePathComplete}
+        canvasOps={canvasOps}
+        onClear={canvasOps.clear}
+        sketchActions={sketchActions}
       />
-      {currentSketch && (
-        <>
-          <SketchBoard
-            currentSketch={currentSketch}
-            drawing={drawing}
-            strokeWidth={strokeWidth}
-            sketchActions={sketchActions}
-            canvasOps={canvasOps}
-          />
-          <SketchToolbar
-            setDrawing={handleDrawing}
-            setStrokeWidth={handleStrokeWidth}
-            sketchActions={sketchActions}
-            clearCanvas={canvasOps.clear}
-            currentSketchId={currentSketch.id}
-            channelName={chatContext.state.currentChannel ?? ""}
-          />
-        </>
-      )}
     </div>
   );
 };

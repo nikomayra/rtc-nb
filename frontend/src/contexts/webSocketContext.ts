@@ -1,6 +1,11 @@
 import { createContext } from "react";
 import { IncomingMessage, OutgoingMessage } from "../types/interfaces";
 
+export type MessageHandlers = {
+  onChatMessage?: (message: IncomingMessage) => void;
+  onSketchMessage?: (message: IncomingMessage) => void;
+};
+
 interface WebSocketContext {
   state: {
     isConnected: boolean;
@@ -9,7 +14,7 @@ interface WebSocketContext {
     connect: (token: string, channelName: string) => void;
     disconnect: () => void;
     send: (message: OutgoingMessage) => void;
-    setMessageHandler: (handler: (message: IncomingMessage) => void) => void;
+    setMessageHandlers: (handlers: MessageHandlers) => void;
   };
 }
 

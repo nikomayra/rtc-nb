@@ -28,10 +28,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleMessage = useCallback((message: IncomingMessage) => {
     if (message.type !== MessageType.SketchUpdate) {
-      setMessages((prev) => ({
-        ...prev,
-        [message.channelName]: [...(prev[message.channelName] || []), message],
-      }));
+      console.log("💬 Received chat message:", message);
+      setMessages((prev) => {
+        const newMessages = {
+          ...prev,
+          [message.channelName]: [...(prev[message.channelName] || []), message],
+        };
+        console.log("Updated messages state:", newMessages);
+        return newMessages;
+      });
     }
   }, []);
 
@@ -67,7 +72,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Set the message handler for the WebSocket
   useEffect(() => {
-    wsContext.actions.setMessageHandler(handleMessage);
+    wsContext.actions.setMessageHandlers({
+      onChatMessage: handleMessage,
+    });
   }, [wsContext, handleMessage]);
 
   // Connect to the WebSocket when the token and currentChannel are available

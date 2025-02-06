@@ -1,35 +1,35 @@
-import { useContext } from "react";
-import { useSketchActions } from "../../hooks/useSketchActions";
-import "../../styles/components/sketch.css";
-import { BASE_URL } from "../../utils/constants";
-import { AuthContext } from "../../contexts/authContext";
-import { axiosInstance } from "../../api/axiosInstance";
+import { useCallback, useContext } from "react";
 import { WebSocketContext } from "../../contexts/webSocketContext";
+import { AuthContext } from "../../contexts/authContext";
 import { MessageType } from "../../types/interfaces";
-import { isAxiosError } from "axios";
+import { axiosInstance } from "../../api/axiosInstance";
+import { BASE_URL } from "../../utils/constants";
+import "../../styles/components/sketch.css";
 
 interface SketchToolbarProps {
-  setStrokeWidth: (value: number) => void;
-  setDrawing: (value: boolean) => void;
-  sketchActions: ReturnType<typeof useSketchActions>;
-  clearCanvas: () => void;
+  onClear: () => void;
   currentSketchId: string;
   channelName: string;
+  isDrawing: boolean;
+  setIsDrawing: (value: boolean) => void;
+  strokeWidth: number;
+  setStrokeWidth: (value: number) => void;
 }
 
 export const SketchToolbar = ({
-  setDrawing,
-  setStrokeWidth,
-  sketchActions,
-  clearCanvas,
+  onClear,
   currentSketchId,
   channelName,
+  isDrawing,
+  setIsDrawing,
+  strokeWidth,
+  setStrokeWidth,
 }: SketchToolbarProps) => {
   const wsService = useContext(WebSocketContext);
   const authContext = useContext(AuthContext);
   if (!wsService || !authContext) throw new Error("Context not found");
 
-  const handleClear = async () => {
+  const handleClear = useCallback(async () => {
     try {
       const response = await axiosInstance.post(
         `${BASE_URL}/clearSketch`,
@@ -45,8 +45,7 @@ export const SketchToolbar = ({
       );
 
       if (response.data.success) {
-        clearCanvas();
-        // Send WebSocket message to clear other clients
+        onClear();
         wsService.actions.send({
           channelName,
           type: MessageType.ClearSketch,
@@ -54,36 +53,25 @@ export const SketchToolbar = ({
         });
       }
     } catch (error) {
-      if (isAxiosError(error)) {
-        console.error("Failed to clear sketch:", error.response?.data?.message);
-      }
-      throw error;
+      console.error("Failed to clear sketch:", error);
     }
-  };
+  }, [currentSketchId, channelName, onClear, wsService.actions, authContext.state.token]);
 
   return (
     <div className="sketch-toolbar">
-      <button onClick={() => setDrawing(true)}>Pen🖊️</button>
-      <button onClick={() => setDrawing(false)}>Eraser🧹</button>
-      <label htmlFor="stroke-width">Stroke Width</label>
-      <select id="stroke-width" onChange={(e) => setStrokeWidth(parseInt(e.target.value))} defaultValue={2}>
-        <option value={1}>1</option>
-        <option value={2}>2</option>
-        <option value={3}>3</option>
-        <option value={4}>4</option>
-        <option value={5}>5</option>
-        <option value={6}>6</option>
-        <option value={7}>7</option>
-        <option value={8}>8</option>
-        <option value={9}>9</option>
-        <option value={10}>10</option>
+      <button onClick={() => setIsDrawing(true)} className={isDrawing ? "active" : ""}>
+        Pen🖊️
+      </button>
+      <button onClick={() => setIsDrawing(false)} className={!isDrawing ? "active" : ""}>
+        Eraser🧹
+      </button>
+      <select value={strokeWidth} onChange={(e) => setStrokeWidth(Number(e.target.value))}>
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((width) => (
+          <option key={width} value={width}>
+            {width}
+          </option>
+        ))}
       </select>
-      <button onClick={() => sketchActions.undo()} disabled={!sketchActions.canUndo()}>
-        Undo◀️
-      </button>
-      <button onClick={() => sketchActions.redo()} disabled={!sketchActions.canRedo()}>
-        Redo▶️
-      </button>
       <button onClick={handleClear}>Clear🗑️</button>
     </div>
   );

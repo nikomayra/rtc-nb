@@ -1,15 +1,34 @@
-import { useEffect, useState } from "react";
-import { WebSocketContext } from "../../contexts/webSocketContext";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { WebSocketContext, MessageHandlers } from "../../contexts/webSocketContext";
 import { WebSocketService } from "../../services/WebsocketService";
-import { IncomingMessage, OutgoingMessage } from "../../types/interfaces";
+import { IncomingMessage, MessageType } from "../../types/interfaces";
 
 export const WebSocketProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const wsService = WebSocketService.getInstance();
+  const handlers = useRef<MessageHandlers>({});
 
-  // Update connection state periodically
+  const handleMessage = useCallback((message: IncomingMessage) => {
+    console.log("📨 WebSocket message received:", {
+      type: message.type,
+      handlers: Object.keys(handlers.current),
+    });
+
+    if (message.type === MessageType.SketchUpdate || message.type === MessageType.ClearSketch) {
+      handlers.current.onSketchMessage?.(message);
+    } else {
+      handlers.current.onChatMessage?.(message);
+    }
+  }, []);
+
+  // Set up WebSocket message handler
+  useEffect(() => {
+    wsService.setMessageHandler(handleMessage);
+  }, [wsService, handleMessage]);
+
+  // Update connection state
   useEffect(() => {
     const interval = setInterval(() => {
       setIsConnected(wsService.isConnected());
@@ -22,17 +41,14 @@ export const WebSocketProvider: React.FC<{
       isConnected,
     },
     actions: {
-      connect: (token: string, channelName: string) => {
-        wsService.connect(token, channelName);
-      },
-      disconnect: () => {
-        wsService.disconnect();
-      },
-      send: (message: OutgoingMessage) => {
-        wsService.send(message);
-      },
-      setMessageHandler: (handler: (message: IncomingMessage) => void) => {
-        wsService.setMessageHandler(handler);
+      connect: wsService.connect.bind(wsService),
+      disconnect: wsService.disconnect.bind(wsService),
+      send: wsService.send.bind(wsService),
+      setMessageHandlers: (newHandlers: MessageHandlers) => {
+        handlers.current = {
+          ...handlers.current,
+          ...newHandlers,
+        };
       },
     },
   };

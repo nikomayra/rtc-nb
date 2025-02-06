@@ -1,156 +1,109 @@
 import "../../styles/components/sketch.css";
-import { useEffect, useState, useCallback, useContext } from "react";
-import { DrawPath, SketchUpdate, MessageType, IncomingMessage, Sketch } from "../../types/interfaces";
-import { WebSocketContext } from "../../contexts/webSocketContext";
+import { useState, useCallback, useRef, memo } from "react";
+import { DrawPath } from "../../types/interfaces";
+import useCanvas from "../../hooks/useCanvas";
 import { useSketchActions } from "../../hooks/useSketchActions";
-import { useCanvas } from "../../hooks/useCanvas";
 
 interface SketchBoardProps {
-  currentSketch: Sketch;
-  drawing: boolean;
-  strokeWidth: number;
-  sketchActions: ReturnType<typeof useSketchActions>;
+  onPathComplete: (path: DrawPath) => void;
   canvasOps: ReturnType<typeof useCanvas>;
+  onClear: () => void;
+  sketchActions: ReturnType<typeof useSketchActions>;
 }
 
-export const SketchBoard = ({ currentSketch, drawing, strokeWidth, sketchActions, canvasOps }: SketchBoardProps) => {
+export const SketchBoard = memo(({ onPathComplete, canvasOps, onClear, sketchActions }: SketchBoardProps) => {
+  const [isDrawing, setIsDrawing] = useState(true);
+  const [strokeWidth, setStrokeWidth] = useState(2);
   const [isInteracting, setIsInteracting] = useState(false);
-  const [currentPath, setCurrentPath] = useState<DrawPath>({
+
+  const currentPathRef = useRef<DrawPath>({
     points: [],
-    isDrawing: drawing,
-    strokeWidth: strokeWidth,
+    isDrawing,
+    strokeWidth,
   });
-  const POINTS_PER_PATH = 20;
 
-  const wsService = useContext(WebSocketContext);
-  if (!wsService) throw new Error("WebSocketContext not found");
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      setIsInteracting(true);
+      const point = canvasOps.getCanvasPoint(e);
+      if (!point || !canvasOps.isValidPoint(point)) return;
 
-  // Update current path when drawing/strokeWidth changes
-  useEffect(() => {
-    setCurrentPath((prev) => ({
-      ...prev,
-      isDrawing: drawing,
-      strokeWidth: strokeWidth,
-    }));
-  }, [drawing, strokeWidth]);
+      currentPathRef.current = {
+        points: [point],
+        isDrawing,
+        strokeWidth,
+      };
+    },
+    [canvasOps, isDrawing, strokeWidth]
+  );
 
-  const flushBuffer = useCallback(() => {
-    if (currentPath.points.length === 0) return;
-    sketchActions.addPath(currentPath);
-    setCurrentPath((prev) => ({ ...prev, points: [] }));
-  }, [currentPath, sketchActions]);
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!isInteracting) return;
 
-  // Flush buffer if points exceed limit
-  useEffect(() => {
-    if (currentPath.points.length === 0) return;
-    if (currentPath.points.length >= POINTS_PER_PATH) flushBuffer();
-  }, [currentPath.points, flushBuffer]);
+      const point = canvasOps.getCanvasPoint(e);
+      if (!point || !canvasOps.isValidPoint(point)) return;
 
-  // Mouse events
-  const handleMouseUp = () => {
-    flushBuffer();
-    setIsInteracting(false);
-  };
+      const prevPoint = currentPathRef.current.points[currentPathRef.current.points.length - 1];
+      if (prevPoint) {
+        canvasOps.drawPath(prevPoint, point, isDrawing, strokeWidth);
+      }
 
-  const handleMouseDown = () => {
-    setIsInteracting(true);
-  };
+      currentPathRef.current.points.push(point);
+    },
+    [canvasOps, isInteracting, isDrawing, strokeWidth]
+  );
 
-  const handleMouseLeave = () => {
-    if (isInteracting) {
-      flushBuffer();
-      setIsInteracting(false);
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseUp = useCallback(() => {
     if (!isInteracting) return;
 
-    const point = canvasOps.getCanvasPoint(e);
-    if (!point || !canvasOps.isValidPoint(point)) return;
-
-    const prevPoint = currentPath.points[currentPath.points.length - 1];
-    if (prevPoint) {
-      canvasOps.drawPath(prevPoint, point, drawing, strokeWidth);
+    if (currentPathRef.current.points.length > 0) {
+      onPathComplete(currentPathRef.current);
     }
 
-    setCurrentPath((prev) => ({ ...prev, points: [...prev.points, point] }));
-  };
-
-  // Draw received sketch updates
-  const handleSketchUpdate = useCallback(
-    (message: IncomingMessage) => {
-      if (message.type === MessageType.SketchUpdate) {
-        if (message.type !== MessageType.SketchUpdate) return;
-
-        const update = message.content.sketchUpdate as SketchUpdate;
-        if (update.sketchId !== currentSketch.id) return;
-
-        const canvas = canvasOps.canvasRef.current;
-        if (!canvas) return;
-
-        // Draw each path in the update
-        update.region.paths.forEach((path) => {
-          const points = path.points;
-          for (let i = 1; i < points.length; i++) {
-            canvasOps.drawPath(points[i - 1], points[i], path.isDrawing, path.strokeWidth);
-          }
-        });
-      } else if (message.type === MessageType.ClearSketch) {
-        if (message.content.clearSketch === currentSketch.id) {
-          canvasOps.clear();
-        }
-      }
-    },
-    [currentSketch.id, canvasOps]
-  );
-
-  useEffect(() => {
-    wsService.actions.setMessageHandler(handleSketchUpdate);
-    return () => wsService.actions.setMessageHandler(() => {});
-  }, [wsService, handleSketchUpdate]);
-
-  // Init on-load draw sketch from database
-  const loadCurrentSketch = useCallback(() => {
-    console.log("Drawing selected sketch...");
-    const canvas = canvasOps.canvasRef.current;
-    if (!canvas) return;
-
-    // Clear the canvas before drawing
-    canvasOps.clear();
-
-    // Iterate through the regions
-    Object.keys(currentSketch.regions).forEach((regionKey) => {
-      const region = currentSketch.regions[regionKey];
-
-      // Iterate through each path in the region
-      region.paths.forEach((path) => {
-        const points = path.points;
-
-        // Draw each segment of the path
-        for (let i = 1; i < points.length; i++) {
-          canvasOps.drawPath(points[i - 1], points[i], path.isDrawing, path.strokeWidth);
-        }
-      });
-    });
-  }, [currentSketch.regions, canvasOps]);
-
-  // Load when currentSketch changes
-  useEffect(() => {
-    loadCurrentSketch();
-  }, [currentSketch, loadCurrentSketch]);
+    setIsInteracting(false);
+    currentPathRef.current = {
+      points: [],
+      isDrawing,
+      strokeWidth,
+    };
+  }, [isInteracting, isDrawing, strokeWidth, onPathComplete]);
 
   return (
-    <div className="sketch-board">
-      <canvas
-        ref={canvasOps.canvasRef}
-        width={currentSketch.width}
-        height={currentSketch.height}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-      ></canvas>
+    <div className="sketch-board-container">
+      <div className="sketch-board">
+        <canvas
+          ref={canvasOps.canvasRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        />
+      </div>
+      <div className="sketch-toolbar">
+        <button onClick={() => setIsDrawing(true)} className={isDrawing ? "active" : ""}>
+          Pen🖊️
+        </button>
+        <button onClick={() => setIsDrawing(false)} className={!isDrawing ? "active" : ""}>
+          Eraser🧹
+        </button>
+        <select value={strokeWidth} onChange={(e) => setStrokeWidth(Number(e.target.value))}>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((width) => (
+            <option key={width} value={width}>
+              {width}
+            </option>
+          ))}
+        </select>
+        <button onClick={onClear}>Clear🗑️</button>
+        <button onClick={sketchActions.undo} disabled={!sketchActions.canUndo()}>
+          Undo↩️
+        </button>
+        <button onClick={sketchActions.redo} disabled={!sketchActions.canRedo()}>
+          Redo↪️
+        </button>
+      </div>
     </div>
   );
-};
+});
+
+SketchBoard.displayName = "SketchBoard";

@@ -1,21 +1,19 @@
 import "../../styles/components/sketch.css";
-import { RegionlessSketch, Sketch, SketchSchema } from "../../types/interfaces";
+import { RegionlessSketch, SketchSchema } from "../../types/interfaces";
 import SketchList from "./SketchList";
 import { axiosInstance, isAxiosError } from "../../api/axiosInstance";
 import { BASE_URL } from "../../utils/constants";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { z } from "zod";
 import { Modal } from "../Generic/Modal";
+import { SketchContext } from "../../contexts/sketchContext";
 
 interface SketchConfigProps {
-  sketches: RegionlessSketch[];
-  currentSketch: (sketch: Sketch) => void;
   channelName: string;
-  deleteSketch: (id: string) => Promise<void>;
   token: string;
 }
 
-export const SketchConfig = ({ sketches, channelName, token, currentSketch, deleteSketch }: SketchConfigProps) => {
+export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
   //  ChannelName string `json:"channelName"`
   // 	DisplayName string `json:"displayName"`
   // 	Width       int    `json:"width"`
@@ -27,9 +25,12 @@ export const SketchConfig = ({ sketches, channelName, token, currentSketch, dele
   const [isOpen, setIsOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
+  const sketchContext = useContext(SketchContext);
+  if (!sketchContext) throw new Error("SketchContext not found");
+
   const handleCreateSketch = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Create Sketch");
+    // console.log("Create Sketch");
     setIsOpen(false);
     try {
       const response = await axiosInstance.post(
@@ -49,7 +50,7 @@ export const SketchConfig = ({ sketches, channelName, token, currentSketch, dele
 
       if (response.data.success) {
         const validatedSketch = SketchSchema.parse(response.data.data);
-        currentSketch(validatedSketch);
+        sketchContext.actions.setCurrentSketch(validatedSketch);
       } else {
         console.error("Failed to create sketch:", response.data.error);
       }
@@ -65,7 +66,7 @@ export const SketchConfig = ({ sketches, channelName, token, currentSketch, dele
   };
 
   const handleSelectSketch = async (sketch: RegionlessSketch) => {
-    console.log("Select Sketch", sketch);
+    // console.log("Select Sketch", sketch);
     try {
       const response = await axiosInstance.get(`${BASE_URL}/channels/${sketch.channelName}/sketches/${sketch.id}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -73,7 +74,7 @@ export const SketchConfig = ({ sketches, channelName, token, currentSketch, dele
 
       if (response.data.success) {
         const sketchWithRegions = SketchSchema.parse(response.data.data);
-        currentSketch(sketchWithRegions);
+        sketchContext.actions.setCurrentSketch(sketchWithRegions);
       } else {
         console.error("Failed to get sketch:", response.data.error);
       }
@@ -89,8 +90,27 @@ export const SketchConfig = ({ sketches, channelName, token, currentSketch, dele
   };
 
   const handleDeleteSketch = async (id: string) => {
-    console.log("Delete Sketch");
-    await deleteSketch(id);
+    // console.log("deleting sketch");
+    try {
+      const response = await axiosInstance.delete(`${BASE_URL}/deleteSketch/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.data.success) {
+        sketchContext.actions.removeSketch(id);
+        if (sketchContext.state.currentSketch?.id === id) {
+          sketchContext.actions.setCurrentSketch(null);
+        }
+      } else {
+        console.error("Failed to delete sketch:", response.data.error);
+      }
+    } catch (error) {
+      if (isAxiosError(error)) {
+        console.error("Failed to delete sketch:", error.response?.data?.message);
+      }
+      throw error;
+    }
   };
 
   const toggleDropdown = () => {
@@ -100,7 +120,7 @@ export const SketchConfig = ({ sketches, channelName, token, currentSketch, dele
   return (
     <div className="sketch-config">
       <SketchList
-        sketches={sketches}
+        sketches={sketchContext.state.sketches}
         onSelect={handleSelectSketch}
         onDelete={handleDeleteSketch}
         toggleDropdown={toggleDropdown}

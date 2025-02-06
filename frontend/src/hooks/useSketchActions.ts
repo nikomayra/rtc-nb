@@ -24,6 +24,11 @@ export function useSketchActions(
       if (!path.points.length) return;
 
       const bounds = calculateBounds(path.points);
+      console.log("📤 Sending Update:", {
+        bounds,
+        isInverse,
+        pathPoints: path.points.length,
+      });
       const update: SketchUpdate = {
         sketchId,
         region: {
@@ -51,6 +56,10 @@ export function useSketchActions(
     (path: DrawPath) => {
       undoStack.current.push(path);
       redoStack.current = [];
+      console.log("➕ Adding Path:", {
+        path,
+        undoStackSize: undoStack.current.length,
+      });
       sendSketchUpdate(path);
     },
     [sendSketchUpdate]
