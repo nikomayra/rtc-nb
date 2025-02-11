@@ -12,21 +12,30 @@ type MessageType int
 const (
 	MessageTypeText MessageType = iota
 	MessageTypeImage
-	MessageTypeSketchUpdate
-	MessageTypeClearSketch
+	MessageTypeSketch
 )
 
-type SketchUpdate struct {
-	SketchID string `json:"sketch_id"`
-	Region   Region `json:"region"`
+type SketchCommandType string
+
+const (
+	SketchCommandTypeUpdate SketchCommandType = "UPDATE"
+	SketchCommandTypeClear  SketchCommandType = "CLEAR"
+	SketchCommandTypeDelete SketchCommandType = "DELETE"
+	SketchCommandTypeNew    SketchCommandType = "NEW"
+)
+
+type SketchCommand struct {
+	CommandType SketchCommandType `json:"command_type"`
+	SketchID    string            `json:"sketch_id"`
+	Region      *Region           `json:"region,omitempty"`
+	SketchData  *Sketch           `json:"sketch_data,omitempty"`
 }
 
 type MessageContent struct {
-	Text         *string       `json:"text,omitempty"`
-	FileURL      *string       `json:"file_url,omitempty"`
-	ThumbnailURL *string       `json:"thumbnail_url,omitempty"`
-	SketchUpdate *SketchUpdate `json:"sketch_update,omitempty"`
-	ClearSketch  *string       `json:"clear_sketch,omitempty"` // id of sketch to clear
+	Text         *string        `json:"text,omitempty"`
+	FileURL      *string        `json:"file_url,omitempty"`
+	ThumbnailURL *string        `json:"thumbnail_url,omitempty"`
+	SketchCmd    *SketchCommand `json:"sketch_cmd,omitempty"`
 }
 
 type IncomingMessage struct {
@@ -49,11 +58,6 @@ func (m *IncomingMessage) Validate() error {
 		return errors.New("channel name required")
 	}
 
-	// if m.Type != MessageTypeText && m.Type != MessageTypeImage {
-	// 	return errors.New("invalid message type")
-	// }
-
-	// Validate content based on type
 	switch m.Type {
 	case MessageTypeText:
 		if m.Content.Text == nil {
@@ -63,13 +67,25 @@ func (m *IncomingMessage) Validate() error {
 		if m.Content.FileURL == nil || m.Content.ThumbnailURL == nil {
 			return errors.New("file and thumbnail URLs required for file message")
 		}
-	case MessageTypeSketchUpdate:
-		if m.Content.SketchUpdate.SketchID == "" && len(m.Content.SketchUpdate.Region.Paths) == 0 {
-			return errors.New("sketch ID and region paths required for sketch message")
+	case MessageTypeSketch:
+		if m.Content.SketchCmd == nil {
+			return errors.New("sketch command required for sketch message")
 		}
-	case MessageTypeClearSketch:
-		if m.Content.ClearSketch == nil {
-			return errors.New("sketch ID required for clear sketch message")
+		switch m.Content.SketchCmd.CommandType {
+		case SketchCommandTypeUpdate:
+			if m.Content.SketchCmd.SketchID == "" || m.Content.SketchCmd.Region == nil {
+				return errors.New("sketch ID and region required for sketch update")
+			}
+		case SketchCommandTypeClear, SketchCommandTypeDelete:
+			if m.Content.SketchCmd.SketchID == "" {
+				return errors.New("sketch ID required for sketch command")
+			}
+		case SketchCommandTypeNew:
+			if m.Content.SketchCmd.SketchID == "" || m.Content.SketchCmd.SketchData == nil {
+				return errors.New("sketch ID and sketch data required for new sketch")
+			}
+		default:
+			return errors.New("invalid sketch command type")
 		}
 	default:
 		return errors.New("invalid message type")
@@ -93,11 +109,11 @@ func NewMessage(incoming *IncomingMessage, username string) (*Message, error) {
 	}, nil
 }
 
-func (m *Message) RequiresPersistence() bool {
-	switch m.Type {
-	case MessageTypeClearSketch:
-		return false
-	default:
-		return true
-	}
-}
+// func (m *Message) RequiresPersistence() bool {
+// 	switch m.Type {
+// 	case MessageTypeSketch:
+// 		return false
+// 	default:
+// 		return true
+// 	}
+// }

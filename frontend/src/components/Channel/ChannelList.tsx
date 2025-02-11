@@ -1,9 +1,9 @@
-import { useContext } from 'react';
-import { ChatContext } from '../../contexts/chatContext';
-import { useAuthContext } from '../../hooks/useAuthContext';
-import { ChannelItem } from './ChannelItem';
-import { CreateChannelForm } from './CreateChannelForm';
-import '../../styles/components/channels.css';
+import { useContext } from "react";
+import { ChatContext } from "../../contexts/chatContext";
+import { useAuthContext } from "../../hooks/useAuthContext";
+import { ChannelItem } from "./ChannelItem";
+import { CreateChannelForm } from "./CreateChannelForm";
+import "../../styles/components/channels.css";
 
 export const ChannelList = () => {
   const chatContext = useContext(ChatContext);
@@ -16,11 +16,13 @@ export const ChannelList = () => {
   } = chatContext;
 
   const {
+    state: { username },
     actions: { logout },
   } = authContext;
 
   return (
-    <div className='channels-container'>
+    <div className="channels-container">
+      <span>{username}</span>
       {channels.map((channel) => (
         <ChannelItem
           key={channel.name}

@@ -72,36 +72,42 @@ func (sb *SketchBuffer) processMessages() {
 func (sb *SketchBuffer) flush(messages []*models.Message) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-    updates := make(map[string][]models.SketchUpdate)
-    
-    // Group updates by sketch ID
-    for _, msg := range messages {
-		if msg.Content.SketchUpdate == nil {
+	updates := make(map[string][]*models.SketchCommand)
+
+	// Group updates by sketch ID
+	for _, msg := range messages {
+		if msg.Type != models.MessageTypeSketch ||
+			msg.Content.SketchCmd == nil ||
+			msg.Content.SketchCmd.CommandType != models.SketchCommandTypeUpdate {
 			continue
 		}
-        updates[msg.Content.SketchUpdate.SketchID] = append(updates[msg.Content.SketchUpdate.SketchID], *msg.Content.SketchUpdate)
-    }
-    
-    // Process each sketch's updates
-    for sketchID, sketchUpdates := range updates {
-        sketch, err := sb.sketchService.GetSketch(ctx, sketchID)
-        if err != nil {
+		sketchId := msg.Content.SketchCmd.SketchID
+		updates[sketchId] = append(updates[sketchId], msg.Content.SketchCmd)
+	}
+
+	// Process each sketch's updates
+	for sketchID, commands := range updates {
+		sketch, err := sb.sketchService.GetSketch(ctx, sketchID)
+		if err != nil {
 			log.Printf("Error getting sketch %s: %v", sketchID, err)
-            continue
-        }
-        
-        // Process each update
-        for _, update := range sketchUpdates {
-            err := sketch.AddRegion(update.Region)
-            if err != nil {
-                log.Printf("Error adding region to sketch %s: %v", sketchID, err)
-                continue
-            }
-        }
-        
-        if err := sb.sketchService.UpdateSketch(ctx, sketch); err != nil {
-            log.Printf("Error updating sketch: %v", err)
-        }
-    }
+			continue
+		}
+
+		// Process each update
+		for _, cmd := range commands {
+			if cmd.Region == nil {
+				continue
+			}
+			err := sketch.AddRegion(*cmd.Region)
+			if err != nil {
+				log.Printf("Error adding region to sketch %s: %v", sketchID, err)
+				continue
+			}
+		}
+
+		if err := sb.sketchService.UpdateSketch(ctx, sketch); err != nil {
+			log.Printf("Error updating sketch: %v", err)
+		}
+	}
 	return nil
 }

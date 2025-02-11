@@ -1,22 +1,29 @@
 import { createContext } from "react";
-import { Sketch, RegionlessSketch } from "../types/interfaces";
+import { Sketch } from "../types/interfaces";
 
 export interface SketchContextState {
-  drawing: boolean;
-  strokeWidth: number;
   currentSketch: Sketch | null;
-  sketches: RegionlessSketch[];
+  sketches: Sketch[];
+  isLoading: boolean;
+  error: string | null;
 }
+
+export const initialState: SketchContextState = {
+  currentSketch: null,
+  sketches: [],
+  isLoading: false,
+  error: null,
+};
 
 interface SketchContextValue {
   state: SketchContextState;
   actions: {
-    setDrawing: (value: boolean) => void;
-    setStrokeWidth: (value: number) => void;
     setCurrentSketch: (sketch: Sketch | null) => void;
-    setSketches: (sketches: RegionlessSketch[]) => void;
-    addSketch: (sketch: RegionlessSketch) => void;
+    setSketches: (sketches: Sketch[]) => void;
+    addSketch: (sketch: Sketch) => void;
     removeSketch: (id: string) => void;
+    setLoading: (value: boolean) => void;
+    setError: (error: string | null) => void;
   };
 }
 

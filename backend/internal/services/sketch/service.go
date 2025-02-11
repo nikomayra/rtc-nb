@@ -90,6 +90,12 @@ func (s *Service) DeleteSketch(ctx context.Context, ID string) error {
 		return fmt.Errorf("unauthorized")
 	}
 
+	// Verify user is in the sketch's channel
+	userChannel, err := s.connMgr.GetUserChannel(claims.Username)
+	if err != nil || userChannel != sketch.ChannelName {
+		return fmt.Errorf("unauthorized")
+	}
+
 	// Check if user is the creator
 	if sketch.CreatedBy == claims.Username {
 		return s.dbStore.DeleteSketch(ctx, ID)
@@ -111,6 +117,22 @@ func (s *Service) DeleteSketch(ctx context.Context, ID string) error {
 func (s *Service) ClearSketch(ctx context.Context, ID string) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		return fmt.Errorf("unauthorized")
+	}
+
+	sketch, err := s.dbStore.GetSketch(ctx, ID)
+	if err != nil {
+		return fmt.Errorf("failed to get sketch: %w", err)
+	}
+
+	// Verify user is in the sketch's channel
+	userChannel, err := s.connMgr.GetUserChannel(claims.Username)
+	if err != nil || userChannel != sketch.ChannelName {
+		return fmt.Errorf("unauthorized")
+	}
 
 	// Clear the regions in the database
 	if err := s.dbStore.ClearSketchRegions(ctx, ID); err != nil {

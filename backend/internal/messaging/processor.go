@@ -11,20 +11,20 @@ import (
 )
 
 type Processor struct {
-    connManager connections.Manager
-    chatService *chat.Service
-    sketchService *sketch.Service
-	sketchBuffer *SketchBuffer
-	chatBuffer *ChatBuffer
+	connManager   connections.Manager
+	chatService   *chat.Service
+	sketchService *sketch.Service
+	sketchBuffer  *SketchBuffer
+	chatBuffer    *ChatBuffer
 }
 
 func NewProcessor(connManager connections.Manager, chatService *chat.Service, sketchService *sketch.Service) *Processor {
 	return &Processor{
-		connManager: connManager,
-		chatService: chatService,
+		connManager:   connManager,
+		chatService:   chatService,
 		sketchService: sketchService,
-		sketchBuffer: NewSketchBuffer(sketchService),
-		chatBuffer: NewChatBuffer(chatService),
+		sketchBuffer:  NewSketchBuffer(sketchService),
+		chatBuffer:    NewChatBuffer(chatService),
 	}
 }
 
@@ -34,16 +34,18 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 		log.Printf("Error marshaling message: %v", err)
 		return err
 	}
-    // Handle real-time broadcast
-    p.connManager.NotifyChannel(msg.ChannelName, outgoingMsgBytes)
-    
-    //Buffer for persistence
-    if msg.RequiresPersistence() {
-        if msg.Type == models.MessageTypeSketchUpdate {
-            p.sketchBuffer.Add(msg)
-        } else {
-            p.chatBuffer.Add(msg)
-        }
-    }
+
+	// Handle real-time broadcast
+	p.connManager.NotifyChannel(msg.ChannelName, outgoingMsgBytes)
+
+	// Buffer for persistence - only buffer Update commands
+	if msg.Type == models.MessageTypeSketch {
+		if msg.Content.SketchCmd != nil && msg.Content.SketchCmd.CommandType == models.SketchCommandTypeUpdate {
+			p.sketchBuffer.Add(msg)
+		}
+	} else {
+		p.chatBuffer.Add(msg)
+	}
+
 	return nil
 }

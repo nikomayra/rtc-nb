@@ -423,10 +423,6 @@ func (h *Handlers) CreateSketchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate channel membership
-	if !ok {
-		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
 	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
 	if err != nil {
 		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
@@ -447,6 +443,12 @@ func (h *Handlers) CreateSketchHandler(w http.ResponseWriter, r *http.Request) {
 		responses.SendError(w, "Max resolution 1280x720", http.StatusBadRequest)
 		return
 	}
+
+	if req.Width < 100 || req.Height < 100 {
+		responses.SendError(w, "Min resolution 100x100", http.StatusBadRequest)
+		return
+	}
+
 	sketch, err := h.sketchService.CreateSketch(ctx, req.ChannelName, req.DisplayName, req.Width, req.Height, claims.Username)
 	if err != nil {
 		log.Printf("Error creating sketch: %v", err)
@@ -507,10 +509,6 @@ func (h *Handlers) GetSketchesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate channel membership
-	if !ok {
-		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
 	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
 	if err != nil {
 		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
@@ -574,11 +572,6 @@ func (h *Handlers) ClearSketchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate channel membership
-	if !ok {
-		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
 	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
 	if err != nil {
 		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)

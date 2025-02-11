@@ -35,7 +35,7 @@ func (s *Store) BatchInsertMessages(ctx context.Context, messages []*models.Mess
 	defer tx.Rollback()
 
 	for _, msg := range messages {
-		if msg.Type == models.MessageTypeSketchUpdate {
+		if msg.Type == models.MessageTypeSketch {
 			continue
 		}
 

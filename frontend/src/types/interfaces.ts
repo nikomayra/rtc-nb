@@ -33,38 +33,49 @@ export const RegionSchema = z.object({
   paths: z.array(DrawPathSchema),
 });
 
-export const SketchUpdateSchema = z.object({
-  sketchId: z.string().uuid(),
-  region: RegionSchema,
-});
-
 export const SketchSchema = z.object({
   id: z.string().uuid(),
   channelName: z.string().min(1),
   displayName: z.string().min(1),
   width: z.number().min(1),
   height: z.number().min(1),
-  regions: z.record(z.string(), RegionSchema), // Key format: "x,y"
+  regions: z.record(z.string(), RegionSchema).default({}),
   createdAt: z.string().min(1).datetime(),
   createdBy: z.string().min(1),
 });
 
-export const RegionlessSketchSchema = z.object({
-  id: z.string().uuid(),
-  channelName: z.string().min(1),
-  displayName: z.string().min(1),
-  width: z.number().min(1),
-  height: z.number().min(1),
-  createdAt: z.string().min(1).datetime(),
-  createdBy: z.string().min(1),
-});
+// export const RegionlessSketchSchema = z.object({
+//   id: z.string().uuid(),
+//   channelName: z.string().min(1),
+//   displayName: z.string().min(1),
+//   width: z.number().min(1),
+//   height: z.number().min(1),
+//   createdAt: z.string().min(1).datetime(),
+//   createdBy: z.string().min(1),
+// });
 
 export enum MessageType {
   Text = 0,
   Image = 1,
-  SketchUpdate = 2,
-  ClearSketch = 3,
+  Sketch = 2,
 }
+
+export enum SketchCommandType {
+  Update = "UPDATE",
+  Clear = "CLEAR",
+  Delete = "DELETE",
+  New = "NEW",
+  Select = "SELECT",
+}
+
+const SketchCommandSchema = z.object({
+  commandType: z.nativeEnum(SketchCommandType),
+  sketchId: z.string().uuid(),
+  region: RegionSchema.optional(),
+  sketchData: SketchSchema.optional(),
+});
+
+export type SketchCommand = z.infer<typeof SketchCommandSchema>;
 
 const URLSchema = z.string().refine((val) => {
   return val.startsWith("http") || val.startsWith("/");
@@ -75,33 +86,27 @@ const messageContentSchema = z
     text: z.string().optional(),
     fileUrl: URLSchema.optional(),
     thumbnailUrl: URLSchema.optional(),
-    sketchUpdate: SketchUpdateSchema.optional(),
-    clearSketch: z.string().uuid().optional(),
+    sketchCmd: SketchCommandSchema.optional(),
   })
   .refine(
     (data) => {
-      // For sketch messages
-      if (data.sketchUpdate !== undefined) {
-        return data.sketchUpdate.sketchId !== undefined && data.sketchUpdate.region !== undefined;
+      if (data.sketchCmd) {
+        if (data.sketchCmd.commandType === SketchCommandType.Update) {
+          return data.sketchCmd.region !== undefined;
+        }
+        return true; // Clear and Delete only need sketchId
       }
-
-      // For clear sketch messages
-      if (data.clearSketch !== undefined) {
-        return data.clearSketch !== undefined;
-      }
-
-      // For file messages
       if (data.fileUrl !== undefined) {
-        return true; // text is optional for file messages
+        return true;
       }
-      // For text-only messages
       return data.text !== undefined;
     },
     {
-      message:
-        "Message must be either: (1) text message with optional file, (2) file message with optional text, or (3) sketch message with both sketchid and region, or (4) clear sketch message with sketchid",
+      message: "Invalid message content structure",
     }
   );
+
+export type MessageContent = z.infer<typeof messageContentSchema>;
 
 export const OutgoingMessageSchema = z.object({
   channelName: z.string().min(1),
@@ -143,5 +148,4 @@ export type Point = z.infer<typeof PointSchema>;
 export type DrawPath = z.infer<typeof DrawPathSchema>;
 export type Region = z.infer<typeof RegionSchema>;
 export type Sketch = z.infer<typeof SketchSchema>;
-export type SketchUpdate = z.infer<typeof SketchUpdateSchema>;
-export type RegionlessSketch = z.infer<typeof RegionlessSketchSchema>;
+// export type RegionlessSketch = z.infer<typeof RegionlessSketchSchema>;

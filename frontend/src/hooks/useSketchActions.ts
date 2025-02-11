@@ -1,5 +1,5 @@
 import { useRef, useCallback, useContext } from "react";
-import { DrawPath, SketchUpdate, MessageType, Point } from "../types/interfaces";
+import { DrawPath, MessageType, Point, SketchCommandType } from "../types/interfaces";
 import { WebSocketContext } from "../contexts/webSocketContext";
 
 interface Bounds {
@@ -23,31 +23,39 @@ export function useSketchActions(
     (path: DrawPath, isInverse: boolean = false) => {
       if (!path.points.length) return;
 
-      const bounds = calculateBounds(path.points);
-      console.log("📤 Sending Update:", {
-        bounds,
-        isInverse,
-        pathPoints: path.points.length,
-      });
-      const update: SketchUpdate = {
-        sketchId,
-        region: {
+      try {
+        const bounds = calculateBounds(path.points);
+        console.log("📤 Sending Update:", {
+          bounds,
+          isInverse,
+          pathPoints: path.points.length,
+        });
+        const updatedRegion = {
           start: bounds.start,
           end: bounds.end,
           paths: [
             {
-              ...path,
+              points: path.points,
               isDrawing: isInverse ? !path.isDrawing : path.isDrawing,
+              strokeWidth: path.strokeWidth,
             },
           ],
-        },
-      };
+        };
 
-      wsService.actions.send({
-        channelName,
-        type: MessageType.SketchUpdate,
-        content: { sketchUpdate: update },
-      });
+        wsService.actions.send({
+          channelName,
+          type: MessageType.Sketch,
+          content: {
+            sketchCmd: {
+              commandType: SketchCommandType.Update,
+              sketchId,
+              region: updatedRegion,
+            },
+          },
+        });
+      } catch (error) {
+        console.error("Failed to send sketch update:", error);
+      }
     },
     [wsService, channelName, sketchId, calculateBounds]
   );

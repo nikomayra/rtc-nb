@@ -27,7 +27,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   } = authContext;
 
   const handleMessage = useCallback((message: IncomingMessage) => {
-    if (message.type !== MessageType.SketchUpdate) {
+    if (message.type !== MessageType.Sketch) {
       console.log("💬 Received chat message:", message);
       setMessages((prev) => {
         const newMessages = {

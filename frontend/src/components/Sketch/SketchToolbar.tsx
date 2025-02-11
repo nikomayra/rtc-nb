@@ -1,7 +1,7 @@
 import { useCallback, useContext } from "react";
 import { WebSocketContext } from "../../contexts/webSocketContext";
 import { AuthContext } from "../../contexts/authContext";
-import { MessageType } from "../../types/interfaces";
+import { MessageType, SketchCommandType } from "../../types/interfaces";
 import { axiosInstance } from "../../api/axiosInstance";
 import { BASE_URL } from "../../utils/constants";
 import "../../styles/components/sketch.css";
@@ -48,8 +48,13 @@ export const SketchToolbar = ({
         onClear();
         wsService.actions.send({
           channelName,
-          type: MessageType.ClearSketch,
-          content: { clearSketch: currentSketchId },
+          type: MessageType.Sketch,
+          content: {
+            sketchCmd: {
+              commandType: SketchCommandType.Clear,
+              sketchId: currentSketchId,
+            },
+          },
         });
       }
     } catch (error) {

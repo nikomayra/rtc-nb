@@ -1,24 +1,19 @@
-import { useState, useMemo, useEffect, useContext, useCallback, useRef } from "react";
-import { SketchContext, SketchContextState } from "../../contexts/sketchContext";
+import { useState, useMemo, useEffect, useContext, useRef } from "react";
+import { initialState, SketchContext, SketchContextState } from "../../contexts/sketchContext";
 import { AuthContext } from "../../contexts/authContext";
 import { ChatContext } from "../../contexts/chatContext";
 import { axiosInstance, isAxiosError } from "../../api/axiosInstance";
 import { BASE_URL } from "../../utils/constants";
 import { z } from "zod";
-import { RegionlessSketch, RegionlessSketchSchema, Sketch } from "../../types/interfaces";
-
-const initialState: SketchContextState = {
-  drawing: true,
-  strokeWidth: 2,
-  currentSketch: null,
-  sketches: [],
-};
+import { Sketch, SketchSchema } from "../../types/interfaces";
 
 export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<SketchContextState>(initialState);
   const stateRef = useRef(state);
   const authContext = useContext(AuthContext);
   const chatContext = useContext(ChatContext);
+
+  if (!authContext || !chatContext) throw new Error("Context not found");
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -30,6 +25,7 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!authContext?.state.token || !chatContext?.state.currentChannel) return;
 
     const getSketches = async () => {
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
       try {
         const response = await axiosInstance.get(
           `${BASE_URL}/getSketches/${encodeURIComponent(chatContext.state.currentChannel!)}`,
@@ -40,93 +36,82 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
         );
         if (response.data.success) {
-          const validatedSketches = z.array(RegionlessSketchSchema).parse(response.data.data);
-          setState((prev) => ({ ...prev, sketches: validatedSketches }));
+          const validatedSketches = z.array(SketchSchema).parse(response.data.data);
+          setState((prev) => ({
+            ...prev,
+            sketches: validatedSketches,
+            isLoading: false,
+          }));
           console.log("📋 Sketches Loaded:", { count: validatedSketches.length });
         } else {
+          setState((prev) => ({
+            ...prev,
+            error: response.data.error,
+            isLoading: false,
+          }));
           console.error("Failed to get sketches:", response.data.error);
         }
       } catch (error) {
+        let errorMessage = "Failed to load sketches";
         if (error instanceof z.ZodError) {
-          console.error("Invalid sketch data:", error.errors);
+          errorMessage = "Invalid sketch data received";
         }
         if (isAxiosError(error)) {
-          console.error("Failed to get sketches:", error.response?.data?.message);
+          errorMessage = error.response?.data?.message || errorMessage;
         }
-        throw error;
+        setState((prev) => ({
+          ...prev,
+          error: errorMessage,
+          isLoading: false,
+        }));
       }
     };
     getSketches();
   }, [chatContext?.state.currentChannel, authContext?.state.token]);
 
-  // Create stable action functions using ref instead of state
-  const setDrawing = useCallback((value: boolean) => {
-    setState((prev) => {
-      if (prev.drawing === value) return prev; // Skip update if value hasn't changed
-
-      console.log("🎨 Setting Drawing Mode:", {
-        previousValue: prev.drawing,
-        newValue: value,
-        currentSketchId: prev.currentSketch?.id,
-      });
-
-      return {
-        ...prev,
-        drawing: value,
-      };
-    });
-  }, []);
-
-  const setStrokeWidth = useCallback((value: number) => {
-    console.log("✏️ Setting Stroke Width:", {
-      previousWidth: stateRef.current.strokeWidth,
-      newWidth: value,
-    });
-    setState((prev) => ({ ...prev, strokeWidth: value }));
-  }, []);
-
-  const setCurrentSketch = useCallback((sketch: Sketch | null) => {
-    console.log("📝 Setting Current Sketch:", {
-      previousId: stateRef.current.currentSketch?.id,
-      newId: sketch?.id,
-      regions: sketch ? Object.keys(sketch.regions).length : 0,
-    });
-    setState((prev) => ({ ...prev, currentSketch: sketch }));
-  }, []);
-
-  const setSketches = useCallback((sketches: RegionlessSketch[]) => {
-    console.log("📋 Setting Sketches:", { count: sketches.length });
-    setState((prev) => ({ ...prev, sketches }));
-  }, []);
-
-  const addSketch = useCallback((sketch: RegionlessSketch) => {
-    console.log("➕ Adding New Sketch:", { id: sketch.id });
-    setState((prev) => ({ ...prev, sketches: [...prev.sketches, sketch] }));
-  }, []);
-
-  const removeSketch = useCallback((id: string) => {
-    console.log("🗑️ Removing Sketch:", {
-      id,
-      isCurrentSketch: stateRef.current.currentSketch?.id === id,
-    });
-    setState((prev) => ({
-      ...prev,
-      sketches: prev.sketches.filter((s) => s.id !== id),
-      currentSketch: prev.currentSketch?.id === id ? null : prev.currentSketch,
-    }));
-  }, []);
-
-  // Memoize actions object with stable function references
   const actions = useMemo(
     () => ({
-      setDrawing,
-      setStrokeWidth,
-      setCurrentSketch,
-      setSketches,
-      addSketch,
-      removeSketch,
+      setCurrentSketch: (sketch: Sketch | null) => {
+        console.log("📝 Setting Current Sketch:", {
+          previousId: stateRef.current.currentSketch?.id,
+          newId: sketch?.id,
+          regions: sketch ? Object.keys(sketch.regions).length : 0,
+        });
+        setState((prev) => ({ ...prev, currentSketch: sketch }));
+      },
+      setSketches: (sketches: Sketch[]) => {
+        console.log("📋 Setting Sketches:", { count: sketches.length });
+        setState((prev) => ({ ...prev, sketches }));
+      },
+      addSketch: (sketch: Sketch) => {
+        console.log("➕ Adding New Sketch:", { id: sketch.id });
+        setState((prev) => {
+          // Check if sketch already exists
+          if (prev.sketches.some((s) => s.id === sketch.id)) {
+            return prev;
+          }
+          return { ...prev, sketches: [...prev.sketches, sketch] };
+        });
+      },
+      removeSketch: (id: string) => {
+        console.log("🗑️ Removing Sketch:", {
+          id,
+          isCurrentSketch: stateRef.current.currentSketch?.id === id,
+        });
+        setState((prev) => ({ ...prev, sketches: prev.sketches.filter((s) => s.id !== id) }));
+      },
+      setLoading: (value: boolean) => {
+        console.log("♻️ Loading Sketch:", { value: value });
+        setState((prev) => ({ ...prev, isLoading: value }));
+      },
+      setError: (error: string | null) => {
+        if (error) {
+          console.log("💥 Sketch Error:", { error });
+        }
+        setState((prev) => ({ ...prev, error }));
+      },
     }),
-    [setDrawing, setStrokeWidth, setCurrentSketch, setSketches, addSketch, removeSketch]
+    []
   );
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);

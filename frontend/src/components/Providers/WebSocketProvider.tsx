@@ -13,19 +13,32 @@ export const WebSocketProvider: React.FC<{
   const handleMessage = useCallback((message: IncomingMessage) => {
     console.log("📨 WebSocket message received:", {
       type: message.type,
+      commandType: message.content.sketchCmd?.commandType,
       handlers: Object.keys(handlers.current),
     });
 
-    if (message.type === MessageType.SketchUpdate || message.type === MessageType.ClearSketch) {
-      handlers.current.onSketchMessage?.(message);
-    } else {
-      handlers.current.onChatMessage?.(message);
+    try {
+      if (message.type === MessageType.Sketch && handlers.current.onSketchMessage) {
+        console.log("🎨 Routing to sketch handler");
+        handlers.current.onSketchMessage(message);
+      } else if (handlers.current.onChatMessage) {
+        console.log("💬 Routing to chat handler");
+        handlers.current.onChatMessage(message);
+      }
+    } catch (error) {
+      console.error("Error in WebSocket message handler:", error);
     }
   }, []);
 
   // Set up WebSocket message handler
   useEffect(() => {
+    console.log("⛑️ Setting up main WebSocket handler");
     wsService.setMessageHandler(handleMessage);
+
+    return () => {
+      console.log("🧼 Cleaning up main WebSocket handler");
+      wsService.setMessageHandler(() => {});
+    };
   }, [wsService, handleMessage]);
 
   // Update connection state

@@ -1,7 +1,7 @@
 import { SketchBoard } from "./SketchBoard";
 import "../../styles/components/sketch.css";
 import { useContext, useCallback, useEffect } from "react";
-import { DrawPath, SketchUpdate } from "../../types/interfaces";
+import { DrawPath, Region } from "../../types/interfaces";
 import { ChatContext } from "../../contexts/chatContext";
 import { AuthContext } from "../../contexts/authContext";
 import { SketchConfig } from "./SketchConfig";
@@ -27,17 +27,6 @@ export const SketchContainer = () => {
     canvasOps.calculateBounds
   );
 
-  console.log("SketchContainer render", {
-    currentSketchId: currentSketch?.id,
-    canvasOpsId: canvasOps?.canvasRef.current?.id,
-  });
-
-  useEffect(() => {
-    console.log("Canvas ops changed", {
-      canvasOpsId: canvasOps?.canvasRef.current?.id,
-    });
-  }, [canvasOps]);
-
   // Handle completed paths from SketchBoard
   const handlePathComplete = useCallback(
     (path: DrawPath) => {
@@ -50,8 +39,8 @@ export const SketchContainer = () => {
 
   // Handle WebSocket updates
   const handleUpdate = useCallback(
-    (update: SketchUpdate) => {
-      update.region.paths.forEach((path) => {
+    (update: Region) => {
+      update.paths.forEach((path) => {
         canvasOps.drawFullPath(path);
       });
     },

@@ -1,5 +1,5 @@
 import "../../styles/components/sketch.css";
-import { RegionlessSketch, SketchSchema } from "../../types/interfaces";
+import { Sketch, SketchSchema, MessageType, SketchCommandType } from "../../types/interfaces";
 import SketchList from "./SketchList";
 import { axiosInstance, isAxiosError } from "../../api/axiosInstance";
 import { BASE_URL } from "../../utils/constants";
@@ -7,11 +7,16 @@ import { useContext, useState } from "react";
 import { z } from "zod";
 import { Modal } from "../Generic/Modal";
 import { SketchContext } from "../../contexts/sketchContext";
+import { WebSocketContext } from "../../contexts/webSocketContext";
 
 interface SketchConfigProps {
   channelName: string;
   token: string;
 }
+
+const MIN_SKETCH_DIMENSION = 100;
+const MAX_SKETCH_WIDTH = 1280;
+const MAX_SKETCH_HEIGHT = 720;
 
 export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
   //  ChannelName string `json:"channelName"`
@@ -20,17 +25,54 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
   // 	Height      int    `json:"height"`
 
   const [displayName, setDisplayName] = useState("");
-  const [width, setWidth] = useState(0);
-  const [height, setHeight] = useState(0);
+  const [width, setWidth] = useState<string>("");
+  const [height, setHeight] = useState<string>("");
   const [isOpen, setIsOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const sketchContext = useContext(SketchContext);
-  if (!sketchContext) throw new Error("SketchContext not found");
+  const wsService = useContext(WebSocketContext);
+  if (!sketchContext || !wsService) throw new Error("SketchContext or WebSocketContext not found");
+
+  const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value === "" || /^\d+$/.test(value)) {
+      setWidth(value);
+    }
+  };
+
+  const handleHeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value === "" || /^\d+$/.test(value)) {
+      setHeight(value);
+    }
+  };
+
+  const validateSketchDimensions = (width: string, height: string): string | null => {
+    const numWidth = parseInt(width);
+    const numHeight = parseInt(height);
+
+    if (!width || !height || isNaN(numWidth) || isNaN(numHeight)) {
+      return "Width and height are required";
+    }
+    if (numWidth < MIN_SKETCH_DIMENSION || numHeight < MIN_SKETCH_DIMENSION) {
+      return `Minimum dimension is ${MIN_SKETCH_DIMENSION}px`;
+    }
+    if (numWidth > MAX_SKETCH_WIDTH || numHeight > MAX_SKETCH_HEIGHT) {
+      return `Maximum dimensions are ${MAX_SKETCH_WIDTH}x${MAX_SKETCH_HEIGHT}`;
+    }
+    return null;
+  };
 
   const handleCreateSketch = async (e: React.FormEvent) => {
     e.preventDefault();
-    // console.log("Create Sketch");
+    sketchContext.actions.setLoading(true);
+    sketchContext.actions.setError(null);
+    const error = validateSketchDimensions(width, height);
+    if (error) {
+      console.error(error);
+      return;
+    }
     setIsOpen(false);
     try {
       const response = await axiosInstance.post(
@@ -38,8 +80,8 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
         {
           channelName: channelName,
           displayName: displayName,
-          width: width,
-          height: height,
+          width: parseInt(width),
+          height: parseInt(height),
         },
         {
           headers: {
@@ -50,23 +92,53 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
 
       if (response.data.success) {
         const validatedSketch = SketchSchema.parse(response.data.data);
-        sketchContext.actions.setCurrentSketch(validatedSketch);
+        sketchContext.actions.addSketch(validatedSketch);
+
+        // Broadcast new sketch to all clients
+        wsService.actions.send({
+          channelName,
+          type: MessageType.Sketch,
+          content: {
+            sketchCmd: {
+              commandType: SketchCommandType.New,
+              sketchId: validatedSketch.id,
+              sketchData: validatedSketch,
+            },
+          },
+        });
+
+        const fullSketchResponse = await axiosInstance.get(
+          `${BASE_URL}/channels/${channelName}/sketches/${validatedSketch.id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (fullSketchResponse.data.success) {
+          const sketchWithRegions = SketchSchema.parse(fullSketchResponse.data.data);
+          sketchContext.actions.setCurrentSketch(sketchWithRegions);
+        }
+        setIsOpen(false);
       } else {
-        console.error("Failed to create sketch:", response.data.error);
+        sketchContext.actions.setError(response.data.error);
       }
     } catch (error) {
+      let errorMessage = "Failed to create sketch";
       if (error instanceof z.ZodError) {
-        console.error("Invalid sketch data:", error.errors);
+        errorMessage = "Invalid sketch data received";
       }
       if (isAxiosError(error)) {
-        console.error("Failed to create sketch:", error.response?.data?.message);
+        errorMessage = error.response?.data?.message || errorMessage;
       }
-      throw error;
+      sketchContext.actions.setError(errorMessage);
+    } finally {
+      sketchContext.actions.setLoading(false);
     }
   };
 
-  const handleSelectSketch = async (sketch: RegionlessSketch) => {
-    // console.log("Select Sketch", sketch);
+  const handleSelectSketch = async (sketch: Sketch) => {
+    sketchContext.actions.setLoading(true);
+    sketchContext.actions.setError(null);
     try {
       const response = await axiosInstance.get(`${BASE_URL}/channels/${sketch.channelName}/sketches/${sketch.id}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -76,38 +148,53 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
         const sketchWithRegions = SketchSchema.parse(response.data.data);
         sketchContext.actions.setCurrentSketch(sketchWithRegions);
       } else {
+        sketchContext.actions.setError(response.data.error);
         console.error("Failed to get sketch:", response.data.error);
       }
     } catch (error) {
+      let errorMessage = "Failed to load sketch";
       if (error instanceof z.ZodError) {
-        console.error("Invalid sketch data:", error.errors);
+        errorMessage = "Invalid sketch data received";
       }
       if (isAxiosError(error)) {
+        errorMessage = error.response?.data?.message || errorMessage;
         console.error("Failed to get sketch:", error.response?.data?.message);
       }
-      throw error;
+      sketchContext.actions.setError(errorMessage);
+    } finally {
+      sketchContext.actions.setLoading(false);
     }
   };
 
   const handleDeleteSketch = async (id: string) => {
-    // console.log("deleting sketch");
     try {
       const response = await axiosInstance.delete(`${BASE_URL}/deleteSketch/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (response.data.success) {
         sketchContext.actions.removeSketch(id);
         if (sketchContext.state.currentSketch?.id === id) {
           sketchContext.actions.setCurrentSketch(null);
         }
-      } else {
-        console.error("Failed to delete sketch:", response.data.error);
+        wsService.actions.send({
+          channelName,
+          type: MessageType.Sketch,
+          content: {
+            sketchCmd: {
+              commandType: SketchCommandType.Delete,
+              sketchId: id,
+            },
+          },
+        });
       }
     } catch (error) {
       if (isAxiosError(error)) {
-        console.error("Failed to delete sketch:", error.response?.data?.message);
+        const message = error.response?.data?.message || "Failed to delete sketch";
+        if (message.includes("unauthorized")) {
+          console.error("Only sketch creator or channel admin can delete sketches");
+        } else {
+          console.error(message);
+        }
       }
       throw error;
     }
@@ -140,16 +227,11 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
           <br />
           <label htmlFor="width">Width (max 1280)</label>
           <br />
-          <input type="number" placeholder="Width" value={width} onChange={(e) => setWidth(parseInt(e.target.value))} />
+          <input type="text" value={width} onChange={handleWidthChange} placeholder="Width (px)" pattern="\d*" />
           <br />
           <label htmlFor="height">Height (max 720)</label>
           <br />
-          <input
-            type="number"
-            placeholder="Height"
-            value={height}
-            onChange={(e) => setHeight(parseInt(e.target.value))}
-          />
+          <input type="text" value={height} onChange={handleHeightChange} placeholder="Height (px)" pattern="\d*" />
           <br />
           <button type="submit">Create Sketch</button>
         </form>
