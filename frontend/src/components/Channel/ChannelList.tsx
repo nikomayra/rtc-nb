@@ -3,7 +3,6 @@ import { ChatContext } from "../../contexts/chatContext";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { ChannelItem } from "./ChannelItem";
 import { CreateChannelForm } from "./CreateChannelForm";
-import "../../styles/components/channels.css";
 
 export const ChannelList = () => {
   const chatContext = useContext(ChatContext);

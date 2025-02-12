@@ -1,6 +1,61 @@
-@import './base/_reset.css';
-@import './base/_variables.css';
-@import './components/auth.css';
-@import './components/channels.css';
-@import './components/messages.css';
-@import './components/layout.css';
+@import "tailwindcss";
+
+@theme {
+  /* Core colors - Dark theme */
+  --color-primary: #d00000;
+  --color-primary-hover: #ffba08;
+  --color-primary-light: #dc2f02;
+  --color-primary-dark: #370617;
+
+  --color-secondary: #0a9396;
+  --color-secondary-hover: #e9d8a6;
+  --color-secondary-light: #94d2bd;
+  --color-secondary-dark: #005f73;
+
+  /* Surfaces */
+  --color-surface-dark: #03071e;
+  --color-surface-light: #13141f;
+
+  /* Text */
+  --color-text-light: #eae2b7;
+  --color-text-dark: #003049;
+
+  /* States */
+  --color-success: #50fa7b;
+  --color-error: #ff5555;
+
+  /* Layout */
+  --header-height: 4rem;
+  --sidebar-width: 300px;
+
+  /* Utils */
+  --radius-md: 0.375rem;
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --transition-smooth: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Base form elements */
+@utility input-base {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-surface-light);
+  border: 1px solid var(--color-primary-light);
+  border-radius: var(--radius-md);
+  color: var(--color-text-light);
+  transition: var(--transition-smooth);
+
+  @variant placeholder {
+    color: var(--color-text-light);
+    opacity: 0.4;
+  }
+
+  @variant hover {
+    border-color: var(--color-primary-light);
+  }
+
+  @variant focus {
+    border-color: var(--color-primary);
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  }
+}

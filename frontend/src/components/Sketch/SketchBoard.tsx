@@ -1,6 +1,5 @@
-import "../../styles/components/sketch.css";
 import { useState, useCallback, useRef, memo, useEffect, useContext } from "react";
-import { DrawPath } from "../../types/interfaces";
+import { DrawPath, Point } from "../../types/interfaces";
 import useCanvas from "../../hooks/useCanvas";
 import { useSketchActions } from "../../hooks/useSketchActions";
 import { SketchContext } from "../../contexts/sketchContext";
@@ -12,17 +11,20 @@ interface SketchBoardProps {
   sketchActions: ReturnType<typeof useSketchActions>;
 }
 
+type Tool = "draw" | "erase" | "pan";
+
 export const SketchBoard = memo(({ onPathComplete, canvasOps, onClear, sketchActions }: SketchBoardProps) => {
-  const [isDrawing, setIsDrawing] = useState(true);
+  const [currentTool, setCurrentTool] = useState<Tool>("draw");
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [isInteracting, setIsInteracting] = useState(false);
+  const [panStart, setPanStart] = useState<Point | null>(null);
 
   const sketchContext = useContext(SketchContext);
   if (!sketchContext) throw new Error("Context missing");
 
   const currentPathRef = useRef<DrawPath>({
     points: [],
-    isDrawing,
+    isDrawing: currentTool === "draw",
     strokeWidth,
   });
 
@@ -42,6 +44,12 @@ export const SketchBoard = memo(({ onPathComplete, canvasOps, onClear, sketchAct
       if (!canvasOps.canvasRef.current) return;
 
       setIsInteracting(true);
+
+      if (currentTool === "pan") {
+        setPanStart({ x: e.clientX, y: e.clientY });
+        return;
+      }
+
       const point = canvasOps.getCanvasPoint(e);
       if (!point || !canvasOps.isValidPoint(point)) {
         console.warn("Invalid point detected");
@@ -50,28 +58,42 @@ export const SketchBoard = memo(({ onPathComplete, canvasOps, onClear, sketchAct
 
       currentPathRef.current = {
         points: [point],
-        isDrawing,
+        isDrawing: currentTool === "draw",
         strokeWidth,
       };
     },
-    [canvasOps, isDrawing, strokeWidth]
+    [canvasOps, currentTool, strokeWidth]
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (!isInteracting) return;
 
+      if (currentTool === "pan" && panStart) {
+        const container = e.currentTarget.parentElement;
+        if (!container) return;
+
+        const dx = e.clientX - panStart.x;
+        const dy = e.clientY - panStart.y;
+
+        container.scrollLeft -= dx;
+        container.scrollTop -= dy;
+
+        setPanStart({ x: e.clientX, y: e.clientY });
+        return;
+      }
+
       const point = canvasOps.getCanvasPoint(e);
       if (!point || !canvasOps.isValidPoint(point)) return;
 
       const prevPoint = currentPathRef.current.points[currentPathRef.current.points.length - 1];
       if (prevPoint) {
-        canvasOps.drawPath(prevPoint, point, isDrawing, strokeWidth);
+        canvasOps.drawPath(prevPoint, point, currentTool === "draw", strokeWidth);
       }
 
       currentPathRef.current.points.push(point);
     },
-    [canvasOps, isInteracting, isDrawing, strokeWidth]
+    [isInteracting, currentTool, panStart, canvasOps, strokeWidth]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -84,10 +106,10 @@ export const SketchBoard = memo(({ onPathComplete, canvasOps, onClear, sketchAct
     setIsInteracting(false);
     currentPathRef.current = {
       points: [],
-      isDrawing,
+      isDrawing: currentTool === "draw",
       strokeWidth,
     };
-  }, [isInteracting, isDrawing, strokeWidth, onPathComplete]);
+  }, [isInteracting, currentTool, strokeWidth, onPathComplete]);
 
   return (
     <div className="sketch-board-container">
@@ -105,11 +127,14 @@ export const SketchBoard = memo(({ onPathComplete, canvasOps, onClear, sketchAct
         />
       </div>
       <div className="sketch-toolbar">
-        <button onClick={() => setIsDrawing(true)} disabled={isInteracting}>
+        <button onClick={() => setCurrentTool("draw")} disabled={isInteracting}>
           Pen🖊️
         </button>
-        <button onClick={() => setIsDrawing(false)} disabled={isInteracting}>
+        <button onClick={() => setCurrentTool("erase")} disabled={isInteracting}>
           Eraser🧹
+        </button>
+        <button onClick={() => setCurrentTool("pan")} disabled={isInteracting}>
+          Pan🤚
         </button>
         <select value={strokeWidth} onChange={(e) => setStrokeWidth(Number(e.target.value))} disabled={isInteracting}>
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((width) => (

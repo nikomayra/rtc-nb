@@ -1,5 +1,4 @@
 import { SketchBoard } from "./SketchBoard";
-import "../../styles/components/sketch.css";
 import { useContext, useCallback, useEffect } from "react";
 import { DrawPath, Region } from "../../types/interfaces";
 import { ChatContext } from "../../contexts/chatContext";

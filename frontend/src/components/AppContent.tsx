@@ -19,10 +19,22 @@ export const AppContent = () => {
   }
 
   return (
-    <div className="app-container">
-      <ChannelList />
-      {chatContext.state.currentChannel && <MessageList />}
-      {chatContext.state.currentChannel && <SketchContainer />}
+    <div className="flex h-screen w-full bg-surface-dark text-text-light p-4">
+      <div className="basis-[15%] bg-surface-light rounded-lg p-4 mr-4 shadow-md">
+        <ChannelList />
+      </div>
+      <div className="flex flex-1 gap-4">
+        {chatContext.state.currentChannel && (
+          <>
+            <div className="basis-[35%] bg-surface-light rounded-lg p-4 shadow-md">
+              <MessageList />
+            </div>
+            <div className="basis-[50%] bg-surface-light rounded-lg p-4 shadow-md">
+              <SketchContainer />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };

@@ -4,7 +4,6 @@ import { AuthContext } from "../../contexts/authContext";
 import { MessageType, SketchCommandType } from "../../types/interfaces";
 import { axiosInstance } from "../../api/axiosInstance";
 import { BASE_URL } from "../../utils/constants";
-import "../../styles/components/sketch.css";
 
 interface SketchToolbarProps {
   onClear: () => void;

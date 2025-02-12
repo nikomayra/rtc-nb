@@ -1,4 +1,3 @@
-import "../../styles/components/sketch.css";
 import { Sketch, SketchSchema, MessageType, SketchCommandType } from "../../types/interfaces";
 import SketchList from "./SketchList";
 import { axiosInstance, isAxiosError } from "../../api/axiosInstance";

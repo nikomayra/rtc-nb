@@ -1,4 +1,4 @@
-import { FormEvent, useContext, useRef } from "react";
+import { FormEvent, useContext, useRef, useState } from "react";
 import { OutgoingMessage, MessageType } from "../../types/interfaces";
 import { ChatContext } from "../../contexts/chatContext";
 import { BASE_URL } from "../../utils/constants";
@@ -14,6 +14,7 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
   const authContext = useContext(AuthContext);
   const messageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   if (!chatContext || !authContext) return null;
 
@@ -25,6 +26,62 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
     state: { token },
   } = authContext;
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith("image/")) {
+      handleFileUpload(file);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!currentChannel) return;
+
+    const uploadFormData = new FormData();
+    uploadFormData.append("file", file);
+    uploadFormData.append("channelName", currentChannel);
+
+    try {
+      const response = await axios.post(`${BASE_URL}/upload`, uploadFormData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      if (response.data.success) {
+        const outgoingMessage: OutgoingMessage = {
+          channelName: currentChannel,
+          type: MessageType.Image,
+          content: {
+            text: messageInputRef.current?.value || "",
+            fileUrl: response.data.data.imagePath,
+            thumbnailUrl: response.data.data.thumbnailPath,
+          },
+        };
+        onSend(outgoingMessage);
+
+        // Clear inputs
+        if (messageInputRef.current) messageInputRef.current.value = "";
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    } catch (err) {
+      console.error("Upload failed:", err);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!currentChannel) return;
@@ -32,42 +89,10 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
     const message = formData.get("message") as string;
     const file = formData.get("file") as File;
 
-    console.log("📜Form submission:", {
-      hasFile: !!file,
-      fileSize: file?.size,
-      fileName: file?.name,
-      fileType: file?.type,
-      message,
-      formDataEntries: Array.from(formData.entries()),
-    });
-
     if (file && file.size > 0) {
-      console.log("🔍 Debug upload:", {
-        url: `${BASE_URL}/upload`,
-        fileDetails: {
-          name: file.name,
-          type: file.type,
-          size: file.size,
-        },
-      });
       const uploadFormData = new FormData();
       uploadFormData.append("file", file);
       uploadFormData.append("channelName", currentChannel);
-
-      console.log("🔍 Raw FormData:", {
-        rawData: Array.from(uploadFormData.entries()).map(([key, value]) => ({
-          key,
-          value:
-            value instanceof File
-              ? {
-                  name: value.name,
-                  size: value.size,
-                  type: value.type,
-                  lastModified: value.lastModified,
-                }
-              : value,
-        })),
-      });
 
       try {
         const response = await axios.post(`${BASE_URL}/upload`, uploadFormData, {
@@ -113,24 +138,48 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
 
   return (
     <div>
-      <form onSubmit={handleSubmit} id="send-message-form">
+      <form
+        onSubmit={handleSubmit}
+        id="send-message-form"
+        className="flex gap-2 p-2 bg-surface-dark"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex-none p-2 rounded-lg hover:bg-primary/20 transition-colors"
+        >
+          📷
+        </button>
         <input
           type="file"
           name="file"
           ref={fileInputRef}
           accept="image/*"
-          onChange={(e) => {
-            console.log("File selected:", {
-              file: e.target.files?.[0],
-              name: e.target.files?.[0]?.name,
-              type: e.target.files?.[0]?.type,
-              size: e.target.files?.[0]?.size,
-            });
-          }}
+          className="hidden"
+          onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
         />
-        <input type="text" name="message" ref={messageInputRef} />
-        <button type="submit">Send</button>
+        <input
+          type="text"
+          name="message"
+          ref={messageInputRef}
+          className="flex-1 bg-surface-light/10 rounded-lg px-3 py-2 text-text-light placeholder:text-text-light/50"
+          placeholder="Type a message..."
+        />
+        <button
+          type="submit"
+          className="flex-none px-4 py-2 bg-primary hover:bg-primary-hover rounded-lg text-white transition-colors"
+        >
+          Send
+        </button>
       </form>
+      {isDragging && (
+        <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+          <p className="text-text-light text-lg">Drop image here</p>
+        </div>
+      )}
     </div>
   );
 };
