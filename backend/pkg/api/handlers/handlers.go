@@ -319,6 +319,10 @@ func (h *Handlers) LeaveChannelHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// log.Printf("Upload request received: Content-Type: %s, Content-Length: %d",
+	// 	r.Header.Get("Content-Type"),
+	// 	r.ContentLength)
+
 	// Get user from context
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {
@@ -351,6 +355,8 @@ func (h *Handlers) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		responses.SendError(w, "Channel name is required", http.StatusBadRequest)
 		return
 	}
+
+	// log.Printf("Form parsed successfully. File headers: %+v", r.MultipartForm.File)
 
 	// Validate content type
 	if err := utils.ValidateFile(header, file, maxUploadSize); err != nil {
