@@ -26,11 +26,10 @@ type ChatManager interface {
 	LeaveChannel(ctx context.Context, channelName, username string) error
 	GetChannels(ctx context.Context) ([]*models.Channel, error)
 	DeleteChannel(ctx context.Context, channelName, username string) error
+	UpdateMemberRole(ctx context.Context, channelName, username string, isAdmin bool, updatedBy string) error
 
 	// File operations
 	HandleImageUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error)
-	HandleVideoUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error)
-	HandleAudioUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error)
 
 	// Message operations
 	BatchInsertMessages(ctx context.Context, messages []*models.Message) error

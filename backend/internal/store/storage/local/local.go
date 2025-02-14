@@ -34,7 +34,7 @@ func NewLocalFileStore(basePath string) (*LocalFileStore, error) {
 		}
 	}
 
-	return &LocalFileStore{basePath: basePath, publicPath: "/files"}, nil
+	return &LocalFileStore{basePath: basePath, publicPath: "/api/files"}, nil
 }
 
 // Returns the path to the original image and the path to the thumbnail

@@ -5,6 +5,7 @@ import { useAuthContext } from "../hooks/useAuthContext";
 import { SketchContainer } from "./Sketch/SketchContainer";
 import { ChatContext } from "../contexts/chatContext";
 import { useContext } from "react";
+import { ChannelInfo } from "./Channel/ChannelInfo";
 
 export const AppContent = () => {
   const {
@@ -20,16 +21,21 @@ export const AppContent = () => {
 
   return (
     <div className="flex h-screen w-full bg-surface-dark text-text-light p-4">
-      <div className="basis-[15%] bg-surface-light rounded-lg p-4 mr-4 shadow-md">
+      <aside className="w-[22%] flex-none bg-surface-light rounded-lg p-4 mr-4 shadow-md">
         <ChannelList />
-      </div>
+      </aside>
       <div className="flex flex-1 gap-4">
         {chatContext.state.currentChannel && (
           <>
-            <div className="basis-[35%] bg-surface-light rounded-lg p-4 shadow-md">
-              <MessageList />
+            <div className="w-[40%] flex-none bg-surface-light rounded-lg shadow-md overflow-hidden">
+              <ChannelInfo
+                channel={chatContext.state.channels.find((c) => c.name === chatContext.state.currentChannel)!}
+              />
+              <div className="h-[calc(100%-4rem)] p-4">
+                <MessageList />
+              </div>
             </div>
-            <div className="basis-[50%] bg-surface-light rounded-lg p-4 shadow-md">
+            <div className="flex-1 bg-surface-light rounded-lg p-4 shadow-md">
               <SketchContainer />
             </div>
           </>

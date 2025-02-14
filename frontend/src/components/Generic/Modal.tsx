@@ -32,14 +32,27 @@ export const Modal = ({ isOpen, onClose, children, title, className = "" }: Moda
 
   // Render modal in a portal
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
-      <div className={`modal-content ${className}`} onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose}>
-          &times;
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div
+        className={`bg-surface-light rounded-lg shadow-lg relative max-h-[90vh] max-w-[90vw] 
+          overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-surface-dark ${className}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          className="absolute -top-2 -right-1.5 w-10 h-10 bg-surface-dark rounded-full 
+            flex items-center justify-center text-text-light hover:bg-primary/80 
+            hover:text-white transition-all duration-200 text-2xl z-10 shadow-lg
+            hover:scale-110 active:scale-95"
+          onClick={onClose}
+        >
+          ×
         </button>
-        <br />
-        <div className="modal-header">{title && <h2>{title}</h2>}</div>
-        <div className="modal-body">{children}</div>
+        {title && (
+          <div className="px-6 py-4 border-b border-primary/20">
+            <h2 className="text-lg font-medium text-text-light">{title}</h2>
+          </div>
+        )}
+        <div className="p-6 space-y-4">{children}</div>
       </div>
     </div>,
     document.body // Portal target

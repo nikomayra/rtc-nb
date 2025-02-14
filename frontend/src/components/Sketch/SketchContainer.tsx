@@ -52,7 +52,7 @@ export const SketchContainer = () => {
   //handle initial sketch loading
   useEffect(() => {
     if (!currentSketch?.regions) {
-      console.log("No regions found in sketch");
+      // console.log("No regions found in sketch");
       return;
     }
 

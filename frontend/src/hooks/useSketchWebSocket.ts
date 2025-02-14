@@ -93,14 +93,14 @@ export const useSketchWebSocket = (
   useEffect(() => {
     if (!wsService) return;
 
-    console.log("🔌 Setting up sketch message handler");
+    // console.log("🔌 Setting up sketch message handler");
     processMessageRef.current = handleMessage;
     wsService.actions.setMessageHandlers({
       onSketchMessage: handleMessage,
     });
 
     return () => {
-      console.log("🔌 Cleaning up sketch message handler");
+      // console.log("🔌 Cleaning up sketch message handler");
       wsService.actions.setMessageHandlers({});
     };
   }, [wsService, handleMessage]);

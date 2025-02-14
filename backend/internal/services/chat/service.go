@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"time"
 
 	// Image packages for decoding
 	_ "image/gif"
@@ -49,6 +50,8 @@ func (cs *Service) GetUserConnection(username string) (*gorilla_websocket.Conn, 
 
 // ClearUserSession clears user session data
 func (cs *Service) ClearUserSession(ctx context.Context, username string) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	if conn, exists := cs.connMgr.GetConnection(username); exists {
 		cs.connMgr.RemoveConnection(username)
 		userChannel, err := cs.dbStore.GetUserChannel(ctx, username)

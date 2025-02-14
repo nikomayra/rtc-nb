@@ -44,16 +44,16 @@ func main() {
 	sketchService := sketch.NewService(dbStore, connManager)
 
 	msgProcessor := messaging.NewProcessor(connManager, chatService, sketchService)
-	
+
 	wsHandler := websocket.NewHandler(connManager, msgProcessor)
 
 	// Setup router and routes
 	router := mux.NewRouter()
-	api.RegisterRoutes(router, wsHandler, connManager, chatService, sketchService)
+	api.RegisterRoutes(router, wsHandler, connManager, chatService, sketchService, cfg.FileStorePath)
 
 	// Serve static files from the filestore
-	fs := http.FileServer(http.Dir(cfg.FileStorePath))
-	router.PathPrefix("/files/").Handler(http.StripPrefix("/files/", fs))
+	// fs := http.FileServer(http.Dir(cfg.FileStorePath))
+	// router.PathPrefix("/files/").Handler(http.StripPrefix("/files/", fs))
 
 	// TODO: serve the frontend from the dist folder for production
 	// fs := http.FileServer(http.Dir("./dist"))

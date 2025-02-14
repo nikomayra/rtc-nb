@@ -143,16 +143,42 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const joinChannel = async (channelName: string, password?: string): Promise<void> => {
     if (channelName === currentChannel) return;
     try {
-      const res = await axiosInstance.patch(
-        `${BASE_URL}/joinchannel`,
-        { name: channelName, password: password },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (res.data.success) {
-        wsContext.actions.disconnect();
-        setCurrentChannel(channelName);
+      if (currentChannel) {
+        await leaveChannel(currentChannel);
+      }
+      wsContext.actions.disconnect();
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => {
+        controller.abort();
+      }, 10000);
+
+      try {
+        const res = await axiosInstance.patch(
+          `${BASE_URL}/joinchannel`,
+          { name: channelName, password: password },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+            timeout: 10000,
+          }
+        );
+
+        clearTimeout(timeout);
+
+        if (res.data.success) {
+          setCurrentChannel(channelName);
+        } else {
+          throw new Error(res.data.error || "Failed to join channel");
+        }
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw new Error("Request timed out");
+        }
+        throw error;
       }
     } catch (error) {
+      wsContext.actions.disconnect(); // Ensure disconnected on error
       if (isAxiosError(error)) {
         console.error("Failed to join channel:", error.response?.data?.message);
       }

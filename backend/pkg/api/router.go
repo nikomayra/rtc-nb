@@ -6,6 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/connections"
 	"rtc-nb/backend/internal/services/chat"
 	"rtc-nb/backend/internal/services/sketch"
@@ -14,11 +15,15 @@ import (
 	"rtc-nb/backend/pkg/api/middleware"
 )
 
-func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager connections.Manager, chatService chat.ChatManager, sketchService *sketch.Service) {
-	// Create a subrouter for /api with common middleware
-	apiRouter := router.PathPrefix("/api").Subrouter()
+func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager connections.Manager, chatService chat.ChatManager, sketchService *sketch.Service,
+	fileStorePath string) {
 
 	// Apply global middleware to all routes
+	limiter := middleware.NewRateLimiter()
+	router.Use(limiter.RateLimit)
+
+	// Create a subrouter for /api with common middleware
+	apiRouter := router.PathPrefix("/api").Subrouter()
 	apiRouter.Use(middleware.LoggingMiddleware)
 
 	handlers := handlers.NewHandlers(connManager, chatService, sketchService)
@@ -38,6 +43,7 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 	protected.HandleFunc("/deletechannel/{channelName}", handlers.DeleteChannelHandler).Methods("DELETE")
 	protected.HandleFunc("/leavechannel/{channelName}", handlers.LeaveChannelHandler).Methods("PATCH")
 	protected.HandleFunc("/channels", handlers.GetChannelsHandler).Methods("GET")
+	protected.HandleFunc("/channels/{channelName}/members/{username}/role", handlers.UpdateChannelMemberRole).Methods("PATCH")
 
 	protected.HandleFunc("/validatetoken", handlers.ValidateTokenHandler).Methods("GET")
 	protected.HandleFunc("/logout", handlers.LogoutHandler).Methods("PATCH")
@@ -51,6 +57,20 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 	protected.HandleFunc("/getSketches/{channelName}", handlers.GetSketchesHandler).Methods("GET")
 	protected.HandleFunc("/deleteSketch/{sketchId}", handlers.DeleteSketchHandler).Methods("DELETE")
 	protected.HandleFunc("/clearSketch", handlers.ClearSketchHandler).Methods("POST")
+
+	// Simple auth wrapper for file server
+	fileServer := http.FileServer(http.Dir(fileStorePath))
+	fileHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("token")
+		if _, err := auth.ValidateAccessToken(token); err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		fileServer.ServeHTTP(w, r)
+	})
+
+	// Move outside protected routes
+	router.PathPrefix("/api/files/").Handler(http.StripPrefix("/api/files/", fileHandler))
 }
 
 func defaultRoute(w http.ResponseWriter, r *http.Request) {

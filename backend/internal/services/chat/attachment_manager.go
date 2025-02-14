@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"mime/multipart"
+	"time"
 
 	"rtc-nb/backend/internal/store/database"
 	"rtc-nb/backend/internal/store/storage"
@@ -27,12 +28,8 @@ func NewAttachmentManager(db *database.Store, fileStorer storage.FileStorer) *at
 }
 
 func (am *attachmentManager) HandleImageUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error) {
-
-	// Check image-specific size limit
-	// TODO: Maybe we don't care since we resize before savings anyways...?
-	// if header.Size > maxImageSize {
-	// 	return nil, fmt.Errorf("image too large: %d > %d bytes", header.Size, maxImageSize)
-	// }
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 
 	// Validate image format
 	img, _, err := image.Decode(file)
@@ -50,12 +47,4 @@ func (am *attachmentManager) HandleImageUpload(ctx context.Context, file multipa
 		return nil, fmt.Errorf("save image: %w", err)
 	}
 	return map[string]string{"imagePath": imgPath, "thumbnailPath": thumbPath}, nil
-}
-
-func (am *attachmentManager) HandleVideoUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error) {
-	return nil, nil
-}
-
-func (am *attachmentManager) HandleAudioUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error) {
-	return nil, nil
 }

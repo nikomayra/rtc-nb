@@ -1,4 +1,4 @@
-import { API_URL } from "./constants";
+import { BASE_URL } from "./constants";
 
 const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
@@ -12,9 +12,11 @@ const formatTimestamp = (timestamp: string) => {
   });
 };
 
-const getFullURL = (partialURL: string) => {
-  if (partialURL.startsWith("http")) return partialURL;
-  return `${API_URL}${partialURL}`;
+const getFullURL = (path: string) => {
+  if (!path) return "";
+  const token = sessionStorage.getItem("token");
+  const cleanPath = path.replace(/^\/*(files\/)?/, "");
+  return `${BASE_URL}/files/${cleanPath}?token=${token}`;
 };
 
 const formatToHumanReadable = (datetime: string): string => {

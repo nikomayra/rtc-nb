@@ -615,3 +615,31 @@ func (h *Handlers) GetMessagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	responses.SendSuccess(w, messages, http.StatusOK)
 }
+
+func (h *Handlers) UpdateChannelMemberRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	username := vars["username"]
+
+	var req struct {
+		IsAdmin bool `json:"is_admin"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.SendError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	ctx := r.Context()
+	if err := h.chatService.UpdateMemberRole(ctx, channelName, username, req.IsAdmin, claims.Username); err != nil {
+		responses.SendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	responses.SendSuccess(w, "Success", http.StatusOK)
+}

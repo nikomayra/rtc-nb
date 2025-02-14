@@ -30,28 +30,31 @@ func NewChannelManager(db *database.Store, connMgr connections.Manager) *channel
 }
 
 func (cm *channelManager) CreateChannel(ctx context.Context, channel *models.Channel) error {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
+	// Reduce timeout to 3 seconds
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
-	// 1. Validate channel
+	// Validate before acquiring lock
 	if err := channel.Validate(); err != nil {
 		return err
 	}
 
-	// 2. Begin transaction
+	// Start transaction
 	tx, err := cm.db.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	// 3. Create in database
+	// Create in database
 	if err := cm.db.CreateChannel(ctx, channel); err != nil {
 		return err
 	}
 
-	// 4. Initialize websocket hub channel
+	// Only lock for hub operation
+	cm.mu.Lock()
 	err = cm.connMgr.InitializeChannel(channel.Name)
+	cm.mu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -61,6 +64,9 @@ func (cm *channelManager) CreateChannel(ctx context.Context, channel *models.Cha
 
 // JoinChannel adds a user to a channel
 func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username string, password *string) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -89,7 +95,6 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 	if err != nil {
 		return fmt.Errorf("get user channel: %w", err)
 	}
-
 	tx, err := cm.db.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
@@ -97,14 +102,13 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 	defer tx.Rollback()
 
 	if currentChannel != "" && currentChannel != channelName {
-		// Remove from other channels
-		if err := cm.db.RemoveChannelMember(ctx, currentChannel, username); err != nil {
-			return fmt.Errorf("remove from current channel: %w", err)
-		}
-		// Remove from websocket channel
+		// Leave current channel before joining new one
 		if conn, ok := cm.connMgr.GetConnection(username); ok {
 			cm.connMgr.RemoveClientFromChannel(currentChannel, conn)
 		}
+		// if err := cm.db.RemoveChannelMember(ctx, currentChannel, username); err != nil {
+		// 	return fmt.Errorf("remove from current channel: %w", err)
+		// }
 	}
 
 	if currentChannel != channelName {
@@ -131,26 +135,31 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
-
 	return nil
 }
 
 // LeaveChannel removes a user from a channel
 func (cm *channelManager) LeaveChannel(ctx context.Context, channelName, username string) error {
+	_, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
 	if conn, ok := cm.connMgr.GetConnection(username); ok {
 		cm.connMgr.RemoveClientFromChannel(channelName, conn)
 	}
-	if err := cm.db.RemoveChannelMember(ctx, channelName, username); err != nil {
-		return fmt.Errorf("remove channel member: %w", err)
-	}
+	// if err := cm.db.RemoveChannelMember(ctx, channelName, username); err != nil {
+	// 	return fmt.Errorf("remove channel member: %w", err)
+	// }
 	return nil
 }
 
 // GetChannels returns all available channels
 func (cm *channelManager) GetChannels(ctx context.Context) ([]*models.Channel, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
@@ -165,6 +174,9 @@ func (cm *channelManager) GetChannels(ctx context.Context) ([]*models.Channel, e
 
 // DeleteChannel removes a channel if the user is an admin
 func (cm *channelManager) DeleteChannel(ctx context.Context, channelName, username string) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -175,4 +187,35 @@ func (cm *channelManager) DeleteChannel(ctx context.Context, channelName, userna
 		return fmt.Errorf("delete channel: %w", err)
 	}
 	return nil
+}
+
+func (cm *channelManager) UpdateMemberRole(ctx context.Context, channelName, username string, isAdmin bool, updatedBy string) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	// Verify updatedBy is an admin
+	isUpdaterAdmin, err := cm.db.IsUserAdmin(ctx, channelName, updatedBy)
+	if err != nil || !isUpdaterAdmin {
+		return fmt.Errorf("unauthorized: only admins can update roles")
+	}
+
+	if !isAdmin {
+		// Check if this would remove the last admin
+		admins, err := cm.db.GetChannelAdmins(ctx, channelName)
+		if err != nil {
+			return fmt.Errorf("get channel admins: %w", err)
+		}
+		if len(admins) == 1 && admins[0] == username {
+			return fmt.Errorf("cannot remove last admin")
+		}
+	}
+
+	if username == updatedBy && !isAdmin {
+		return fmt.Errorf("cannot self-demote from admin")
+	}
+
+	return cm.db.UpdateChannelMemberRole(ctx, channelName, username, isAdmin)
 }

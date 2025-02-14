@@ -10,16 +10,16 @@ import (
 )
 
 type Hub struct {
-	mu          sync.RWMutex
-	connections map[string]*websocket.Conn          // username -> connection
-	channels    map[string]map[*websocket.Conn]bool // channelName -> user connections: bool
+	mu            sync.RWMutex
+	connections   map[string]*websocket.Conn          // username -> connection
+	channels      map[string]map[*websocket.Conn]bool // channelName -> user connections: bool
 	connToChannel map[*websocket.Conn]string
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		connections: make(map[string]*websocket.Conn),
-		channels:    make(map[string]map[*websocket.Conn]bool),
+		connections:   make(map[string]*websocket.Conn),
+		channels:      make(map[string]map[*websocket.Conn]bool),
 		connToChannel: make(map[*websocket.Conn]string),
 	}
 }
@@ -38,9 +38,10 @@ func (h *Hub) InitializeChannel(channelName string) error {
 func (h *Hub) NotifyChannel(channelName string, message []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	log.Printf("NotifyChannel: channelName=%s clients=%v\n", channelName, len(h.channels[channelName]))
+	// log.Printf("NotifyChannel: channelName=%s clients=%v\n", channelName, len(h.channels[channelName]))
 	if clients, ok := h.channels[channelName]; ok {
 		for client := range clients {
+			client.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			if err := client.WriteMessage(websocket.TextMessage, message); err != nil {
 				log.Printf("Error writing message to client: %v", err)
 			}
@@ -55,6 +56,7 @@ func (h *Hub) NotifyUser(username string, message []byte) {
 	defer h.mu.RUnlock()
 
 	if conn, ok := h.connections[username]; ok {
+		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
 			log.Printf("Error writing message to client: %v", err)
 		}

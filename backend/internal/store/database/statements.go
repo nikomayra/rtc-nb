@@ -11,8 +11,8 @@ type Statements struct {
 	DeleteUser *sql.Stmt // username
 
 	// TODO: Implement for idle system maybe
-	UpsertUserStatus *sql.Stmt // username, is_online
-	SelectUserStatus *sql.Stmt // username
+	// UpsertUserStatus *sql.Stmt // username, is_online
+	// SelectUserStatus *sql.Stmt // username
 
 	InsertChannel        *sql.Stmt // name, is_private, description, created_by, hashed_password
 	SelectChannel        *sql.Stmt // name
@@ -35,6 +35,9 @@ type Statements struct {
 	UpdateSketchRegions *sql.Stmt // id, regions
 	DeleteSketch        *sql.Stmt // id
 	ClearSketchRegions  *sql.Stmt // id
+
+	UpdateChannelMemberRole *sql.Stmt // channel_name, username, is_admin
+	GetChannelAdmins        *sql.Stmt // channel_name
 }
 
 func PrepareStatements(db *sql.DB) (*Statements, error) {
@@ -74,19 +77,19 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 	}
 
 	// // Prepare user status statements
-	if s.UpsertUserStatus, err = prepare(`
-        INSERT INTO user_status (username, is_online, last_seen)
-        VALUES ($1, $2, CURRENT_TIMESTAMP)
-        ON CONFLICT (username) 
-        DO UPDATE SET is_online = $2, last_seen = CURRENT_TIMESTAMP`); err != nil {
-		return nil, fmt.Errorf("prepare upsert user status: %w", err)
-	}
+	// if s.UpsertUserStatus, err = prepare(`
+	//     INSERT INTO user_status (username, is_online, last_seen)
+	//     VALUES ($1, $2, CURRENT_TIMESTAMP)
+	//     ON CONFLICT (username)
+	//     DO UPDATE SET is_online = $2, last_seen = CURRENT_TIMESTAMP`); err != nil {
+	// 	return nil, fmt.Errorf("prepare upsert user status: %w", err)
+	// }
 
-	if s.SelectUserStatus, err = prepare(`
-        SELECT username, is_online, last_seen 
-        FROM user_status WHERE username = $1`); err != nil {
-		return nil, fmt.Errorf("prepare select user status: %w", err)
-	}
+	// if s.SelectUserStatus, err = prepare(`
+	//     SELECT username, is_online, last_seen
+	//     FROM user_status WHERE username = $1`); err != nil {
+	// 	return nil, fmt.Errorf("prepare select user status: %w", err)
+	// }
 
 	// Prepare channel statements
 	if s.InsertChannel, err = prepare(`
@@ -127,7 +130,8 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 
 	if s.AddChannelMember, err = prepare(`
         INSERT INTO channel_member (channel_name, username, is_admin, joined_at) 
-        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`); err != nil {
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+        ON CONFLICT (channel_name, username) DO NOTHING`); err != nil {
 		return nil, fmt.Errorf("prepare add channel member: %w", err)
 	}
 
@@ -207,6 +211,21 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 		return nil, fmt.Errorf("prepare clear sketch regions: %w", err)
 	}
 
+	// Role change statements
+	if s.UpdateChannelMemberRole, err = prepare(`
+        UPDATE channel_member 
+        SET is_admin = $3 
+        WHERE channel_name = $1 AND username = $2`); err != nil {
+		return nil, fmt.Errorf("prepare update channel member role: %w", err)
+	}
+
+	if s.GetChannelAdmins, err = prepare(`
+        SELECT username 
+        FROM channel_member 
+        WHERE channel_name = $1 AND is_admin = true`); err != nil {
+		return nil, fmt.Errorf("prepare get channel admins: %w", err)
+	}
+
 	return s, nil
 }
 
@@ -215,8 +234,8 @@ func (s *Statements) CloseStatements() error {
 		s.InsertUser,
 		s.SelectUser,
 		s.DeleteUser,
-		s.UpsertUserStatus,
-		s.SelectUserStatus,
+		// s.UpsertUserStatus,
+		// s.SelectUserStatus,
 		s.InsertChannel,
 		s.SelectChannel,
 		s.SelectChannels,
@@ -231,6 +250,8 @@ func (s *Statements) CloseStatements() error {
 		s.SelectSketches,
 		s.UpdateSketchRegions,
 		s.DeleteSketch,
+		s.UpdateChannelMemberRole,
+		s.GetChannelAdmins,
 	} {
 		if stmt != nil {
 			stmt.Close()

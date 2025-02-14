@@ -7,12 +7,12 @@ CREATE TABLE users (
     last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Represents the current state of a user
-CREATE TABLE user_status (
-    username VARCHAR(50) PRIMARY KEY REFERENCES users(username) ON DELETE CASCADE,
-    is_online BOOLEAN NOT NULL DEFAULT false,
-    last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+-- -- Represents the current state of a user
+-- CREATE TABLE user_status (
+--     username VARCHAR(50) PRIMARY KEY REFERENCES users(username) ON DELETE CASCADE,
+--     is_online BOOLEAN NOT NULL DEFAULT false,
+--     last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- );
 
 -- Channel table - stores channel information
 CREATE TABLE channels (

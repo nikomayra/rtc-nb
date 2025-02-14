@@ -15,6 +15,7 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
   const messageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [draggedFile, setDraggedFile] = useState<File | null>(null);
 
   if (!chatContext || !authContext) return null;
 
@@ -28,25 +29,28 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    if (!isDragging) setIsDragging(true);
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
+  // const handleDragLeave = (e: React.DragEvent) => {
+  //   e.preventDefault();
+  //   setIsDragging(false);
+  // };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
 
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith("image/")) {
-      handleFileUpload(file);
+      setDraggedFile(file);
+      if (messageInputRef.current) {
+        messageInputRef.current.focus();
+      }
     }
   };
 
-  const handleFileUpload = async (file: File) => {
+  const handleFileUpload = async (file: File, message: string) => {
     if (!currentChannel) return;
 
     const uploadFormData = new FormData();
@@ -66,7 +70,7 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
           channelName: currentChannel,
           type: MessageType.Image,
           content: {
-            text: messageInputRef.current?.value || "",
+            text: message,
             fileUrl: response.data.data.imagePath,
             thumbnailUrl: response.data.data.thumbnailPath,
           },
@@ -85,40 +89,13 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!currentChannel) return;
-    const formData = new FormData(e.target as HTMLFormElement);
-    const message = formData.get("message") as string;
-    const file = formData.get("file") as File;
 
-    if (file && file.size > 0) {
-      const uploadFormData = new FormData();
-      uploadFormData.append("file", file);
-      uploadFormData.append("channelName", currentChannel);
+    const message = messageInputRef.current?.value || "";
+    const file = draggedFile || fileInputRef.current?.files?.[0] || null;
 
-      try {
-        const response = await axios.post(`${BASE_URL}/upload`, uploadFormData, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        });
-        if (response.data.success) {
-          // Then send websocket message with the URLs
-          const outgoingMessage: OutgoingMessage = {
-            channelName: currentChannel,
-            type: MessageType.Image,
-            content: {
-              text: message, // Optional message
-              fileUrl: response.data.data.imagePath,
-              thumbnailUrl: response.data.data.thumbnailPath,
-            },
-          };
-          onSend(outgoingMessage);
-        }
-      } catch (err) {
-        console.error("Upload failed with error:", err);
-      }
-    } else {
-      // Regular text message
+    if (file) {
+      await handleFileUpload(file, message);
+    } else if (message.trim()) {
       const outgoingMessage: OutgoingMessage = {
         channelName: currentChannel,
         type: MessageType.Text,
@@ -128,55 +105,50 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
     }
 
     // Clear form
-    if (messageInputRef.current) {
-      messageInputRef.current.value = "";
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (messageInputRef.current) messageInputRef.current.value = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setDraggedFile(null);
   };
 
   return (
-    <div>
+    <div className="relative w-full">
       <form
         onSubmit={handleSubmit}
-        id="send-message-form"
-        className="flex gap-2 p-2 bg-surface-dark"
+        className="flex gap-2 p-1.5 bg-surface-dark rounded-lg w-full min-w-0"
         onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
+        onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
       >
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="flex-none p-2 rounded-lg hover:bg-primary/20 transition-colors"
-        >
-          📷
-        </button>
         <input
           type="file"
-          name="file"
           ref={fileInputRef}
           accept="image/*"
           className="hidden"
-          onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+          onChange={(e) => setDraggedFile(e.target.files?.[0] || null)}
         />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex-none px-2.5 py-1.5 text-sm bg-surface-light/10 hover:bg-primary/20 text-text-light/70 rounded-lg transition-colors relative whitespace-nowrap"
+        >
+          Upload
+          {draggedFile && <div className="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-success" />}
+        </button>
         <input
           type="text"
-          name="message"
           ref={messageInputRef}
-          className="flex-1 bg-surface-light/10 rounded-lg px-3 py-2 text-text-light placeholder:text-text-light/50"
-          placeholder="Type a message..."
+          className="flex-1 min-w-0 bg-surface-light/10 rounded-lg px-3 py-1.5 text-text-light placeholder:text-text-light/50"
+          placeholder={draggedFile ? "Add a message..." : "Type a message..."}
         />
         <button
           type="submit"
-          className="flex-none px-4 py-2 bg-primary hover:bg-primary-hover rounded-lg text-white transition-colors"
+          className="flex-none px-3 py-1.5 bg-primary/70 hover:bg-primary/80 rounded-lg text-white transition-colors whitespace-nowrap"
         >
           Send
         </button>
       </form>
       {isDragging && (
-        <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+        <div className="absolute inset-0 bg-primary/20 border-2 border-primary/50 border-dashed rounded-lg flex items-center justify-center pointer-events-none">
           <p className="text-text-light text-lg">Drop image here</p>
         </div>
       )}

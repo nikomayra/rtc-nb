@@ -444,3 +444,28 @@ func (s *Store) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	defer s.mu.Unlock()
 	return s.db.BeginTx(ctx, nil)
 }
+
+func (s *Store) UpdateChannelMemberRole(ctx context.Context, channelName, username string, isAdmin bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.statements.UpdateChannelMemberRole.ExecContext(ctx, channelName, username, isAdmin)
+	return err
+}
+
+func (s *Store) GetChannelAdmins(ctx context.Context, channelName string) ([]string, error) {
+	rows, err := s.statements.GetChannelAdmins.QueryContext(ctx, channelName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var admins []string
+	for rows.Next() {
+		var username string
+		if err := rows.Scan(&username); err != nil {
+			return nil, err
+		}
+		admins = append(admins, username)
+	}
+	return admins, nil
+}
