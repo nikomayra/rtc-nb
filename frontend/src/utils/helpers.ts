@@ -1,5 +1,3 @@
-import { BASE_URL } from "./constants";
-
 const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
 
@@ -10,13 +8,6 @@ const formatTimestamp = (timestamp: string) => {
     month: "short",
     day: "numeric",
   });
-};
-
-const getFullURL = (path: string) => {
-  if (!path) return "";
-  const token = sessionStorage.getItem("token");
-  const cleanPath = path.replace(/^\/*(files\/)?/, "");
-  return `${BASE_URL}/files/${cleanPath}?token=${token}`;
 };
 
 const formatToHumanReadable = (datetime: string): string => {
@@ -42,4 +33,4 @@ const formatToHumanReadable = (datetime: string): string => {
   return date.toLocaleString("en-US", options);
 };
 
-export default { formatTimestamp, getFullURL, formatToHumanReadable };
+export default { formatTimestamp, formatToHumanReadable };

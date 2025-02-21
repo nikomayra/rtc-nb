@@ -70,7 +70,7 @@ func (rl *RateLimiter) RateLimit(next http.Handler) http.Handler {
 		now := time.Now()
 
 		// Debug logging
-		log.Printf("Rate limiting request from IP: %s, Current count: %d", ip, len(rl.requests[ip]))
+		// log.Printf("Rate limiting request from IP: %s, Current count: %d", ip, len(rl.requests[ip]))
 
 		// Rest of the function remains the same...
 		if times, exists := rl.requests[ip]; exists {
@@ -88,7 +88,7 @@ func (rl *RateLimiter) RateLimit(next http.Handler) http.Handler {
 		// Lower limit for testing
 		if len(rl.requests[ip]) > 50 {
 			rl.mu.Unlock()
-			log.Printf("Rate limit exceeded for IP: %s, Count: %d", ip, len(rl.requests[ip]))
+			// log.Printf("Rate limit exceeded for IP: %s, Count: %d", ip, len(rl.requests[ip]))
 			w.Header().Set("Retry-After", "60")
 			http.Error(w, "Rate limit exceeded. Try again in 1 minute.", http.StatusTooManyRequests)
 			return

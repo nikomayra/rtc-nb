@@ -25,21 +25,9 @@ export const useSketchWebSocket = (
 
   const handleMessage = useCallback(
     async (message: IncomingMessage) => {
-      console.log("📥 Received message:", {
-        type: message.type,
-        commandType: message.content.sketchCmd?.commandType,
-        sketchId: message.content.sketchCmd?.sketchId,
-        currentSketchId: currentSketchIdRef.current,
-      });
-      console.log("📥 Queue status:", {
-        isProcessing: isProcessingMessage.current,
-        queueLength: messageQueue.current.length,
-      });
-
       if (message.type !== MessageType.Sketch || !message.content.sketchCmd) return;
 
       if (isProcessingMessage.current) {
-        console.log("⏳ Queueing message:", message.content.sketchCmd?.commandType);
         messageQueue.current.push(message);
         return;
       }
@@ -47,8 +35,6 @@ export const useSketchWebSocket = (
       try {
         isProcessingMessage.current = true;
         const cmd = message.content.sketchCmd;
-
-        console.log("🔄 Processing command:", cmd.commandType);
 
         switch (cmd.commandType) {
           case SketchCommandType.Update:
@@ -69,7 +55,6 @@ export const useSketchWebSocket = (
             break;
           case SketchCommandType.New:
             if (cmd.sketchData) {
-              console.log("➕ Adding sketch from websocket:", cmd.sketchData.id);
               sketchContext.actions.addSketch(cmd.sketchData);
             }
             break;

@@ -58,6 +58,8 @@ export enum MessageType {
   Text = 0,
   Image = 1,
   Sketch = 2,
+  ChannelUpdate = 3,
+  MemberUpdate = 4,
 }
 
 export enum SketchCommandType {
@@ -68,43 +70,62 @@ export enum SketchCommandType {
   Select = "SELECT",
 }
 
-const SketchCommandSchema = z.object({
-  commandType: z.nativeEnum(SketchCommandType),
-  sketchId: z.string().uuid(),
-  region: RegionSchema.optional(),
-  sketchData: SketchSchema.optional(),
+export enum ChannelUpdateAction {
+  Created = "created",
+  Deleted = "deleted",
+}
+
+export enum MemberUpdateAction {
+  Added = "added",
+  RoleChanged = "role_changed",
+}
+
+const SketchCommandSchema = z
+  .object({
+    commandType: z.nativeEnum(SketchCommandType),
+    sketchId: z.string().uuid(),
+    region: RegionSchema.optional(),
+    sketchData: SketchSchema.optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.commandType === SketchCommandType.Update) {
+        return data.region !== undefined;
+      }
+      return true; // Clear and Delete only need sketchId
+    },
+    {
+      message: "Invalid sketch command structure",
+    }
+  );
+
+const ChannelUpdateSchema = z.object({
+  action: z.nativeEnum(ChannelUpdateAction),
+  channel: ChannelSchema,
 });
 
+const MemberUpdateSchema = z.object({
+  action: z.nativeEnum(MemberUpdateAction),
+  username: z.string().min(1),
+  isAdmin: z.boolean(),
+});
+
+export type ChannelUpdate = z.infer<typeof ChannelUpdateSchema>;
+export type MemberUpdate = z.infer<typeof MemberUpdateSchema>;
 export type SketchCommand = z.infer<typeof SketchCommandSchema>;
 
 const URLSchema = z.string().refine((val) => {
   return val.startsWith("http") || val.startsWith("/");
 }, "Must be a valid URL or path");
 
-const messageContentSchema = z
-  .object({
-    text: z.string().optional(),
-    fileUrl: URLSchema.optional(),
-    thumbnailUrl: URLSchema.optional(),
-    sketchCmd: SketchCommandSchema.optional(),
-  })
-  .refine(
-    (data) => {
-      if (data.sketchCmd) {
-        if (data.sketchCmd.commandType === SketchCommandType.Update) {
-          return data.sketchCmd.region !== undefined;
-        }
-        return true; // Clear and Delete only need sketchId
-      }
-      if (data.fileUrl !== undefined) {
-        return true;
-      }
-      return data.text !== undefined;
-    },
-    {
-      message: "Invalid message content structure",
-    }
-  );
+const messageContentSchema = z.object({
+  text: z.string().optional(),
+  fileUrl: URLSchema.optional(),
+  thumbnailUrl: URLSchema.optional(),
+  sketchCmd: SketchCommandSchema.optional(),
+  channelUpdate: ChannelUpdateSchema.optional(),
+  memberUpdate: MemberUpdateSchema.optional(),
+});
 
 export type MessageContent = z.infer<typeof messageContentSchema>;
 

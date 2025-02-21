@@ -35,8 +35,13 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 		return err
 	}
 
-	// Handle real-time broadcast
-	p.connManager.NotifyChannel(msg.ChannelName, outgoingMsgBytes)
+	// For channel and member updates, broadcast to all connected clients
+	if msg.Type == models.MessageTypeChannelUpdate || msg.Type == models.MessageTypeMemberUpdate {
+		p.connManager.NotifyAll(outgoingMsgBytes)
+	} else {
+		// Handle real-time broadcast to specific channel
+		p.connManager.NotifyChannel(msg.ChannelName, outgoingMsgBytes)
+	}
 
 	// Buffer for persistence - only buffer Update commands
 	if msg.Type == models.MessageTypeSketch {

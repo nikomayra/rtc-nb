@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	// "encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -58,6 +59,20 @@ func (cm *channelManager) CreateChannel(ctx context.Context, channel *models.Cha
 	if err != nil {
 		return err
 	}
+
+	// updateMsg := &models.Message{
+	//     Type: models.TypeChannelUpdate,
+	//     Content: models.MessageContent{
+	//         ChannelUpdate: &models.ChannelUpdateData{
+	//             Action:  "created",
+	//             Channel: channel,
+	//         },
+	//     },
+	// }
+
+	// if msgBytes, err := json.Marshal(updateMsg); err == nil {
+	//     cm.connMgr.NotifyAll(msgBytes)
+	// }
 
 	return tx.Commit()
 }

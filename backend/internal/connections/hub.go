@@ -63,6 +63,18 @@ func (h *Hub) NotifyUser(username string, message []byte) {
 	}
 }
 
+func (h *Hub) NotifyAll(message []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	for _, conn := range h.connections {
+		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+			log.Printf("Error broadcasting message: %v", err)
+		}
+	}
+}
+
 func (h *Hub) GetUserChannel(username string) (string, error) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

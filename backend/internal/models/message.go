@@ -13,7 +13,20 @@ const (
 	MessageTypeText MessageType = iota
 	MessageTypeImage
 	MessageTypeSketch
+	MessageTypeChannelUpdate
+	MessageTypeMemberUpdate
 )
+
+type ChannelUpdate struct {
+	Action  string   `json:"action"`  // "created", "deleted"
+	Channel *Channel `json:"channel"` // The channel data
+}
+
+type MemberUpdate struct {
+	Action   string `json:"action"` // "added", "role_changed"
+	Username string `json:"username"`
+	IsAdmin  bool   `json:"is_admin"`
+}
 
 type SketchCommandType string
 
@@ -32,10 +45,12 @@ type SketchCommand struct {
 }
 
 type MessageContent struct {
-	Text         *string        `json:"text,omitempty"`
-	FileURL      *string        `json:"file_url,omitempty"`
-	ThumbnailURL *string        `json:"thumbnail_url,omitempty"`
-	SketchCmd    *SketchCommand `json:"sketch_cmd,omitempty"`
+	Text          *string        `json:"text,omitempty"`
+	FileURL       *string        `json:"file_url,omitempty"`
+	ThumbnailURL  *string        `json:"thumbnail_url,omitempty"`
+	SketchCmd     *SketchCommand `json:"sketch_cmd,omitempty"`
+	ChannelUpdate *ChannelUpdate `json:"channel_update,omitempty"`
+	MemberUpdate  *MemberUpdate  `json:"member_update,omitempty"`
 }
 
 type IncomingMessage struct {
@@ -86,6 +101,30 @@ func (m *IncomingMessage) Validate() error {
 			}
 		default:
 			return errors.New("invalid sketch command type")
+		}
+	case MessageTypeChannelUpdate:
+		if m.Content.ChannelUpdate == nil {
+			return errors.New("channel update data required")
+		}
+		switch m.Content.ChannelUpdate.Action {
+		case "created", "deleted", "updated":
+			if m.Content.ChannelUpdate.Channel == nil {
+				return errors.New("channel data required for channel update")
+			}
+		default:
+			return errors.New("invalid channel update action")
+		}
+	case MessageTypeMemberUpdate:
+		if m.Content.MemberUpdate == nil {
+			return errors.New("member update data required")
+		}
+		switch m.Content.MemberUpdate.Action {
+		case "added", "role_changed":
+			if m.ChannelName == "" || m.Content.MemberUpdate.Username == "" {
+				return errors.New("channel name and username required for member update")
+			}
+		default:
+			return errors.New("invalid member update action")
 		}
 	default:
 		return errors.New("invalid message type")

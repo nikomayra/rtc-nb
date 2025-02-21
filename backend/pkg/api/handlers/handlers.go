@@ -223,6 +223,9 @@ func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) 
 	if req.ChannelName == "" {
 		responses.SendError(w, "Channel name required", http.StatusBadRequest)
 		return
+	} else if req.ChannelName == "system" {
+		responses.SendError(w, "'system' is a reserved channel name", http.StatusBadRequest)
+		return
 	}
 
 	claims, ok := auth.ClaimsFromContext(r.Context())

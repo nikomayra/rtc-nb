@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useContext } from "react";
 import { useAuthContext } from "../../hooks/useAuthContext";
-import { Channel } from "../../types/interfaces";
+import { Channel, MemberUpdateAction, MessageType } from "../../types/interfaces";
 import { BASE_URL } from "../../utils/constants";
 import axios from "axios";
+import { WebSocketContext } from "../../contexts/webSocketContext";
 
 interface ChannelInfoProps {
   channel: Channel;
@@ -11,9 +12,14 @@ interface ChannelInfoProps {
 export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const wsContext = useContext(WebSocketContext);
   const {
     state: { username, token },
   } = useAuthContext();
+
+  if (!wsContext) {
+    throw new Error("ChannelInfo must be used within a WebSocketContext");
+  }
 
   const isAdmin = Object.values(channel.members).some((member) => member.username === username && member.isAdmin);
 
@@ -34,6 +40,12 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
 
   const handleRoleToggle = async (memberUsername: string, newIsAdmin: boolean) => {
     try {
+      console.log("🎭 Attempting role update:", {
+        channelName: channel.name,
+        username: memberUsername,
+        newIsAdmin,
+      });
+
       const response = await axios.patch(
         `${BASE_URL}/channels/${channel.name}/members/${memberUsername}/role`,
         {
@@ -45,7 +57,21 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
           },
         }
       );
-      if (!response.data.success) {
+      if (response.data.success) {
+        const wsMessage = {
+          type: MessageType.MemberUpdate,
+          channelName: channel.name,
+          content: {
+            memberUpdate: {
+              action: MemberUpdateAction.RoleChanged,
+              username: memberUsername,
+              isAdmin: newIsAdmin,
+            },
+          },
+        };
+        console.log("🎭 Sending websocket message:", wsMessage);
+        wsContext.actions.send(wsMessage);
+      } else {
         console.error("Failed to update role:", response.data.error);
       }
     } catch (error) {
@@ -104,7 +130,7 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
                     <span className="text-sm truncate flex-1">{member.username}</span>
                   </div>
 
-                  {isAdmin && member.username !== username && (
+                  {isAdmin && member.username !== username && member.username !== channel.createdBy && (
                     <button
                       onClick={() => handleRoleToggle(member.username, !member.isAdmin)}
                       className={`text-xs px-2 py-1 rounded flex-none ml-2 ${
