@@ -39,16 +39,37 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (message.type !== MessageType.ChannelUpdate || !message.content.channelUpdate) return;
 
       const update = message.content.channelUpdate;
-      switch (update.action) {
-        case ChannelUpdateAction.Created:
-          setChannels((prev) => [...prev, update.channel]);
-          break;
-        case ChannelUpdateAction.Deleted:
-          setChannels((prev) => prev.filter((c) => c.name !== update.channel.name));
-          if (currentChannel === update.channel.name) {
-            setCurrentChannel(null);
+      console.log("💬 Handling channel update:", update);
+
+      // Normalize action for more reliable comparison
+      const actionType = update.action.toLowerCase();
+
+      if (actionType === ChannelUpdateAction.Created.toLowerCase()) {
+        console.log("Processing channel creation for:", update.channel.name);
+        setChannels((prev) => {
+          // Check if channel with this name already exists
+          const exists = prev.some((c) => c.name.toLowerCase() === update.channel.name.toLowerCase());
+          if (exists) {
+            console.log("Channel already exists, updating:", update.channel.name);
+            // Replace the existing channel with the updated one
+            return prev.map((c) => (c.name.toLowerCase() === update.channel.name.toLowerCase() ? update.channel : c));
+          } else {
+            console.log("Adding new channel:", update.channel.name);
+            // Add the new channel
+            return [...prev, update.channel];
           }
-          break;
+        });
+      } else if (actionType === ChannelUpdateAction.Deleted.toLowerCase()) {
+        setChannels((prev) => prev.filter((c) => c.name !== update.channel.name));
+        if (currentChannel === update.channel.name) {
+          setCurrentChannel(null);
+        }
+        // Also clear any messages for this channel
+        setMessages((prev) => {
+          const newMessages = { ...prev };
+          delete newMessages[update.channel.name];
+          return newMessages;
+        });
       }
     },
     [currentChannel]
@@ -115,7 +136,26 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       if (res.data.success) {
         const validatedChannels = z.array(ChannelSchema).parse(res.data.data);
-        setChannels(validatedChannels);
+
+        // Ensure we don't duplicate channels with different case
+        const uniqueChannels: Channel[] = [];
+        const channelMap = new Map<string, boolean>();
+
+        for (const channel of validatedChannels) {
+          const normalizedName = channel.name.toLowerCase();
+          if (!channelMap.has(normalizedName)) {
+            channelMap.set(normalizedName, true);
+            uniqueChannels.push(channel);
+          } else {
+            console.log(`Skipping duplicate channel: ${channel.name}`);
+          }
+        }
+
+        setChannels(uniqueChannels);
+        console.log(
+          "Updated channels from fetchChannels:",
+          uniqueChannels.map((c) => c.name)
+        );
       } else {
         console.error("Failed to get channels:", res.data.error);
       }
@@ -176,34 +216,62 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!message.content.memberUpdate) return;
 
       const update = message.content.memberUpdate;
-      setChannels((prev) =>
-        prev.map((channel) => {
+      console.log("💬 Handling member update:", update, "action:", update.action);
+
+      setChannels((prev) => {
+        const result = prev.map((channel) => {
           if (channel.name === message.channelName) {
-            const updatedMembers = { ...channel.members };
+            // Make a clean copy of members
+            const currentMembers = { ...channel.members };
+            console.log("Current members before update:", currentMembers);
+
+            // We'll use a consistent lowercase key for member lookup
+            const memberLookupKey = update.username.toLowerCase();
+
+            // Find the actual key in the members object (which might have different casing)
+            const actualMemberKey = Object.keys(currentMembers).find((key) => key.toLowerCase() === memberLookupKey);
 
             switch (update.action) {
               case MemberUpdateAction.Added:
-                updatedMembers[update.username] = {
+                // Always use the username as provided for the key to maintain consistency
+                // This ensures the key and the username property match exactly
+                currentMembers[update.username] = {
                   username: update.username,
                   isAdmin: update.isAdmin,
                   joinedAt: new Date().toISOString(),
                 };
                 break;
+
               case MemberUpdateAction.RoleChanged:
-                if (updatedMembers[update.username]) {
-                  updatedMembers[update.username].isAdmin = update.isAdmin;
+                if (actualMemberKey) {
+                  // Update the member's admin status
+                  currentMembers[actualMemberKey].isAdmin = update.isAdmin;
+                } else {
+                  console.error(
+                    "Member not found for role change. Username:",
+                    update.username,
+                    "Available members:",
+                    Object.keys(currentMembers).map((k) => `${k} (${currentMembers[k].username})`)
+                  );
                 }
+                break;
+
+              default:
+                console.error("Unknown member update action:", update.action);
                 break;
             }
 
             return {
               ...channel,
-              members: updatedMembers,
+              members: currentMembers,
             };
           }
           return channel;
-        })
-      );
+        });
+
+        return result;
+      });
+
       // Update the messages state
       handleMessage(message);
     },
@@ -268,9 +336,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (res.data.success) {
             setCurrentChannel(channelName);
-            // Only send a member update if the user is not already a member
+
+            // Only broadcast member update if the user is not already a member
             const currChannel = channels.find((c) => c.name === channelName);
-            if (currChannel && Object.values(currChannel.members).some((member) => member.username === username)) {
+            const isAlreadyMember =
+              currChannel && Object.values(currChannel.members).some((member) => member.username === username);
+
+            if (!isAlreadyMember) {
+              console.log("Broadcasting member joined update to system channel");
               wsContext.actions.send({
                 type: MessageType.MemberUpdate,
                 channelName,
@@ -282,6 +355,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   },
                 },
               });
+            } else {
+              console.log("User already a member, skipping member update broadcast");
             }
           } else {
             throw new Error(res.data.error || "Failed to join channel");
@@ -300,7 +375,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error;
       }
     },
-    [currentChannel, wsContext.actions, leaveChannel, token, channels, username]
+    [currentChannel, wsContext.actions, leaveChannel, token, username, channels]
   );
 
   const createChannel = async (channelName: string, description?: string, password?: string): Promise<void> => {
@@ -316,6 +391,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
       if (res.data.success) {
         const validatedChannel = ChannelSchema.parse(res.data.data);
+
         console.log("Sending channel creation websocket:", {
           type: MessageType.ChannelUpdate,
           channelName,
@@ -326,6 +402,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             },
           },
         });
+
+        // Update local state immediately in case the websocket message isn't received
+        setChannels((prev) => {
+          // Check if channel with this name already exists (case insensitive)
+          const existingChannelIndex = prev.findIndex(
+            (c) => c.name.toLowerCase() === validatedChannel.name.toLowerCase()
+          );
+
+          if (existingChannelIndex >= 0) {
+            // Replace the existing channel
+            console.log("Replacing existing channel in local state:", validatedChannel.name);
+            const newChannels = [...prev];
+            newChannels[existingChannelIndex] = validatedChannel;
+            return newChannels;
+          } else {
+            // Add as a new channel
+            console.log("Adding new channel to local state:", validatedChannel.name);
+            return [...prev, validatedChannel];
+          }
+        });
+
+        // Still send the websocket message for other clients
         wsContext.actions.send({
           type: MessageType.ChannelUpdate,
           channelName: channelName,

@@ -11,6 +11,7 @@ export const WebSocketProvider: React.FC<{
   const [channelConnected, setChannelConnected] = useState(false);
   const wsService = WebSocketService.getInstance();
   const handlers = useRef<MessageHandlers>({});
+  const setupDoneRef = useRef(false);
   const authContext = useContext(AuthContext);
 
   if (!authContext) {
@@ -21,6 +22,7 @@ export const WebSocketProvider: React.FC<{
     state: { token },
   } = authContext;
 
+  // Handle incoming messages
   const handleMessage = useCallback((message: IncomingMessage) => {
     console.log("📨 WebSocket message received:", {
       type: message.type,
@@ -54,33 +56,50 @@ export const WebSocketProvider: React.FC<{
           }
       }
     } catch (error) {
-      console.error("Error in WebSocket message handler:", error);
+      console.error("Error in message handler:", error);
     }
   }, []);
 
+  // Set up handlers and connections
   useEffect(() => {
-    if (!token) {
-      wsService.disconnectAll();
+    // Prevent setup from running twice in React Strict Mode
+    if (setupDoneRef.current) {
       return;
     }
 
     console.log("⛑️ Setting up WebSocket handlers");
+
+    // Set flag to prevent duplicate setups
+    setupDoneRef.current = true;
+
+    // Setup message and connection state handlers
     wsService.setMessageHandler(handleMessage);
     wsService.setConnectionStateHandler((system, channel) => {
       setSystemConnected(system);
       setChannelConnected(channel);
     });
 
-    wsService.connectSystem(token);
+    // Connect system websocket if token exists
+    if (token) {
+      // Use a small timeout to ensure the DOM is settled before connection
+      setTimeout(() => {
+        wsService.connectSystem(token);
+      }, 100);
+    } else {
+      wsService.disconnectAll();
+    }
 
+    // Cleanup on unmount
     return () => {
       console.log("🧼 Cleaning up WebSocket handlers");
-      wsService.setMessageHandler(() => {});
-      wsService.setConnectionStateHandler(() => {});
+      wsService.setMessageHandler(null);
+      wsService.setConnectionStateHandler(null);
       wsService.disconnectAll();
+      setupDoneRef.current = false;
     };
   }, [wsService, handleMessage, token]);
 
+  // Create context value
   const contextValue = {
     state: {
       systemConnected,
@@ -93,10 +112,7 @@ export const WebSocketProvider: React.FC<{
       disconnectAll: wsService.disconnectAll.bind(wsService),
       send: wsService.send.bind(wsService),
       setMessageHandlers: (newHandlers: MessageHandlers) => {
-        handlers.current = {
-          ...handlers.current,
-          ...newHandlers,
-        };
+        handlers.current = { ...handlers.current, ...newHandlers };
       },
     },
   };

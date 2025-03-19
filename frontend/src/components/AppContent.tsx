@@ -27,11 +27,11 @@ export const AppContent = () => {
       <div className="flex flex-1 gap-4">
         {chatContext.state.currentChannel && (
           <>
-            <div className="w-[40%] flex-none bg-surface-light rounded-lg shadow-md overflow-hidden">
+            <div className="w-[40%] bg-surface-light rounded-lg shadow-md overflow-hidden flex flex-col">
               <ChannelInfo
                 channel={chatContext.state.channels.find((c) => c.name === chatContext.state.currentChannel)!}
               />
-              <div className="h-[calc(100%-4rem)] p-4">
+              <div className="flex-1 overflow-y-auto p-4">
                 <MessageList />
               </div>
             </div>

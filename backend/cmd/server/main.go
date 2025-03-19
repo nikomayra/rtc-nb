@@ -39,6 +39,11 @@ func main() {
 	connManager := connections.NewHub()
 	connManager.StartCleanupTicker() // Stale connections cleanup
 
+	// Initialize the system channel for broadcasting system messages
+	if err := connManager.InitializeChannel("system"); err != nil {
+		log.Printf("Warning: Could not initialize system channel: %v", err)
+	}
+
 	// Initialize services
 	chatService := chat.NewService(dbStore, fileStore, connManager)
 	sketchService := sketch.NewService(dbStore, connManager)

@@ -47,6 +47,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
   };
 
   const renderContent = () => {
+    // Get the member update if available
+    const memberUpdate = message.content.memberUpdate;
+
     switch (message.type) {
       case MessageType.Text:
         return (
@@ -59,28 +62,35 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
           </p>
         );
       case MessageType.MemberUpdate:
-        if (message.content.memberUpdate?.action == MemberUpdateAction.RoleChanged) {
-          return (
-            <div className="px-3 py-1.5 text-text-light italic text-xs text-center">
-              {message.content.memberUpdate.isAdmin ? (
-                <p>
-                  {message.username} made {message.content.memberUpdate.username} an admin.
-                </p>
-              ) : (
-                <p>
-                  {message.username} removed {message.content.memberUpdate.username}'s admin status.
-                </p>
-              )}
-            </div>
-          );
-        } else if (message.content.memberUpdate?.action == MemberUpdateAction.Added) {
-          return (
-            <div className="px-3 py-1.5 text-text-light italic text-xs text-center">
-              <p>{message.content.memberUpdate.username} joined the channel.</p>
-            </div>
-          );
+        // Ensure memberUpdate is defined
+        if (!memberUpdate) return null;
+
+        // Handle specific member update actions
+        switch (memberUpdate.action) {
+          case MemberUpdateAction.RoleChanged:
+            return (
+              <div className="px-3 py-1.5 text-text-light italic text-xs text-center">
+                {memberUpdate.isAdmin ? (
+                  <p>
+                    {message.username} made {memberUpdate.username} an admin.
+                  </p>
+                ) : (
+                  <p>
+                    {message.username} removed {memberUpdate.username}'s admin status.
+                  </p>
+                )}
+              </div>
+            );
+          case MemberUpdateAction.Added:
+            return (
+              <div className="px-3 py-1.5 text-text-light italic text-xs text-center">
+                <p>{memberUpdate.username} joined the channel.</p>
+              </div>
+            );
+          default:
+            console.error("Unknown member update action:", memberUpdate.action);
+            return null;
         }
-        return null;
 
       case MessageType.Image:
         return (

@@ -78,6 +78,7 @@ export enum ChannelUpdateAction {
 export enum MemberUpdateAction {
   Added = "added",
   RoleChanged = "role_changed",
+  Removed = "removed",
 }
 
 const SketchCommandSchema = z

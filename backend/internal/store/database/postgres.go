@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"rtc-nb/backend/internal/models"
 	"sync"
 )
@@ -34,9 +35,29 @@ func (s *Store) BatchInsertMessages(ctx context.Context, messages []*models.Mess
 	}
 	defer tx.Rollback()
 
+	// Create a map to track which channels we've already verified
+	verifiedChannels := make(map[string]bool)
+
 	for _, msg := range messages {
 		if msg.Type == models.MessageTypeSketch {
 			continue
+		}
+
+		// Check if channel exists before inserting message
+		if !verifiedChannels[msg.ChannelName] {
+			var exists bool
+			err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM channels WHERE name = $1)", msg.ChannelName).Scan(&exists)
+			if err != nil {
+				return fmt.Errorf("failed to check if channel exists: %w", err)
+			}
+
+			if !exists {
+				// Skip this message as channel doesn't exist
+				log.Printf("Skipping message for non-existent channel: %s", msg.ChannelName)
+				continue
+			}
+
+			verifiedChannels[msg.ChannelName] = true
 		}
 
 		contentJSON, err := json.Marshal(msg.Content)
@@ -468,4 +489,13 @@ func (s *Store) GetChannelAdmins(ctx context.Context, channelName string) ([]str
 		admins = append(admins, username)
 	}
 	return admins, nil
+}
+
+// DeleteChannelMembers removes all members from a channel
+func (s *Store) DeleteChannelMembers(ctx context.Context, channelName string) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM channel_member WHERE channel_name = $1", channelName)
+	if err != nil {
+		return fmt.Errorf("failed to delete channel members: %w", err)
+	}
+	return nil
 }

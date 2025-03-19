@@ -37,6 +37,8 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 	protected := apiRouter.NewRoute().Subrouter()
 	protected.Use(middleware.AuthMiddleware)
 
+	// Handle websocket connections - separate handlers for system and channel websockets
+	protected.HandleFunc("/ws/system", wsh.HandleSystemWebSocket)
 	protected.HandleFunc("/ws/{channelName}", wsh.HandleWebSocket)
 	protected.HandleFunc("/joinchannel", handlers.JoinChannelHandler).Methods("PATCH")
 	protected.HandleFunc("/createchannel", handlers.CreateChannelHandler).Methods("POST")

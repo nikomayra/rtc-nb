@@ -195,12 +195,40 @@ func (cm *channelManager) DeleteChannel(ctx context.Context, channelName, userna
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	if isAdmin, err := cm.db.IsUserAdmin(ctx, channelName, username); err != nil || !isAdmin {
+	// Check if user is admin
+	isAdmin, err := cm.db.IsUserAdmin(ctx, channelName, username)
+	if err != nil {
+		return fmt.Errorf("failed to check admin status: %w", err)
+	}
+	if !isAdmin {
 		return fmt.Errorf("user is not admin")
 	}
+
+	// Start a transaction for the deletion
+	tx, err := cm.db.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Delete all channel members first to avoid constraint issues
+	if err := cm.db.DeleteChannelMembers(ctx, channelName); err != nil {
+		return fmt.Errorf("failed to delete channel members: %w", err)
+	}
+
+	// Delete the channel
 	if err := cm.db.DeleteChannel(ctx, channelName); err != nil {
 		return fmt.Errorf("delete channel: %w", err)
 	}
+
+	// Clean up any lingering clients in this channel
+	cm.connMgr.RemoveAllClientsFromChannel(channelName)
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return nil
 }
 
