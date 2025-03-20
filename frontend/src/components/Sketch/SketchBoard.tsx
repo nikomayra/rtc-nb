@@ -1,68 +1,55 @@
-import { useState, useCallback, useRef, memo, useEffect, useContext } from "react";
-import { DrawPath, Point } from "../../types/interfaces";
-import useCanvas from "../../hooks/useCanvas";
-import { useSketchActions } from "../../hooks/useSketchActions";
+import { useState, useCallback, memo, useContext, useRef } from "react";
+import { Point } from "../../types/interfaces";
 import { SketchContext } from "../../contexts/sketchContext";
+import { useSketch } from "../../hooks/useSketch";
 
 interface SketchBoardProps {
-  onPathComplete: (path: DrawPath) => void;
-  canvasOps: ReturnType<typeof useCanvas>;
-  onClear: () => void;
-  sketchActions: ReturnType<typeof useSketchActions>;
+  channelName: string;
 }
 
 type Tool = "draw" | "erase" | "pan";
 
-export const SketchBoard = memo(({ onPathComplete, canvasOps, onClear, sketchActions }: SketchBoardProps) => {
+export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
   const [currentTool, setCurrentTool] = useState<Tool>("draw");
-  const [strokeWidth, setStrokeWidth] = useState(2);
+  const [strokeWidth, setStrokeWidth] = useState(3);
   const [isInteracting, setIsInteracting] = useState(false);
   const [panStart, setPanStart] = useState<Point | null>(null);
+
+  // Reference to the scroll container for panning
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const sketchContext = useContext(SketchContext);
   if (!sketchContext) throw new Error("Context missing");
 
-  const currentPathRef = useRef<DrawPath>({
-    points: [],
-    isDrawing: currentTool === "draw",
-    strokeWidth,
+  // Use our new useSketch hook
+  const sketch = useSketch({
+    channelName,
+    currentSketch: sketchContext.state.currentSketch,
   });
-
-  // Prevent memory leaks by cleaning up paths
-  useEffect(() => {
-    return () => {
-      currentPathRef.current = {
-        points: [],
-        isDrawing: true,
-        strokeWidth: 2,
-      };
-    };
-  }, []);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!canvasOps.canvasRef.current) return;
+      if (!sketch.canvasRef.current) return;
 
+      console.log(`👇 [SketchBoard] Tool: ${currentTool}`);
       setIsInteracting(true);
 
       if (currentTool === "pan") {
         setPanStart({ x: e.clientX, y: e.clientY });
+        // Change cursor to "grabbing" when panning
+        e.currentTarget.style.cursor = "grabbing";
         return;
       }
 
-      const point = canvasOps.getCanvasPoint(e);
-      if (!point || !canvasOps.isValidPoint(point)) {
+      const point = sketch.getCanvasPoint(e);
+      if (!point || !sketch.isValidPoint(point)) {
         console.warn("Invalid point detected");
         return;
       }
 
-      currentPathRef.current = {
-        points: [point],
-        isDrawing: currentTool === "draw",
-        strokeWidth,
-      };
+      sketch.startPath(point, currentTool === "draw", strokeWidth);
     },
-    [canvasOps, currentTool, strokeWidth]
+    [sketch, currentTool, strokeWidth]
   );
 
   const handleMouseMove = useCallback(
@@ -70,87 +57,124 @@ export const SketchBoard = memo(({ onPathComplete, canvasOps, onClear, sketchAct
       if (!isInteracting) return;
 
       if (currentTool === "pan" && panStart) {
-        const container = e.currentTarget.parentElement;
+        const container = scrollContainerRef.current;
         if (!container) return;
 
+        // Calculate the distance moved since last position
         const dx = e.clientX - panStart.x;
         const dy = e.clientY - panStart.y;
 
+        // Update scroll position (subtract because scroll direction is opposite to drag)
         container.scrollLeft -= dx;
         container.scrollTop -= dy;
 
+        // Update the pan start position for next move event
         setPanStart({ x: e.clientX, y: e.clientY });
         return;
       }
 
-      const point = canvasOps.getCanvasPoint(e);
-      if (!point || !canvasOps.isValidPoint(point)) return;
+      const point = sketch.getCanvasPoint(e);
+      if (!point || !sketch.isValidPoint(point)) return;
 
-      const prevPoint = currentPathRef.current.points[currentPathRef.current.points.length - 1];
-      if (prevPoint) {
-        canvasOps.drawPath(prevPoint, point, currentTool === "draw", strokeWidth);
-      }
-
-      currentPathRef.current.points.push(point);
+      sketch.continuePath(point);
     },
-    [isInteracting, currentTool, panStart, canvasOps, strokeWidth]
+    [isInteracting, currentTool, panStart, sketch]
   );
 
   const handleMouseUp = useCallback(() => {
     if (!isInteracting) return;
 
-    if (currentPathRef.current.points.length > 0) {
-      onPathComplete(currentPathRef.current);
+    if (currentTool === "pan") {
+      // Reset cursor back to grab when done panning
+      if (sketch.canvasRef.current) {
+        sketch.canvasRef.current.style.cursor = "grab";
+      }
+    } else {
+      sketch.completePath();
     }
 
     setIsInteracting(false);
-    currentPathRef.current = {
-      points: [],
-      isDrawing: currentTool === "draw",
-      strokeWidth,
-    };
-  }, [isInteracting, currentTool, strokeWidth, onPathComplete]);
+    setPanStart(null);
+  }, [isInteracting, currentTool, sketch]);
 
   return (
-    <div className="sketch-board-container">
-      <div className="sketch-title">
-        <span>{sketchContext.state.currentSketch?.displayName}</span>
+    <div className="flex w-full flex-col h-full">
+      <div className="text-center py-3 border-b border-primary/20">
+        <h2 className="font-medium text-text-light">{sketchContext.state.currentSketch?.displayName}</h2>
       </div>
-      <div className="sketch-board">
-        <canvas
-          ref={canvasOps.canvasRef}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          style={{ touchAction: "none" }} // Prevent touch scrolling while drawing
-        />
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-auto bg-surface-dark/30 min-h-[300px] scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-surface-dark 
+          scrollbar-hover:scrollbar-thumb-primary/30"
+      >
+        <div className="min-w-min">
+          <canvas
+            ref={sketch.canvasRef}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            style={{
+              touchAction: "none",
+              cursor: currentTool === "pan" ? "grab" : "crosshair",
+              display: "block",
+            }}
+            className="bg-black border-2 border-dashed border-primary/30"
+          />
+        </div>
       </div>
-      <div className="sketch-toolbar">
-        <button onClick={() => setCurrentTool("draw")} disabled={isInteracting}>
-          Pen🖊️
+      <div className="flex gap-2 p-3 justify-center border-t border-primary/20 bg-surface-dark/10">
+        <button
+          onClick={() => setCurrentTool("draw")}
+          disabled={isInteracting}
+          className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+            currentTool === "draw"
+              ? "bg-primary/20 text-primary hover:bg-primary/30"
+              : "bg-surface-dark/50 text-text-light/70 hover:bg-red-500/10"
+          }`}
+        >
+          ✏️ Draw
         </button>
-        <button onClick={() => setCurrentTool("erase")} disabled={isInteracting}>
-          Eraser🧹
+        <button
+          onClick={() => setCurrentTool("erase")}
+          disabled={isInteracting}
+          className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+            currentTool === "erase"
+              ? "bg-primary/20 text-primary hover:bg-primary/30"
+              : "bg-surface-dark/50 text-text-light/70 hover:bg-red-500/10"
+          }`}
+        >
+          🧽 Erase
         </button>
-        <button onClick={() => setCurrentTool("pan")} disabled={isInteracting}>
-          Pan🤚
+        <button
+          onClick={() => setCurrentTool("pan")}
+          disabled={isInteracting}
+          className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+            currentTool === "pan"
+              ? "bg-primary/20 text-primary hover:bg-primary/30"
+              : "bg-surface-dark/50 text-text-light/70 hover:bg-red-500/10"
+          }`}
+        >
+          👋 Pan
         </button>
-        <select value={strokeWidth} onChange={(e) => setStrokeWidth(Number(e.target.value))} disabled={isInteracting}>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((width) => (
+        <select
+          value={strokeWidth}
+          onChange={(e) => setStrokeWidth(Number(e.target.value))}
+          disabled={isInteracting}
+          className="px-2 py-1.5 rounded-md text-sm bg-surface-dark/50 text-text-light border border-primary/20"
+        >
+          {[3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45].map((width) => (
             <option key={width} value={width}>
-              {width}
+              {width}px
             </option>
           ))}
         </select>
-        <button onClick={onClear} disabled={isInteracting}>
-          Clear🗑️
-        </button>
-        <button onClick={sketchActions.undo} disabled={!sketchActions.canUndo() || isInteracting}>
-          Undo↩️
-        </button>
-        <button onClick={sketchActions.redo} disabled={!sketchActions.canRedo() || isInteracting}>
-          Redo↪️
+        <button
+          onClick={sketch.clear}
+          disabled={isInteracting}
+          className="px-3 py-1.5 rounded-md text-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+        >
+          🗑️ Clear
         </button>
       </div>
     </div>

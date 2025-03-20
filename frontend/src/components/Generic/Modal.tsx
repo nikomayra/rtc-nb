@@ -48,7 +48,7 @@ export const Modal = ({ isOpen, onClose, children, title, className = "" }: Moda
           ×
         </button>
         {title && (
-          <div className="px-6 py-4 border-b border-primary/20">
+          <div className="px-8 py-4 border-b border-primary/20">
             <h2 className="text-lg font-medium text-text-light">{title}</h2>
           </div>
         )}

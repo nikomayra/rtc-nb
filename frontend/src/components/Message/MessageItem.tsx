@@ -54,8 +54,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
       case MessageType.Text:
         return (
           <p
-            className={`px-3 py-1.5 rounded-lg break-words ${
-              myMessage ? "bg-secondary text-text-light" : "bg-secondary-dark text-text-light"
+            className={`px-3 py-1 rounded-lg break-words text-sm ${
+              myMessage ? "bg-secondary/60 text-text-light" : "bg-secondary-dark/40 text-text-light"
             }`}
           >
             {message.content.text}
@@ -122,8 +122,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
             </Modal>
             {message.content.text && (
               <p
-                className={`px-3 py-1.5 rounded-lg ${
-                  myMessage ? "bg-secondary text-text-light" : "bg-secondary-dark text-text-light"
+                className={`px-3 py-1 rounded-lg ${
+                  myMessage ? "bg-secondary/60 text-text-light" : "bg-secondary-dark/40 text-text-light"
                 }`}
               >
                 {message.content.text}

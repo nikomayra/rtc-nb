@@ -56,7 +56,7 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 
 	protected.HandleFunc("/createSketch", handlers.CreateSketchHandler).Methods("POST")
 	protected.HandleFunc("/channels/{channelName}/sketches/{sketchId}", handlers.GetSketchHandler).Methods("GET")
-	protected.HandleFunc("/getSketches/{channelName}", handlers.GetSketchesHandler).Methods("GET")
+	protected.HandleFunc("/channels/{channelName}/sketches", handlers.GetSketchesHandler).Methods("GET")
 	protected.HandleFunc("/deleteSketch/{sketchId}", handlers.DeleteSketchHandler).Methods("DELETE")
 	protected.HandleFunc("/clearSketch", handlers.ClearSketchHandler).Methods("POST")
 

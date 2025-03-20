@@ -77,10 +77,15 @@ func (sb *SketchBuffer) flush(messages []*models.Message) error {
 	// Group updates by sketch ID
 	for _, msg := range messages {
 		if msg.Type != models.MessageTypeSketch ||
-			msg.Content.SketchCmd == nil ||
-			msg.Content.SketchCmd.CommandType != models.SketchCommandTypeUpdate {
+			msg.Content.SketchCmd == nil {
 			continue
 		}
+
+		// Only process Update commands
+		if msg.Content.SketchCmd.CommandType != models.SketchCommandTypeUpdate {
+			continue
+		}
+
 		sketchId := msg.Content.SketchCmd.SketchID
 		updates[sketchId] = append(updates[sketchId], msg.Content.SketchCmd)
 	}
@@ -98,6 +103,7 @@ func (sb *SketchBuffer) flush(messages []*models.Message) error {
 			if cmd.Region == nil {
 				continue
 			}
+
 			err := sketch.AddRegion(*cmd.Region)
 			if err != nil {
 				log.Printf("Error adding region to sketch %s: %v", sketchID, err)

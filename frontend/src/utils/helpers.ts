@@ -16,7 +16,7 @@ const formatToHumanReadable = (datetime: string): string => {
 
   // Format the date and time into a human-readable format
   const options: Intl.DateTimeFormatOptions = {
-    weekday: "narrow", // Day of the week (e.g., "M")
+    weekday: "short", // Day of the week (e.g., "Mon")
     year: "2-digit", // Full year (e.g., "25")
     month: "2-digit", // Abbreviated month (e.g., "01")
     day: "2-digit", // Day of the month (e.g., "07")
@@ -27,7 +27,7 @@ const formatToHumanReadable = (datetime: string): string => {
   };
 
   // Example input: 2025-01-07T13:35:56.626742Z
-  // Example output: T, 01/07/25, 13:35 UTC
+  // Example output: Tues, 01/07/25, 13:35 UTC
 
   // Use `Intl.DateTimeFormat` to format the Date object
   return date.toLocaleString("en-US", options);

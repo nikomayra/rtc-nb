@@ -44,16 +44,6 @@ export const SketchSchema = z.object({
   createdBy: z.string().min(1),
 });
 
-// export const RegionlessSketchSchema = z.object({
-//   id: z.string().uuid(),
-//   channelName: z.string().min(1),
-//   displayName: z.string().min(1),
-//   width: z.number().min(1),
-//   height: z.number().min(1),
-//   createdAt: z.string().min(1).datetime(),
-//   createdBy: z.string().min(1),
-// });
-
 export enum MessageType {
   Text = 0,
   Image = 1,
@@ -87,6 +77,7 @@ const SketchCommandSchema = z
     sketchId: z.string().uuid(),
     region: RegionSchema.optional(),
     sketchData: SketchSchema.optional(),
+    pathId: z.string().uuid().optional(),
   })
   .refine(
     (data) => {

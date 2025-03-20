@@ -20,22 +20,24 @@ export const AppContent = () => {
   }
 
   return (
-    <div className="flex h-screen w-full bg-surface-dark text-text-light p-4">
-      <aside className="w-[22%] flex-none bg-surface-light rounded-lg p-4 mr-4 shadow-md">
+    <div className="flex h-screen w-screen bg-surface-dark text-text-light p-4 overflow-hidden">
+      <aside className="w-[22%] bg-surface-light rounded-lg p-4 mr-4 shadow-md">
         <ChannelList />
       </aside>
-      <div className="flex flex-1 gap-4">
+      <div className="flex gap-4 w-[78%]">
         {chatContext.state.currentChannel && (
           <>
             <div className="w-[40%] bg-surface-light rounded-lg shadow-md overflow-hidden flex flex-col">
-              <ChannelInfo
-                channel={chatContext.state.channels.find((c) => c.name === chatContext.state.currentChannel)!}
-              />
+              <div className="flex-none">
+                <ChannelInfo
+                  channel={chatContext.state.channels.find((c) => c.name === chatContext.state.currentChannel)!}
+                />
+              </div>
               <div className="flex-1 overflow-y-auto p-4">
                 <MessageList />
               </div>
             </div>
-            <div className="flex-1 bg-surface-light rounded-lg p-4 shadow-md">
+            <div className="w-[60%] min-w-0 bg-surface-light rounded-lg shadow-md overflow-hidden mr-4">
               <SketchContainer />
             </div>
           </>

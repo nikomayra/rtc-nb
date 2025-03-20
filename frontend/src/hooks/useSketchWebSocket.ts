@@ -1,92 +1,115 @@
-import { useCallback, useContext, useEffect, useRef } from "react";
-import { WebSocketContext } from "../contexts/webSocketContext";
-import { SketchContext } from "../contexts/sketchContext";
-import { IncomingMessage, MessageType, SketchCommandType, Region } from "../types/interfaces";
-import { AuthContext } from "../contexts/authContext";
+// import { useCallback, useContext, useEffect, useRef } from "react";
+// import { WebSocketContext } from "../contexts/webSocketContext";
+// import { SketchContext } from "../contexts/sketchContext";
+// import { IncomingMessage, MessageType, SketchCommandType, Region } from "../types/interfaces";
+// import { AuthContext } from "../contexts/authContext";
 
-export const useSketchWebSocket = (
-  currentSketchId: string | undefined,
-  onUpdate: (update: Region) => void,
-  onClear: () => void
-) => {
-  const wsService = useContext(WebSocketContext);
-  const sketchContext = useContext(SketchContext);
-  const authContext = useContext(AuthContext);
-  if (!sketchContext || !wsService || !authContext) throw new Error("Context not found");
+/**
+ * @deprecated Use the useSketchSync hook instead.
+ * This hook is kept for backward compatibility only.
+ */
 
-  const currentSketchIdRef = useRef(currentSketchId);
-  const isProcessingMessage = useRef(false);
-  const messageQueue = useRef<IncomingMessage[]>([]);
-  const processMessageRef = useRef<(message: IncomingMessage) => void>();
+// export const useSketchWebSocket = (
+//   currentSketchId: string | undefined,
+//   onUpdate: (update: Region) => void,
+//   onClear: () => void
+// ) => {
+//   const wsService = useContext(WebSocketContext);
+//   const sketchContext = useContext(SketchContext);
+//   const authContext = useContext(AuthContext);
+//   if (!sketchContext || !wsService || !authContext) throw new Error("Context not found");
 
-  useEffect(() => {
-    currentSketchIdRef.current = currentSketchId;
-  }, [currentSketchId]);
+//   const currentSketchIdRef = useRef(currentSketchId);
+//   const isProcessingMessage = useRef(false);
+//   const messageQueue = useRef<IncomingMessage[]>([]);
+//   const processMessageRef = useRef<(message: IncomingMessage) => void>();
 
-  const handleMessage = useCallback(
-    async (message: IncomingMessage) => {
-      if (message.type !== MessageType.Sketch || !message.content.sketchCmd) return;
+//   useEffect(() => {
+//     currentSketchIdRef.current = currentSketchId;
+//   }, [currentSketchId]);
 
-      if (isProcessingMessage.current) {
-        messageQueue.current.push(message);
-        return;
-      }
+//   const handleMessage = useCallback(
+//     async (message: IncomingMessage) => {
+//       if (message.type !== MessageType.Sketch || !message.content.sketchCmd) return;
 
-      try {
-        isProcessingMessage.current = true;
-        const cmd = message.content.sketchCmd;
+//       console.log(`📥 [handleMessage] From ${message.username}, cmd: ${message.content.sketchCmd.commandType}`);
 
-        switch (cmd.commandType) {
-          case SketchCommandType.Update:
-            if (cmd.region && currentSketchIdRef.current === cmd.sketchId) {
-              onUpdate(cmd.region);
-            }
-            break;
-          case SketchCommandType.Clear:
-            if (currentSketchIdRef.current === cmd.sketchId) {
-              onClear();
-            }
-            break;
-          case SketchCommandType.Delete:
-            sketchContext.actions.removeSketch(cmd.sketchId);
-            if (currentSketchIdRef.current === cmd.sketchId) {
-              sketchContext.actions.setCurrentSketch(null);
-            }
-            break;
-          case SketchCommandType.New:
-            if (cmd.sketchData) {
-              sketchContext.actions.addSketch(cmd.sketchData);
-            }
-            break;
-        }
-      } catch (error) {
-        console.error("Error processing sketch message:", error);
-      } finally {
-        isProcessingMessage.current = false;
-        // Process next message if any
-        if (messageQueue.current.length > 0) {
-          const nextMessage = messageQueue.current.shift();
-          if (nextMessage) {
-            processMessageRef.current?.(nextMessage);
-          }
-        }
-      }
-    },
-    [onUpdate, onClear, sketchContext.actions]
-  );
+//       if (isProcessingMessage.current) {
+//         console.log(`⏳ [handleMessage] Queue message (${messageQueue.current.length} pending)`);
+//         messageQueue.current.push(message);
+//         return;
+//       }
 
-  useEffect(() => {
-    if (!wsService) return;
+//       try {
+//         isProcessingMessage.current = true;
+//         const cmd = message.content.sketchCmd;
 
-    // console.log("🔌 Setting up sketch message handler");
-    processMessageRef.current = handleMessage;
-    wsService.actions.setMessageHandlers({
-      onSketchMessage: handleMessage,
-    });
+//         // Skip our own messages - we handle everything locally first
+//         if (message.username === authContext.state.username) {
+//           console.log(`🔄 [handleMessage] Ignoring own message (already processed locally)`);
+//           return;
+//         }
 
-    return () => {
-      // console.log("🔌 Cleaning up sketch message handler");
-      wsService.actions.setMessageHandlers({});
-    };
-  }, [wsService, handleMessage]);
-};
+//         // Process messages from other users
+//         switch (cmd.commandType) {
+//           case SketchCommandType.Update:
+//             if (cmd.region && currentSketchIdRef.current === cmd.sketchId) {
+//               console.log(`🔄 [handleMessage] Update from ${message.username}: ${cmd.region.paths.length} paths`);
+
+//               onUpdate(cmd.region);
+//             } else {
+//               console.log(`⚠️ [handleMessage] Skipping update - ID mismatch`);
+//             }
+//             break;
+
+//           case SketchCommandType.Clear:
+//             if (currentSketchIdRef.current === cmd.sketchId) {
+//               console.log(`🧹 [handleMessage] Clear from ${message.username}`);
+//               onClear();
+//             }
+//             break;
+
+//           case SketchCommandType.Delete:
+//             console.log(`🗑️ [handleMessage] Delete sketch: ${cmd.sketchId}`);
+//             sketchContext.actions.removeSketch(cmd.sketchId);
+//             if (currentSketchIdRef.current === cmd.sketchId) {
+//               sketchContext.actions.setCurrentSketch(null);
+//             }
+//             break;
+
+//           case SketchCommandType.New:
+//             if (cmd.sketchData) {
+//               console.log(`📝 [handleMessage] New sketch: ${cmd.sketchData.id}`);
+//               sketchContext.actions.addSketch(cmd.sketchData);
+//             }
+//             break;
+//         }
+//       } catch (error) {
+//         console.error("❌ [handleMessage] Error:", error);
+//       } finally {
+//         isProcessingMessage.current = false;
+//         if (messageQueue.current.length > 0) {
+//           const nextMessage = messageQueue.current.shift();
+//           if (nextMessage) {
+//             console.log(`⏭️ [handleMessage] Processing next queued message`);
+//             processMessageRef.current?.(nextMessage);
+//           }
+//         }
+//       }
+//     },
+//     [onUpdate, onClear, sketchContext.actions, authContext.state.username]
+//   );
+
+//   useEffect(() => {
+//     if (!wsService) return;
+
+//     processMessageRef.current = handleMessage;
+//     wsService.actions.setMessageHandlers({
+//       onSketchMessage: handleMessage,
+//     });
+
+//     return () => {
+//       wsService.actions.setMessageHandlers({});
+//     };
+//   }, [wsService, handleMessage]);
+// };

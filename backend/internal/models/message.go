@@ -42,6 +42,7 @@ type SketchCommand struct {
 	SketchID    string            `json:"sketch_id"`
 	Region      *Region           `json:"region,omitempty"`
 	SketchData  *Sketch           `json:"sketch_data,omitempty"`
+	PathID      *string           `json:"path_id,omitempty"`
 }
 
 type MessageContent struct {

@@ -551,7 +551,7 @@ func (h *Handlers) DeleteSketchHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.sketchService.DeleteSketch(r.Context(), sketchId); err != nil {
 		log.Printf("Error deleting sketch: %v", err)
-		responses.SendError(w, "Failed to delete sketch", http.StatusInternalServerError)
+		responses.SendError(w, "Only sketch creator or channel admin can delete sketches", http.StatusInternalServerError)
 		return
 	}
 
