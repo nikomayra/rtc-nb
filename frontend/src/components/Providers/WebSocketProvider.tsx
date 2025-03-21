@@ -24,34 +24,32 @@ export const WebSocketProvider: React.FC<{
 
   // Handle incoming messages
   const handleMessage = useCallback((message: IncomingMessage) => {
-    console.log("📨 WebSocket message received:", {
-      type: message.type,
-      handlers: Object.keys(handlers.current),
-    });
+    // Reduce logging to essential info only
+    console.log("📨 WebSocket message:", { type: message.type, channel: message.channelName });
 
     try {
       switch (message.type) {
         case MessageType.Sketch:
           if (handlers.current.onSketchMessage) {
-            console.log("🎨 Routing to sketch handler");
+            console.log("🎨 Routing sketch message");
             handlers.current.onSketchMessage(message);
           }
           break;
         case MessageType.ChannelUpdate:
           if (handlers.current.onChannelUpdate) {
-            console.log("📢 Routing to channel update handler");
+            console.log("📢 Routing channel update");
             handlers.current.onChannelUpdate(message);
           }
           break;
         case MessageType.MemberUpdate:
           if (handlers.current.onMemberUpdate) {
-            console.log("👥 Routing to member update handler");
+            console.log("👥 Routing member update");
             handlers.current.onMemberUpdate(message);
           }
           break;
         default:
           if (handlers.current.onChatMessage) {
-            console.log("💬 Routing to chat handler");
+            console.log("💬 Routing chat message");
             handlers.current.onChatMessage(message);
           }
       }

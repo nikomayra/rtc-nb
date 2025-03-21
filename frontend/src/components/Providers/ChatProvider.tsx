@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useContext } from "react";
+import { useCallback, useEffect, useState, useContext, useRef } from "react";
 import { ChatContext } from "../../contexts/chatContext";
 import { AuthContext } from "../../contexts/authContext";
 import {
@@ -15,6 +15,8 @@ import { axiosInstance } from "../../api/axiosInstance";
 import { isAxiosError } from "axios";
 import { z } from "zod";
 import { WebSocketContext } from "../../contexts/webSocketContext";
+import { NotificationContext } from "../../contexts/notificationContext";
+import React from "react";
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [messages, setMessages] = useState<Record<string, IncomingMessage[]>>({});
@@ -25,6 +27,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const authContext = useContext(AuthContext);
   const wsContext = useContext(WebSocketContext);
+  const notificationContext = useContext(NotificationContext);
 
   if (!authContext || !wsContext) {
     throw new Error("ChatProvider must be used within Auth and WebSocket providers");
@@ -33,6 +36,37 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const {
     state: { token, username },
   } = authContext;
+
+  // Use a stable reference to notification functions
+  const notifyError = useCallback(
+    (message: string) => {
+      if (!notificationContext) {
+        console.error("Notification context not available:", message);
+        return;
+      }
+      notificationContext.actions.addNotification({
+        type: "error",
+        message,
+        duration: 5000,
+      });
+    },
+    [notificationContext]
+  );
+
+  const notifyInfo = useCallback(
+    (message: string) => {
+      if (!notificationContext) {
+        console.error("Notification context not available:", message);
+        return;
+      }
+      notificationContext.actions.addNotification({
+        type: "info",
+        message,
+        duration: 5000,
+      });
+    },
+    [notificationContext]
+  );
 
   const handleChannelUpdate = useCallback(
     (message: IncomingMessage) => {
@@ -111,19 +145,25 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             [channelName]: validatedMessages,
           }));
         } else {
-          console.error("Failed to get messages:", res.data.error);
+          const errorMsg = `Failed to get messages: ${res.data.error}`;
+          console.error(errorMsg);
+          notifyError(errorMsg);
         }
       } catch (error) {
         if (error instanceof z.ZodError) {
+          const errorMsg = "Invalid message data received";
           console.error("Invalid message data:", error.errors);
+          notifyError(errorMsg);
         }
         if (isAxiosError(error)) {
-          console.error("Failed to get messages:", error.response?.data?.message);
+          const errorMsg = `Failed to get messages: ${error.response?.data?.message || "Unknown error"}`;
+          console.error(errorMsg);
+          notifyError(errorMsg);
         }
         throw error;
       }
     },
-    [token]
+    [token, notifyError]
   );
 
   // Fetch channels from the server on load or token change
@@ -158,19 +198,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
       } else {
         console.error("Failed to get channels:", res.data.error);
+        notifyError(`Failed to get channels: ${res.data.error}`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      let errorMsg = "Failed to get channels: Unknown error";
+
       if (error instanceof z.ZodError) {
+        errorMsg = "Invalid channel data format";
         console.error("Invalid channel data:", error.errors);
+      } else if (isAxiosError(error) && error.response?.data?.message) {
+        errorMsg = `Failed to get channels: ${error.response.data.message}`;
+      } else if (error instanceof Error) {
+        errorMsg = `Failed to get channels: ${error.message}`;
       }
-      if (isAxiosError(error)) {
-        console.error("Failed to get channels:", error.response?.data?.message);
-      }
+
+      console.error(errorMsg);
+      notifyError(errorMsg);
       throw error;
     }
-  }, [token]);
+  }, [token, notifyError]);
 
-  // System connection and channel list management
+  // System connection and channel list management - simplified
   useEffect(() => {
     if (!token) {
       wsContext.actions.disconnectAll();
@@ -279,7 +327,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   // Set the message handlers for the WebSocket
+  // Add a ref to track if we've already logged the setup message
+  const handlersLoggedRef = useRef(false);
+
   useEffect(() => {
+    // Only log once per component mount, not on every dependency change
+    if (!handlersLoggedRef.current) {
+      console.log("🔄 Setting WebSocket message handlers");
+      handlersLoggedRef.current = true;
+    }
+
     wsContext.actions.setMessageHandlers({
       onChatMessage: handleMessage,
       onChannelUpdate: handleChannelUpdate,
@@ -295,16 +352,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         if (res.data.success) {
           setCurrentChannel(null);
+          notifyInfo(`Left channel: ${channelName}`);
         } else {
-          console.error("Failed to leave channel:", res.data.error);
+          const errorMsg = `Failed to leave channel: ${res.data.error}`;
+          console.error(errorMsg);
+          notifyError(errorMsg);
         }
       } catch (error) {
         if (isAxiosError(error)) {
-          console.error("Failed to leave channel:", error.response?.data?.message);
+          const errorMsg = `Failed to leave channel: ${error.response?.data?.message || "Unknown error"}`;
+          console.error(errorMsg);
+          notifyError(errorMsg);
         }
       }
     },
-    [token]
+    [token, notifyError, notifyInfo]
   );
 
   const joinChannel = useCallback(
@@ -336,6 +398,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (res.data.success) {
             setCurrentChannel(channelName);
+            notifyInfo(`Joined channel: ${channelName}`);
 
             // Only broadcast member update if the user is not already a member
             const currChannel = channels.find((c) => c.name === channelName);
@@ -370,12 +433,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error) {
         wsContext.actions.disconnect(); // Ensure disconnected on error
         if (isAxiosError(error)) {
-          console.error("Failed to join channel:", error.response?.data?.message);
+          const errorMsg = `Failed to join channel: ${error instanceof Error ? error.message : "Unknown error"}`;
+          console.error(errorMsg);
+          notifyError(errorMsg);
+        } else if (error instanceof Error) {
+          notifyError(error.message);
         }
         throw error;
       }
     },
-    [currentChannel, wsContext.actions, leaveChannel, token, username, channels]
+    [currentChannel, wsContext.actions, leaveChannel, token, username, channels, notifyError, notifyInfo]
   );
 
   const createChannel = async (channelName: string, description?: string, password?: string): Promise<void> => {
@@ -391,6 +458,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
       if (res.data.success) {
         const validatedChannel = ChannelSchema.parse(res.data.data);
+        notifyInfo(`Channel "${channelName}" created successfully`);
 
         console.log("Sending channel creation websocket:", {
           type: MessageType.ChannelUpdate,
@@ -426,7 +494,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Still send the websocket message for other clients
         wsContext.actions.send({
           type: MessageType.ChannelUpdate,
-          channelName: channelName,
+          channelName,
           content: {
             channelUpdate: {
               action: ChannelUpdateAction.Created,
@@ -435,15 +503,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
         });
       } else {
-        console.error("Failed to create channel:", res.data.error);
+        const errorMsg = `Failed to create channel: ${res.data.error}`;
+        console.error(errorMsg);
+        notifyError(errorMsg);
       }
     } catch (error) {
       if (error instanceof z.ZodError) {
-        console.error("Invalid channel data:", error.errors);
+        const errorMsg = "Invalid channel data received";
+        console.error(errorMsg, error.errors);
+        notifyError(errorMsg);
       }
       if (isAxiosError(error)) {
-        console.error("Failed to create channel:", error.response?.data?.message);
+        const errorMsg = `Failed to create channel: ${error.response?.data?.message || "Unknown error"}`;
+        console.error(errorMsg);
+        notifyError(errorMsg);
       }
+      throw error;
     }
   };
 
@@ -466,12 +541,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             },
           },
         });
+        notifyInfo(`Channel "${channelName}" deleted successfully`);
       } else {
-        console.error("Failed to delete channel:", res.data.error);
+        const errorMsg = `Failed to delete channel: ${res.data.error}`;
+        console.error(errorMsg);
+        notifyError(errorMsg);
       }
     } catch (error) {
       if (isAxiosError(error)) {
-        console.error("Failed to delete channel:", error.response?.data?.message);
+        const errorMsg = `Failed to delete channel: ${error.response?.data?.message || "Unknown error"}`;
+        console.error(errorMsg);
+        notifyError(errorMsg);
       }
     }
   };

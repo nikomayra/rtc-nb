@@ -7,6 +7,7 @@ import { z } from "zod";
 import { Modal } from "../Generic/Modal";
 import { SketchContext } from "../../contexts/sketchContext";
 import { WebSocketContext } from "../../contexts/webSocketContext";
+import { useNotification } from "../../hooks/useNotification";
 
 interface SketchConfigProps {
   channelName: string;
@@ -30,6 +31,8 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
 
   const sketchContext = useContext(SketchContext);
   const wsService = useContext(WebSocketContext);
+  const { showError, showSuccess } = useNotification();
+
   if (!sketchContext || !wsService) throw new Error("SketchContext or WebSocketContext not found");
 
   const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -68,7 +71,8 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
     sketchContext.actions.setError(null);
     const error = validateSketchDimensions(width, height);
     if (error) {
-      console.error(error);
+      showError(error);
+      sketchContext.actions.setLoading(false);
       return;
     }
     setIsOpen(false);
@@ -91,6 +95,7 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
       if (response.data.success) {
         const validatedSketch = SketchSchema.parse(response.data.data);
         sketchContext.actions.addSketch(validatedSketch);
+        showSuccess(`Sketch "${displayName}" created successfully`);
 
         // Broadcast new sketch to all clients
         wsService.actions.send({
@@ -117,7 +122,13 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
           sketchContext.actions.setCurrentSketch(sketchWithRegions);
         }
         setIsOpen(false);
+
+        // Reset form fields
+        setDisplayName("");
+        setWidth("");
+        setHeight("");
       } else {
+        showError(response.data.error || "Failed to create sketch");
         sketchContext.actions.setError(response.data.error);
       }
     } catch (error) {
@@ -128,6 +139,7 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
       if (isAxiosError(error)) {
         errorMessage = error.response?.data?.message || errorMessage;
       }
+      showError(errorMessage);
       sketchContext.actions.setError(errorMessage);
     } finally {
       sketchContext.actions.setLoading(false);
@@ -145,7 +157,9 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
       if (response.data.success) {
         const sketchWithRegions = SketchSchema.parse(response.data.data);
         sketchContext.actions.setCurrentSketch(sketchWithRegions);
+        showSuccess(`Sketch "${sketch.displayName}" loaded`);
       } else {
+        showError(response.data.error || "Failed to load sketch");
         sketchContext.actions.setError(response.data.error);
         console.error("Failed to get sketch:", response.data.error);
       }
@@ -158,6 +172,7 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
         errorMessage = error.response?.data?.message || errorMessage;
         console.error("Failed to get sketch:", error.response?.data?.message);
       }
+      showError(errorMessage);
       sketchContext.actions.setError(errorMessage);
     } finally {
       sketchContext.actions.setLoading(false);
@@ -184,10 +199,12 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
             },
           },
         });
+        showSuccess("Sketch deleted successfully");
       }
     } catch (error) {
       if (isAxiosError(error)) {
         const message = error.response?.data?.error.message || "Failed to delete sketch";
+        showError(message);
         sketchContext.actions.setError(message);
       }
       throw error;
@@ -212,10 +229,6 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
           + New Sketch
         </button>
       </div>
-
-      {sketchContext.state.error && (
-        <div className="px-3 py-1 rounded-md text-xs bg-red-500/10 text-red-400">{sketchContext.state.error}</div>
-      )}
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Create Sketch">
         <form onSubmit={handleCreateSketch} className="space-y-4">

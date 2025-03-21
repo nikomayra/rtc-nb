@@ -15,6 +15,7 @@ const (
 	MessageTypeSketch
 	MessageTypeChannelUpdate
 	MessageTypeMemberUpdate
+	MessageTypeUserStatus
 )
 
 type ChannelUpdate struct {
@@ -26,6 +27,11 @@ type MemberUpdate struct {
 	Action   string `json:"action"` // "added", "role_changed"
 	Username string `json:"username"`
 	IsAdmin  bool   `json:"is_admin"`
+}
+
+type UserStatus struct {
+	Action   string `json:"action"` // "online", "offline"
+	Username string `json:"username"`
 }
 
 type SketchCommandType string
@@ -52,6 +58,7 @@ type MessageContent struct {
 	SketchCmd     *SketchCommand `json:"sketch_cmd,omitempty"`
 	ChannelUpdate *ChannelUpdate `json:"channel_update,omitempty"`
 	MemberUpdate  *MemberUpdate  `json:"member_update,omitempty"`
+	UserStatus    *UserStatus    `json:"user_status,omitempty"`
 }
 
 type IncomingMessage struct {
@@ -126,6 +133,18 @@ func (m *IncomingMessage) Validate() error {
 			}
 		default:
 			return errors.New("invalid member update action")
+		}
+	case MessageTypeUserStatus:
+		if m.Content.UserStatus == nil {
+			return errors.New("user status data required")
+		}
+		switch m.Content.UserStatus.Action {
+		case "online", "offline":
+			if m.ChannelName == "" || m.Content.UserStatus.Username == "" {
+				return errors.New("channel name and username required for user status")
+			}
+		default:
+			return errors.New("invalid user status action")
 		}
 	default:
 		return errors.New("invalid message type")

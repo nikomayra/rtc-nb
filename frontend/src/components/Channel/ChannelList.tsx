@@ -19,6 +19,9 @@ export const ChannelList = () => {
     actions: { logout },
   } = authContext;
 
+  // Count total online users across all channels
+  const totalOnlineUsers = 1;
+
   return (
     <div className="flex flex-col h-full">
       {/* User Section */}
@@ -33,6 +36,11 @@ export const ChannelList = () => {
       <div className="flex-1 min-h-0 flex flex-col">
         <div className="flex items-center justify-between mb-2 px-2">
           <h2 className="text-sm font-medium text-text-light/70 uppercase tracking-wider">Channels</h2>
+          {totalOnlineUsers > 0 && (
+            <span className="text-xs bg-green-600/20 text-green-400 px-2 py-0.5 rounded-full truncate whitespace-nowrap">
+              {totalOnlineUsers} online
+            </span>
+          )}
         </div>
         <div
           className="flex-1 overflow-y-scroll px-2 

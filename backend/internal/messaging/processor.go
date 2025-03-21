@@ -45,7 +45,9 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 	}
 
 	// For system-level messages (channel/member updates), always use system connections
-	if msg.Type == models.MessageTypeChannelUpdate || msg.Type == models.MessageTypeMemberUpdate {
+	if msg.Type == models.MessageTypeChannelUpdate ||
+		msg.Type == models.MessageTypeMemberUpdate ||
+		msg.Type == models.MessageTypeUserStatus {
 		log.Printf("Broadcasting system message type %d to all system connections", msg.Type)
 		// This will only broadcast to system connections, not regular channel connections
 		p.connManager.NotifyAll(outgoingMsgBytes)
@@ -74,7 +76,7 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 		// Buffer text and image messages
 		log.Printf("Adding message to chat buffer for channel %s", msg.ChannelName)
 		p.chatBuffer.Add(msg)
-	case models.MessageTypeChannelUpdate, models.MessageTypeMemberUpdate:
+	case models.MessageTypeChannelUpdate, models.MessageTypeMemberUpdate, models.MessageTypeUserStatus:
 		// Do not buffer system messages
 		log.Printf("Skipping buffer for system message type %d", msg.Type)
 	}

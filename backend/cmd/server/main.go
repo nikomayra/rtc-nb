@@ -32,9 +32,6 @@ func main() {
 		log.Fatalf("Failed to initialize file store: %v", err)
 	}
 
-	// Initialize Redis PubSub with config-provided client
-	// cache := redis.NewCache(cfg.Redis)
-
 	// Initialize websocket hub and handler
 	connManager := connections.NewHub()
 	connManager.StartCleanupTicker() // Stale connections cleanup
@@ -55,14 +52,6 @@ func main() {
 	// Setup router and routes
 	router := mux.NewRouter()
 	api.RegisterRoutes(router, wsHandler, connManager, chatService, sketchService, cfg.FileStorePath)
-
-	// Serve static files from the filestore
-	// fs := http.FileServer(http.Dir(cfg.FileStorePath))
-	// router.PathPrefix("/files/").Handler(http.StripPrefix("/files/", fs))
-
-	// TODO: serve the frontend from the dist folder for production
-	// fs := http.FileServer(http.Dir("./dist"))
-	// router.Handle("/", fs)
 
 	log.Println("Server started on :8080")
 	if err := http.ListenAndServe(":8080", router); err != nil {

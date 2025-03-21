@@ -157,7 +157,8 @@ func (h *Handler) HandleSystemWebSocket(w http.ResponseWriter, r *http.Request) 
 
 		// Verify this is actually a system message
 		if incomingMsg.Type != models.MessageTypeChannelUpdate &&
-			incomingMsg.Type != models.MessageTypeMemberUpdate {
+			incomingMsg.Type != models.MessageTypeMemberUpdate &&
+			incomingMsg.Type != models.MessageTypeUserStatus {
 			log.Printf("Received non-system message type %d on system WebSocket", incomingMsg.Type)
 			continue
 		}

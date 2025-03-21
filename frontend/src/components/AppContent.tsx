@@ -6,6 +6,7 @@ import { SketchContainer } from "./Sketch/SketchContainer";
 import { ChatContext } from "../contexts/chatContext";
 import { useContext } from "react";
 import { ChannelInfo } from "./Channel/ChannelInfo";
+import { NotificationTest } from "./NotificationTest";
 
 export const AppContent = () => {
   const {
@@ -21,6 +22,9 @@ export const AppContent = () => {
 
   return (
     <div className="flex h-screen w-screen bg-surface-dark text-text-light p-4 overflow-hidden">
+      {/* Always show the notification test panel for development */}
+      <NotificationTest />
+
       <aside className="w-[22%] bg-surface-light rounded-lg p-4 mr-4 shadow-md">
         <ChannelList />
       </aside>

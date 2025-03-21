@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useContext, useRef } from "react";
+import { useState, useMemo, useEffect, useContext, useRef, useCallback } from "react";
 import { initialState, SketchContext, SketchContextState } from "../../contexts/sketchContext";
 import { AuthContext } from "../../contexts/authContext";
 import { ChatContext } from "../../contexts/chatContext";
@@ -6,15 +6,37 @@ import { axiosInstance, isAxiosError } from "../../api/axiosInstance";
 import { BASE_URL } from "../../utils/constants";
 import { z } from "zod";
 import { Sketch, SketchSchema, Region } from "../../types/interfaces";
+import { NotificationContext } from "../../contexts/notificationContext";
 
 export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, setState] = useState<SketchContextState>(initialState);
-  const stateRef = useRef(state);
   const authContext = useContext(AuthContext);
   const chatContext = useContext(ChatContext);
+  const notificationContext = useContext(NotificationContext);
+
+  // Track if we've already tried to fetch sketches for channels in this session
+  const attemptedChannelsRef = useRef(new Set<string>());
+
+  const [state, setState] = useState<SketchContextState>(initialState);
+  const stateRef = useRef(state);
   const previousChannelRef = useRef<string | null>(null);
 
   if (!authContext || !chatContext) throw new Error("Context not found");
+
+  // Create stable notification function
+  const notifyError = useCallback(
+    (message: string) => {
+      if (!notificationContext) {
+        console.error(message);
+        return;
+      }
+      notificationContext.actions.addNotification({
+        type: "error",
+        message,
+        duration: 5000,
+      });
+    },
+    [notificationContext]
+  );
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -43,6 +65,13 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Only attempt to fetch sketches if both token and channel are available
     if (!authContext?.state.token || !chatContext?.state.currentChannel) {
       console.log("Skipping GET Sketches - missing token or channel");
+      return;
+    }
+
+    // If we've already attempted to fetch sketches for this channel and got a 500 error, don't try again
+    const channelKey = chatContext.state.currentChannel;
+    if (attemptedChannelsRef.current.has(channelKey)) {
+      console.log(`Already attempted to fetch sketches for ${channelKey} and failed, skipping`);
       return;
     }
 
@@ -89,16 +118,19 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             throw zodError;
           }
         } else {
+          const errorMsg = `Failed to get sketches: ${response.data.error}`;
           setState((prev) => ({
             ...prev,
             error: response.data.error,
             isLoading: false,
           }));
-          console.error("Failed to get sketches:", response.data.error);
+          console.error(errorMsg);
+          notifyError(errorMsg);
         }
       } catch (error) {
         let errorMessage = "Failed to load sketches";
         if (error instanceof z.ZodError) {
+          console.error("Invalid sketch data:", error.errors);
           errorMessage = "Invalid sketch data received";
         }
         if (isAxiosError(error)) {
@@ -116,21 +148,32 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               isLoading: false,
               error: null,
             }));
+
+            // Remember that we've tried this channel and got a 500 error to avoid retrying
+            attemptedChannelsRef.current.add(channelKey);
             return; // Exit early without setting error
+          } else if (error.response?.status === 500) {
+            // Handle other 500 errors to prevent continuous retry loops
+            console.log(`Server error (500) when fetching sketches for ${channelKey}, will not retry`);
+            errorMessage = "Server error while loading sketches";
+
+            // Remember that we've tried this channel and got a 500 error to avoid retrying
+            attemptedChannelsRef.current.add(channelKey);
           } else {
             errorMessage = error.response?.data?.message || error.response?.data?.error?.message || errorMessage;
           }
         }
-        console.error("Sketch loading error:", errorMessage);
+
         setState((prev) => ({
           ...prev,
           error: errorMessage,
           isLoading: false,
         }));
+        notifyError(errorMessage);
       }
     };
     getSketches();
-  }, [chatContext?.state.currentChannel, authContext?.state.token]);
+  }, [chatContext.state.currentChannel, authContext.state.token, notifyError]);
 
   const actions = useMemo(
     () => ({
@@ -170,11 +213,12 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setError: (error: string | null) => {
         if (error) {
           console.log("💥 Sketch Error:", { error });
+          notifyError(error);
         }
         setState((prev) => ({ ...prev, error }));
       },
     }),
-    []
+    [notifyError]
   );
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);
