@@ -1,27 +1,34 @@
 import { useState, useContext } from "react";
 import { useAuthContext } from "../../hooks/useAuthContext";
-import { Channel, MemberUpdateAction, MessageType } from "../../types/interfaces";
-import { BASE_URL } from "../../utils/constants";
-import axios from "axios";
-import { WebSocketContext } from "../../contexts/webSocketContext";
+import { Channel } from "../../types/interfaces";
+import { ChatContext } from "../../contexts/chatContext";
 import { Dropdown } from "../Generic/Dropdown";
 import { useNotification } from "../../hooks/useNotification";
 
 interface ChannelInfoProps {
-  channel: Channel;
+  channel?: Channel;
 }
 
 export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-  const wsContext = useContext(WebSocketContext);
+  const chatContext = useContext(ChatContext);
   const {
-    state: { username, token },
+    state: { username },
   } = useAuthContext();
   const { showError, showSuccess } = useNotification();
 
-  if (!wsContext) {
-    throw new Error("ChannelInfo must be used within a WebSocketContext");
+  if (!chatContext) {
+    throw new Error("ChannelInfo must be used within a ChatContext");
+  }
+
+  // Early return if no channel is provided
+  if (!channel || !channel.members) {
+    return (
+      <div className="flex flex-col p-4 border-b border-primary/20 min-h-16 overflow-visible w-full">
+        <div className="text-text-light/50 text-sm">Loading channel information...</div>
+      </div>
+    );
   }
 
   const isAdmin = Object.values(channel.members).some((member) => member.username === username && member.isAdmin);
@@ -48,39 +55,13 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
         newIsAdmin,
       });
 
-      const response = await axios.patch(
-        `${BASE_URL}/channels/${channel.name}/members/${memberUsername}/role`,
-        {
-          is_admin: newIsAdmin,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (response.data.success) {
-        console.log("🎭 Role update API success:", response.data);
+      const success = await chatContext.actions.updateMemberRole(channel.name, memberUsername, newIsAdmin);
+
+      if (success) {
+        console.log("🎭 Role update success");
         showSuccess(`${memberUsername} ${newIsAdmin ? "promoted to admin" : "demoted to user"}`);
-
-        const wsMessage = {
-          type: MessageType.MemberUpdate,
-          channelName: channel.name,
-          content: {
-            memberUpdate: {
-              action: MemberUpdateAction.RoleChanged,
-              username: memberUsername,
-              isAdmin: newIsAdmin,
-            },
-          },
-        };
-        console.log("🎭 Sending websocket message:", wsMessage);
-        console.log("🎭 MemberUpdateAction.RoleChanged value:", MemberUpdateAction.RoleChanged);
-
-        wsContext.actions.send(wsMessage);
-        console.log("🎭 WebSocket message sent for role change");
       } else {
-        const errorMsg = `Failed to update role: ${response.data.error}`;
+        const errorMsg = "Failed to update user role";
         console.error(errorMsg);
         showError(errorMsg);
       }

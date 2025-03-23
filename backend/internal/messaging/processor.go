@@ -44,41 +44,44 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 		return err
 	}
 
-	// For system-level messages (channel/member updates), always use system connections
-	if msg.Type == models.MessageTypeChannelUpdate ||
-		msg.Type == models.MessageTypeMemberUpdate ||
-		msg.Type == models.MessageTypeUserStatus {
+	// Step 1: Route message to appropriate connections
+	// -----------------------------------------------
+	switch msg.Type {
+	case models.MessageTypeChannelUpdate:
+		// Only channel updates are system-wide messages
 		log.Printf("Broadcasting system message type %d to all system connections", msg.Type)
-		// This will only broadcast to system connections, not regular channel connections
 		p.connManager.NotifyAll(outgoingMsgBytes)
-	} else {
-		// For channel-specific messages, ensure the channel exists
+
+	default:
+		// All other messages are channel-specific
 		if msg.ChannelName == "" {
 			log.Printf("Skipping message with empty channel name")
 			return nil
 		}
 
 		log.Printf("Broadcasting message type %d to channel %s", msg.Type, msg.ChannelName)
-
-		// Broadcast to the specific channel
 		p.connManager.NotifyChannel(msg.ChannelName, outgoingMsgBytes)
 	}
 
-	// Persist messages as needed
+	// Step 2: Buffer messages that need persistence
+	// --------------------------------------------
+	// Only certain message types should be buffered for persistence
 	switch msg.Type {
+	case models.MessageTypeText, models.MessageTypeImage:
+		// Regular chat messages should be persisted
+		log.Printf("Adding message to chat buffer for channel %s", msg.ChannelName)
+		p.chatBuffer.Add(msg)
+
 	case models.MessageTypeSketch:
 		// Only buffer sketch update commands
 		if msg.Content.SketchCmd != nil && msg.Content.SketchCmd.CommandType == models.SketchCommandTypeUpdate {
 			log.Printf("Adding sketch update to buffer for channel %s", msg.ChannelName)
 			p.sketchBuffer.Add(msg)
 		}
-	case models.MessageTypeText, models.MessageTypeImage:
-		// Buffer text and image messages
-		log.Printf("Adding message to chat buffer for channel %s", msg.ChannelName)
-		p.chatBuffer.Add(msg)
+
 	case models.MessageTypeChannelUpdate, models.MessageTypeMemberUpdate, models.MessageTypeUserStatus:
-		// Do not buffer system messages
-		log.Printf("Skipping buffer for system message type %d", msg.Type)
+		// System messages should not be persisted - they only update UI state
+		log.Printf("Skipping persistence for system message type %d", msg.Type)
 	}
 
 	return nil

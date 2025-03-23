@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useCallback, useContext } from "react";
 import { ChatContext } from "../../contexts/chatContext";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { ChannelItem } from "./ChannelItem";
@@ -7,11 +7,45 @@ import { CreateChannelForm } from "./CreateChannelForm";
 export const ChannelList = () => {
   const chatContext = useContext(ChatContext);
   const authContext = useAuthContext();
+
+  // Create wrapper functions with defensive programming
+  const handleJoinChannel = useCallback(
+    async (channelName: string, password?: string) => {
+      if (!chatContext) return;
+      await chatContext.actions.joinChannel(channelName, password);
+    },
+    [chatContext]
+  );
+
+  const handleLeaveChannel = useCallback(
+    async (channelName: string) => {
+      if (!chatContext) return;
+      await chatContext.actions.leaveChannel(channelName);
+    },
+    [chatContext]
+  );
+
+  const handleDeleteChannel = useCallback(
+    async (channelName: string) => {
+      if (!chatContext) return;
+      await chatContext.actions.deleteChannel(channelName);
+    },
+    [chatContext]
+  );
+
+  const handleCreateChannel = useCallback(
+    async (name: string, description?: string, password?: string) => {
+      if (!chatContext) return;
+      await chatContext.actions.createChannel(name, description, password);
+    },
+    [chatContext]
+  );
+
+  // Early return if contexts are not available
   if (!chatContext || !authContext) return null;
 
   const {
     state: { channels, currentChannel },
-    actions: { joinChannel, createChannel, deleteChannel, leaveChannel },
   } = chatContext;
 
   const {
@@ -54,9 +88,9 @@ export const ChannelList = () => {
               <ChannelItem
                 key={channel.name}
                 channel={channel}
-                onJoin={joinChannel}
-                onLeave={leaveChannel}
-                onDelete={deleteChannel}
+                onJoin={handleJoinChannel}
+                onLeave={handleLeaveChannel}
+                onDelete={handleDeleteChannel}
                 currentChannel={currentChannel}
               />
             ))}
@@ -66,7 +100,7 @@ export const ChannelList = () => {
 
       {/* Create Channel Section */}
       <div className="mt-4 pt-4 border-t border-primary/20">
-        <CreateChannelForm onSubmit={createChannel} />
+        <CreateChannelForm onSubmit={handleCreateChannel} />
       </div>
     </div>
   );

@@ -39,7 +39,13 @@ func (s *Store) BatchInsertMessages(ctx context.Context, messages []*models.Mess
 	verifiedChannels := make(map[string]bool)
 
 	for _, msg := range messages {
+		// Skip sketch messages (they have their own storage mechanism)
 		if msg.Type == models.MessageTypeSketch {
+			continue
+		}
+
+		// Skip MemberUpdate messages as these shouldn't be persisted
+		if msg.Type == models.MessageTypeMemberUpdate {
 			continue
 		}
 
@@ -93,6 +99,7 @@ func (s *Store) GetMessages(ctx context.Context, channelName string) ([]*models.
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan message row: %w", err)
 		}
+
 		err = json.Unmarshal(contentJSON, &msg.Content)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal message content: %w", err)

@@ -40,20 +40,25 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 	// Handle websocket connections - separate handlers for system and channel websockets
 	protected.HandleFunc("/ws/system", wsh.HandleSystemWebSocket)
 	protected.HandleFunc("/ws/{channelName}", wsh.HandleWebSocket)
-	protected.HandleFunc("/joinchannel", handlers.JoinChannelHandler).Methods("PATCH")
-	protected.HandleFunc("/createchannel", handlers.CreateChannelHandler).Methods("POST")
-	protected.HandleFunc("/deletechannel/{channelName}", handlers.DeleteChannelHandler).Methods("DELETE")
-	protected.HandleFunc("/leavechannel/{channelName}", handlers.LeaveChannelHandler).Methods("PATCH")
+
+	// Chat routes
+	// -- Channel routes
+	protected.HandleFunc("/joinChannel", handlers.JoinChannelHandler).Methods("PATCH")
+	protected.HandleFunc("/createChannel", handlers.CreateChannelHandler).Methods("POST")
+	protected.HandleFunc("/deleteChannel/{channelName}", handlers.DeleteChannelHandler).Methods("DELETE")
+	protected.HandleFunc("/leaveChannel/{channelName}", handlers.LeaveChannelHandler).Methods("PATCH")
 	protected.HandleFunc("/channels", handlers.GetChannelsHandler).Methods("GET")
 	protected.HandleFunc("/channels/{channelName}/members/{username}/role", handlers.UpdateChannelMemberRole).Methods("PATCH")
-
-	protected.HandleFunc("/validatetoken", handlers.ValidateTokenHandler).Methods("GET")
-	protected.HandleFunc("/logout", handlers.LogoutHandler).Methods("PATCH")
-	protected.HandleFunc("/deleteaccount", handlers.DeleteAccountHandler).Methods("DELETE")
-
+	// -- Messages routes
 	protected.HandleFunc("/upload", handlers.UploadHandler).Methods("POST")
 	protected.HandleFunc("/getMessages/{channelName}", handlers.GetMessagesHandler).Methods("GET")
 
+	// Auth routes
+	protected.HandleFunc("/validateToken", handlers.ValidateTokenHandler).Methods("GET")
+	protected.HandleFunc("/logout", handlers.LogoutHandler).Methods("PATCH")
+	protected.HandleFunc("/deleteAccount", handlers.DeleteAccountHandler).Methods("DELETE")
+
+	// Sketch routes
 	protected.HandleFunc("/createSketch", handlers.CreateSketchHandler).Methods("POST")
 	protected.HandleFunc("/channels/{channelName}/sketches/{sketchId}", handlers.GetSketchHandler).Methods("GET")
 	protected.HandleFunc("/channels/{channelName}/sketches", handlers.GetSketchesHandler).Methods("GET")

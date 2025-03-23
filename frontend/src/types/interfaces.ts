@@ -50,6 +50,7 @@ export enum MessageType {
   Sketch = 2,
   ChannelUpdate = 3,
   MemberUpdate = 4,
+  UserStatus = 5,
 }
 
 export enum SketchCommandType {

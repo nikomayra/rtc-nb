@@ -1,117 +1,49 @@
-import { useState, useCallback, useRef, useEffect, useContext } from "react";
-import { WebSocketContext, MessageHandlers } from "../../contexts/webSocketContext";
+import React, { useState, useEffect } from "react";
+import { WebSocketContext, MessageHandlers, WebSocketContextType } from "../../contexts/webSocketContext";
 import { WebSocketService } from "../../services/WebsocketService";
-import { IncomingMessage, MessageType } from "../../types/interfaces";
-import { AuthContext } from "../../contexts/authContext";
+import { OutgoingMessage } from "../../types/interfaces";
 
-export const WebSocketProvider: React.FC<{
+interface WebSocketProviderProps {
   children: React.ReactNode;
-}> = ({ children }) => {
+}
+
+export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
   const [systemConnected, setSystemConnected] = useState(false);
   const [channelConnected, setChannelConnected] = useState(false);
+
+  // Get the singleton instance
   const wsService = WebSocketService.getInstance();
-  const handlers = useRef<MessageHandlers>({});
-  const setupDoneRef = useRef(false);
-  const authContext = useContext(AuthContext);
 
-  if (!authContext) {
-    throw new Error("AuthContext not found");
-  }
-
-  const {
-    state: { token },
-  } = authContext;
-
-  // Handle incoming messages
-  const handleMessage = useCallback((message: IncomingMessage) => {
-    // Reduce logging to essential info only
-    console.log("📨 WebSocket message:", { type: message.type, channel: message.channelName });
-
-    try {
-      switch (message.type) {
-        case MessageType.Sketch:
-          if (handlers.current.onSketchMessage) {
-            console.log("🎨 Routing sketch message");
-            handlers.current.onSketchMessage(message);
-          }
-          break;
-        case MessageType.ChannelUpdate:
-          if (handlers.current.onChannelUpdate) {
-            console.log("📢 Routing channel update");
-            handlers.current.onChannelUpdate(message);
-          }
-          break;
-        case MessageType.MemberUpdate:
-          if (handlers.current.onMemberUpdate) {
-            console.log("👥 Routing member update");
-            handlers.current.onMemberUpdate(message);
-          }
-          break;
-        default:
-          if (handlers.current.onChatMessage) {
-            console.log("💬 Routing chat message");
-            handlers.current.onChatMessage(message);
-          }
-      }
-    } catch (error) {
-      console.error("Error in message handler:", error);
-    }
-  }, []);
-
-  // Set up handlers and connections
+  // Update connection state regularly
   useEffect(() => {
-    // Prevent setup from running twice in React Strict Mode
-    if (setupDoneRef.current) {
-      return;
-    }
+    const interval = setInterval(() => {
+      setSystemConnected(wsService.isSystemConnected);
+      setChannelConnected(wsService.isChannelConnected);
+    }, 1000);
 
-    console.log("⛑️ Setting up WebSocket handlers");
+    return () => clearInterval(interval);
+  }, [wsService.isChannelConnected, wsService.isSystemConnected]);
 
-    // Set flag to prevent duplicate setups
-    setupDoneRef.current = true;
-
-    // Setup message and connection state handlers
-    wsService.setMessageHandler(handleMessage);
-    wsService.setConnectionStateHandler((system, channel) => {
-      setSystemConnected(system);
-      setChannelConnected(channel);
-    });
-
-    // Connect system websocket if token exists
-    if (token) {
-      // Use a small timeout to ensure the DOM is settled before connection
-      setTimeout(() => {
-        wsService.connectSystem(token);
-      }, 100);
-    } else {
-      wsService.disconnectAll();
-    }
-
-    // Cleanup on unmount
+  // Clean up websocket connections on unmount
+  useEffect(() => {
     return () => {
-      console.log("🧼 Cleaning up WebSocket handlers");
-      wsService.setMessageHandler(null);
-      wsService.setConnectionStateHandler(null);
-      wsService.disconnectAll();
-      setupDoneRef.current = false;
+      wsService.disconnect();
     };
-  }, [wsService, handleMessage, token]);
+  }, [wsService]);
 
-  // Create context value
-  const contextValue = {
+  // Create context value with all required methods
+  const contextValue: WebSocketContextType = {
     state: {
       systemConnected,
       channelConnected,
     },
     actions: {
-      connectChannel: wsService.connectChannel.bind(wsService),
-      connectSystem: wsService.connectSystem.bind(wsService),
-      disconnect: wsService.disconnect.bind(wsService),
-      disconnectAll: wsService.disconnectAll.bind(wsService),
-      send: wsService.send.bind(wsService),
-      setMessageHandlers: (newHandlers: MessageHandlers) => {
-        handlers.current = { ...handlers.current, ...newHandlers };
-      },
+      connectSystem: (token: string) => wsService.connectSystem(token),
+      connectChannel: (token: string, channelName: string) => wsService.connectChannel(token, channelName),
+      disconnect: () => wsService.disconnect(),
+      disconnectAll: () => wsService.disconnectAll(),
+      send: (message: OutgoingMessage) => wsService.send(message),
+      setMessageHandlers: (handlers: MessageHandlers) => wsService.setMessageHandlers(handlers),
     },
   };
 

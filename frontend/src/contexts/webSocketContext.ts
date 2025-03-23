@@ -1,21 +1,23 @@
 import { createContext } from "react";
-import { IncomingMessage, OutgoingMessage } from "../types/interfaces";
+import { OutgoingMessage, IncomingMessage } from "../types/interfaces";
 
-export type MessageHandlers = {
+// Define MessageHandlers interface here instead of importing from service
+export interface MessageHandlers {
   onChatMessage?: (message: IncomingMessage) => void;
-  onSketchMessage?: (message: IncomingMessage) => void;
   onChannelUpdate?: (message: IncomingMessage) => void;
   onMemberUpdate?: (message: IncomingMessage) => void;
-};
+  onSketchMessage?: (message: IncomingMessage) => void;
+}
 
-interface WebSocketContext {
+// Define the WebSocketContext interface
+export interface WebSocketContextType {
   state: {
     systemConnected: boolean;
     channelConnected: boolean;
   };
   actions: {
-    connectChannel: (token: string, channelName: string) => void;
     connectSystem: (token: string) => void;
+    connectChannel: (token: string, channelName: string) => void;
     disconnect: () => void;
     disconnectAll: () => void;
     send: (message: OutgoingMessage) => void;
@@ -23,4 +25,18 @@ interface WebSocketContext {
   };
 }
 
-export const WebSocketContext = createContext<WebSocketContext | null>(null);
+// Create the context with a proper default value
+export const WebSocketContext = createContext<WebSocketContextType>({
+  state: {
+    systemConnected: false,
+    channelConnected: false,
+  },
+  actions: {
+    connectSystem: () => {},
+    connectChannel: () => {},
+    disconnect: () => {},
+    disconnectAll: () => {},
+    send: () => {},
+    setMessageHandlers: () => {},
+  },
+});

@@ -126,10 +126,13 @@ func (m *IncomingMessage) Validate() error {
 		if m.Content.MemberUpdate == nil {
 			return errors.New("member update data required")
 		}
+		if m.ChannelName == "" {
+			return errors.New("channel name required for member update")
+		}
 		switch m.Content.MemberUpdate.Action {
 		case "added", "role_changed":
-			if m.ChannelName == "" || m.Content.MemberUpdate.Username == "" {
-				return errors.New("channel name and username required for member update")
+			if m.Content.MemberUpdate.Username == "" {
+				return errors.New("username required for member update")
 			}
 		default:
 			return errors.New("invalid member update action")

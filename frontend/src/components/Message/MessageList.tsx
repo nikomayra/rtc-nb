@@ -20,7 +20,6 @@ export const MessageList = () => {
 
   const {
     state: { currentChannel, messages },
-    actions: { sendMessage },
   } = context;
 
   if (!currentChannel) {
@@ -42,7 +41,7 @@ export const MessageList = () => {
         <div ref={messagesEndRef} />
       </div>
       <div>
-        <SendMessageForm onSend={sendMessage} />
+        <SendMessageForm />
       </div>
     </div>
   );

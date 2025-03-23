@@ -86,7 +86,7 @@ func (rl *RateLimiter) RateLimit(next http.Handler) http.Handler {
 		rl.requests[ip] = append(rl.requests[ip], now)
 
 		// Lower limit for testing
-		if len(rl.requests[ip]) > 50 {
+		if len(rl.requests[ip]) > 120 {
 			rl.mu.Unlock()
 			// log.Printf("Rate limit exceeded for IP: %s, Count: %d", ip, len(rl.requests[ip]))
 			w.Header().Set("Retry-After", "60")

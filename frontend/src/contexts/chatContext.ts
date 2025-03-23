@@ -1,24 +1,27 @@
 import { createContext } from "react";
-import { Channel } from "../types/interfaces";
+import { Channel, IncomingMessage, OutgoingMessage } from "../types/interfaces";
 
-import { IncomingMessage, OutgoingMessage } from "../types/interfaces";
-
-interface ChatState {
-  channels: Channel[];
-  currentChannel: string | null;
-  messages: Record<string, IncomingMessage[]>;
-}
-
-interface ChatContext {
-  state: ChatState;
+export interface ChatContext {
+  state: {
+    messages: Record<string, IncomingMessage[]>;
+    channels: Channel[];
+    currentChannel: string | null;
+    isLoading: boolean;
+    errors: Record<string, Error | null>;
+    connectionState: {
+      systemConnected: boolean;
+      channelConnected: boolean;
+    };
+  };
   actions: {
     sendMessage: (message: OutgoingMessage) => void;
-    joinChannel: (channelName: string, password?: string) => Promise<void>;
-    createChannel: (channelName: string, description?: string, password?: string) => Promise<void>;
-    deleteChannel: (channelName: string) => Promise<void>;
-    leaveChannel: (channelName: string) => Promise<void>;
-    getChannels: () => Promise<void>;
-    // updateChannel: (channel: Channel) => Promise<APIResponse<void>>;
+    joinChannel: (channelName: string, password?: string) => Promise<boolean>;
+    createChannel: (channelName: string, description?: string, password?: string) => Promise<boolean>;
+    deleteChannel: (channelName: string) => Promise<boolean>;
+    leaveChannel: (channelName: string) => Promise<boolean>;
+    fetchChannels: () => Promise<Channel[] | null>;
+    updateMemberRole: (channelName: string, username: string, isAdmin: boolean) => Promise<boolean>;
+    uploadFile: (channelName: string, file: File, messageText?: string) => Promise<boolean>;
   };
 }
 

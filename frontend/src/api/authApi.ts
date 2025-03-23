@@ -27,7 +27,7 @@ export const authApi = {
   },
 
   deleteAccount: async (token: string): Promise<APIResponse<{ message: string }>> => {
-    const res = await axiosInstance.delete(`${BASE_URL}/deleteaccount`, {
+    const res = await axiosInstance.delete(`${BASE_URL}/deleteAccount`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.data;
@@ -37,7 +37,7 @@ export const authApi = {
     const headers = {
       Authorization: `Bearer ${token}`,
     };
-    const res = await axiosInstance.get(`${BASE_URL}/validatetoken`, { headers });
+    const res = await axiosInstance.get(`${BASE_URL}/validateToken`, { headers });
     return res.data;
   },
 };

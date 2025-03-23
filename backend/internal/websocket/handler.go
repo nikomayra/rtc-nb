@@ -36,7 +36,7 @@ func NewHandler(connMgr connections.Manager, msgProcessor *messaging.Processor) 
 	}
 }
 
-func (wsh *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if _, ok := w.(http.Hijacker); !ok {
 		responses.SendError(w, "WebSocket not supported", http.StatusInternalServerError)
 		return
@@ -59,7 +59,7 @@ func (wsh *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Channel websocket connection for user %s to channel %s", claims.Username, channelName)
 
-	conn, err := wsh.upgrader.Upgrade(w, r, nil)
+	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Error during WebSocket connection upgrade: %v", err)
 		responses.SendError(w, fmt.Sprintf("Error during WebSocket connection upgrade: %v", err), http.StatusInternalServerError)
@@ -67,14 +67,14 @@ func (wsh *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Register user connection
-	wsh.connMgr.AddConnection(claims.Username, conn)
-	wsh.connMgr.AddClientToChannel(channelName, conn)
+	h.connMgr.AddConnection(claims.Username, conn)
+	h.connMgr.AddClientToChannel(channelName, conn)
 	log.Printf("Added user %s to channel %s", claims.Username, channelName)
 
 	// Cleanup on disconnect
 	defer func() {
-		wsh.connMgr.RemoveConnection(claims.Username)
-		wsh.connMgr.RemoveClientFromChannel(channelName, conn)
+		h.connMgr.RemoveConnection(claims.Username)
+		h.connMgr.RemoveClientFromChannel(channelName, conn)
 		log.Printf("Removed user %s from channel %s", claims.Username, channelName)
 		conn.Close()
 	}()
@@ -101,7 +101,7 @@ func (wsh *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		err = wsh.msgProcessor.ProcessMessage(outgoingMsg)
+		err = h.msgProcessor.ProcessMessage(outgoingMsg)
 		if err != nil {
 			log.Printf("Error processing message: %v", err)
 		}
@@ -155,10 +155,8 @@ func (h *Handler) HandleSystemWebSocket(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 
-		// Verify this is actually a system message
-		if incomingMsg.Type != models.MessageTypeChannelUpdate &&
-			incomingMsg.Type != models.MessageTypeMemberUpdate &&
-			incomingMsg.Type != models.MessageTypeUserStatus {
+		// Verify this is actually a system message (ChannelUpdate only)
+		if incomingMsg.Type != models.MessageTypeChannelUpdate {
 			log.Printf("Received non-system message type %d on system WebSocket", incomingMsg.Type)
 			continue
 		}
@@ -176,8 +174,4 @@ func (h *Handler) HandleSystemWebSocket(w http.ResponseWriter, r *http.Request) 
 			log.Printf("Error processing system message: %v", err)
 		}
 	}
-}
-
-func (h *Handler) GetMessageProcessor() *messaging.Processor {
-	return h.msgProcessor
 }

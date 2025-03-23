@@ -2,11 +2,10 @@ import { useState, useMemo, useEffect, useContext, useRef, useCallback } from "r
 import { initialState, SketchContext, SketchContextState } from "../../contexts/sketchContext";
 import { AuthContext } from "../../contexts/authContext";
 import { ChatContext } from "../../contexts/chatContext";
-import { axiosInstance, isAxiosError } from "../../api/axiosInstance";
-import { BASE_URL } from "../../utils/constants";
 import { z } from "zod";
-import { Sketch, SketchSchema, Region } from "../../types/interfaces";
+import { Sketch, SketchSchema } from "../../types/interfaces";
 import { NotificationContext } from "../../contexts/notificationContext";
+import { sketchApi } from "../../api/sketchApi";
 
 export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const authContext = useContext(AuthContext);
@@ -83,63 +82,44 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       try {
         console.log(`Fetching sketches for channel: ${chatContext.state.currentChannel}`);
-        const response = await axiosInstance.get(
-          `${BASE_URL}/channels/${encodeURIComponent(chatContext.state.currentChannel!)}/sketches`,
-          {
-            headers: {
-              Authorization: `Bearer ${authContext.state.token}`,
-            },
-          }
-        );
 
-        if (response.data.success) {
-          console.log("Raw sketches data:", JSON.stringify(response.data.data));
+        const sketchData = await sketchApi.getSketches(chatContext.state.currentChannel!, authContext.state.token);
+
+        if (sketchData && sketchData.length > 0) {
+          // Get the first sketch (or could implement UI to choose)
+          const firstSketch = sketchData[0];
 
           // Attempt to fix regions if they're null
-          const fixedSketches = response.data.data.map((sketch: unknown) => {
-            const typedSketch = sketch as Partial<Sketch> & { regions: Record<string, Region> | null };
-            if (typedSketch.regions === null) {
-              console.log(`Fixing null regions for sketch ${typedSketch.id}`);
-              return { ...typedSketch, regions: {} };
-            }
-            return sketch;
-          });
+          const fixedSketch = firstSketch.regions === null ? { ...firstSketch, regions: {} } : firstSketch;
 
           try {
-            const validatedSketches = z.array(SketchSchema).parse(fixedSketches);
+            const validatedSketch = SketchSchema.parse(fixedSketch);
             setState((prev) => ({
               ...prev,
-              sketches: validatedSketches,
+              sketches: sketchData,
+              currentSketch: validatedSketch,
               isLoading: false,
             }));
-            console.log("📋 Sketches Loaded:", { count: validatedSketches.length });
+            console.log("📋 Sketch Loaded:", { id: validatedSketch.id });
           } catch (zodError) {
             console.error("Zod validation error:", zodError);
             throw zodError;
           }
         } else {
-          const errorMsg = `Failed to get sketches: ${response.data.error}`;
+          console.log("No sketches found for channel");
           setState((prev) => ({
             ...prev,
-            error: response.data.error,
+            sketches: [],
             isLoading: false,
           }));
-          console.error(errorMsg);
-          notifyError(errorMsg);
         }
       } catch (error) {
         let errorMessage = "Failed to load sketches";
         if (error instanceof z.ZodError) {
           console.error("Invalid sketch data:", error.errors);
           errorMessage = "Invalid sketch data received";
-        }
-        if (isAxiosError(error)) {
-          if (error.response?.status === 401) {
-            errorMessage = "Not authorized to view sketches in this channel";
-          } else if (
-            error.response?.status === 500 &&
-            error.response?.data?.error?.message === "Failed to get user channel"
-          ) {
+        } else if (error instanceof Error) {
+          if (error.message.includes("Failed to get user channel")) {
             // This error occurs when user hasn't joined a channel yet
             console.log("User hasn't joined a channel yet, skipping sketch loading");
             setState((prev) => ({
@@ -149,18 +129,18 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               error: null,
             }));
 
-            // Remember that we've tried this channel and got a 500 error to avoid retrying
+            // Remember that we've tried this channel and got an error to avoid retrying
             attemptedChannelsRef.current.add(channelKey);
             return; // Exit early without setting error
-          } else if (error.response?.status === 500) {
-            // Handle other 500 errors to prevent continuous retry loops
-            console.log(`Server error (500) when fetching sketches for ${channelKey}, will not retry`);
+          } else if (error.message.includes("Server error")) {
+            // Handle server errors to prevent continuous retry loops
+            console.log(`Server error when fetching sketches for ${channelKey}, will not retry`);
             errorMessage = "Server error while loading sketches";
 
-            // Remember that we've tried this channel and got a 500 error to avoid retrying
+            // Remember that we've tried this channel and got an error to avoid retrying
             attemptedChannelsRef.current.add(channelKey);
           } else {
-            errorMessage = error.response?.data?.message || error.response?.data?.error?.message || errorMessage;
+            errorMessage = error.message;
           }
         }
 

@@ -1,15 +1,9 @@
 import { FormEvent, useContext, useRef, useState } from "react";
 import { OutgoingMessage, MessageType } from "../../types/interfaces";
 import { ChatContext } from "../../contexts/chatContext";
-import { BASE_URL } from "../../utils/constants";
 import { AuthContext } from "../../contexts/authContext";
-import axios from "axios";
 
-type SendMessageFormProps = {
-  onSend: (message: OutgoingMessage) => void;
-};
-
-export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
+export const SendMessageForm = () => {
   const chatContext = useContext(ChatContext);
   const authContext = useContext(AuthContext);
   const messageInputRef = useRef<HTMLInputElement>(null);
@@ -21,21 +15,13 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
 
   const {
     state: { currentChannel },
+    actions: { sendMessage, uploadFile },
   } = chatContext;
-
-  const {
-    state: { token },
-  } = authContext;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     if (!isDragging) setIsDragging(true);
   };
-
-  // const handleDragLeave = (e: React.DragEvent) => {
-  //   e.preventDefault();
-  //   setIsDragging(false);
-  // };
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
@@ -50,42 +36,6 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
     }
   };
 
-  const handleFileUpload = async (file: File, message: string) => {
-    if (!currentChannel) return;
-
-    const uploadFormData = new FormData();
-    uploadFormData.append("file", file);
-    uploadFormData.append("channelName", currentChannel);
-
-    try {
-      const response = await axios.post(`${BASE_URL}/upload`, uploadFormData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      });
-
-      if (response.data.success) {
-        const outgoingMessage: OutgoingMessage = {
-          channelName: currentChannel,
-          type: MessageType.Image,
-          content: {
-            text: message,
-            fileUrl: response.data.data.imagePath,
-            thumbnailUrl: response.data.data.thumbnailPath,
-          },
-        };
-        onSend(outgoingMessage);
-
-        // Clear inputs
-        if (messageInputRef.current) messageInputRef.current.value = "";
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }
-    } catch (err) {
-      console.error("Upload failed:", err);
-    }
-  };
-
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!currentChannel) return;
@@ -94,14 +44,15 @@ export const SendMessageForm = ({ onSend }: SendMessageFormProps) => {
     const file = draggedFile || fileInputRef.current?.files?.[0] || null;
 
     if (file) {
-      await handleFileUpload(file, message);
+      // Use the uploadFile action from the chat context
+      await uploadFile(currentChannel, file, message);
     } else if (message.trim()) {
       const outgoingMessage: OutgoingMessage = {
         channelName: currentChannel,
         type: MessageType.Text,
         content: { text: message },
       };
-      onSend(outgoingMessage);
+      sendMessage(outgoingMessage);
     }
 
     // Clear form
