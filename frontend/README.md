@@ -4,11 +4,60 @@
 
 The frontend architecture follows a clean separation of concerns with a service-oriented approach. The main components are:
 
-1. **API Layer**: Handles direct HTTP requests to the backend
+1. **API Layer**: Handles direct HTTP requests to the backend with Zod validation
 2. **Services Layer**: Provides singleton services with business logic and caching
 3. **Contexts**: Provide state management throughout the application
 4. **Hooks**: Custom React hooks that connect services and contexts to components
 5. **Components**: UI elements that consume hooks and contexts
+
+## Architecture Diagram
+
+```mermaid
+flowchart TD
+    subgraph Components[UI Components Layer]
+        UI[React Components]
+    end
+
+    subgraph Hooks[Hooks Layer]
+        useChat[useChat]
+        useAuth[useAuthContext]
+        useNotification[useNotification]
+    end
+
+    subgraph Contexts[Context Layer]
+        ChatContext[Chat Context]
+        AuthContext[Auth Context]
+        WSContext[WebSocket Context]
+        NotifContext[Notification Context]
+    end
+
+    subgraph Services[Services Layer]
+        ChatService[Chat Service]
+        WebSocketService[WebSocket Service]
+    end
+
+    subgraph API[API Layer]
+        REST[REST API Calls]
+        WS[WebSocket Connections]
+    end
+
+    UI --> Hooks
+    Hooks --> Contexts
+    Hooks --> Services
+    Contexts <--> Services
+    Services --> API
+    API <--> Backend[Backend Server]
+
+    %% Data flow for specific operations
+    classDef dataflow fill:#f96,stroke:#333,stroke-width:2px;
+
+    UserAction[User Action] --> UI
+    class UserAction dataflow;
+
+    WS -- "Real-time Updates" --> WebSocketService
+    WebSocketService -- "Broadcasts" --> WSContext
+    WSContext -- "State Updates" --> UI
+```
 
 ## Architecture Layers
 
@@ -18,6 +67,26 @@ Located in `src/api/`, this layer contains direct API calls to the backend.
 
 - `chatApi.ts`: Handles REST API calls for chat-related functionality with validation using Zod
 - `axiosInstance.ts`: Configures the Axios instance with interceptors and common settings
+
+API calls follow a consistent pattern with proper error handling:
+
+```typescript
+// Example from chatApi.ts
+joinChannel: async (channelName: string, token: string, password?: string): Promise<string[]> => {
+  const res = await axiosInstance.patch(
+    `${BASE_URL}/joinChannel/${encodeURIComponent(channelName)}`,
+    { password: password || "" },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  if (!res.data.success) {
+    throw new Error(`Failed to join channel: ${res.data.error}`);
+  }
+
+  // Return online users from the response
+  return res.data.data.onlineUsers || [];
+};
+```
 
 ### 2. Services Layer
 
@@ -47,6 +116,11 @@ export class ChatService {
 
   // Methods for channel/message operations with cache management
   public async fetchChannels(token: string, forceRefresh = false): Promise<Channel[]> { ... }
+
+  // Returns online users when joining a channel
+  public async joinChannel(channelName: string, token: string, password?: string): Promise<string[]> {
+    return await chatApi.joinChannel(channelName, token, password);
+  }
 }
 ```
 
@@ -59,15 +133,31 @@ Located in `src/contexts/`, this layer provides application-wide state.
 - `authContext.ts`: Handles authentication state
 - `notificationContext.ts`: Manages notifications
 
-Each context follows a consistent pattern:
+Each context follows a consistent pattern with clearly defined state and actions:
 
 ```typescript
 export interface ChatContext {
   state: {
-    /* State properties */
+    messages: Record<string, IncomingMessage[]>;
+    channels: Channel[];
+    currentChannel: string | null;
+    isLoading: boolean;
+    errors: Record<string, Error | null>;
+    connectionState: {
+      systemConnected: boolean;
+      channelConnected: boolean;
+    };
+    onlineUsers: Record<string, Set<string>>; // channelName -> Set of online usernames
   };
   actions: {
-    /* Actions to modify state */
+    sendMessage: (message: OutgoingMessage) => void;
+    joinChannel: (channelName: string, password?: string) => Promise<boolean>;
+    createChannel: (channelName: string, description?: string, password?: string) => Promise<boolean>;
+    deleteChannel: (channelName: string) => Promise<boolean>;
+    leaveChannel: (channelName: string) => Promise<boolean>;
+    fetchChannels: () => Promise<Channel[] | null>;
+    updateMemberRole: (channelName: string, username: string, isAdmin: boolean) => Promise<boolean>;
+    uploadFile: (channelName: string, file: File, messageText?: string) => Promise<boolean>;
   };
 }
 ```
@@ -80,6 +170,7 @@ Located in `src/hooks/`, these custom hooks abstract away complex logic and stat
   - Manages channels, messages, and WebSocket interactions
   - Implements rate limiting and error handling
   - Provides a clean API for components
+  - Handles user online status tracking
 - `useAuthContext.ts`: Simplifies authentication interactions
 - `useNotification.ts`: Manages user notifications
 
@@ -89,6 +180,7 @@ The `useChat` hook is central to the implementation and follows a clear initiali
 2. Fetches available channels
 3. Restores the previous channel if available
 4. Fetches messages for the current channel
+5. Maintains online user presence information
 
 ### 5. UI Components Layer
 
@@ -136,7 +228,7 @@ The WebSocket implementation follows a clear separation of concerns:
      - Image messages
      - Sketch messages
      - Member updates (join/leave/role changes)
-     - User status updates
+     - User status updates (online/offline)
    - System Socket Messages:
      - Channel creation
      - Channel deletion
@@ -162,14 +254,44 @@ The WebSocket implementation follows a clear separation of concerns:
    - Connection state tracking
    - Clean disconnection handling
 
+## User Presence Management
+
+The application implements a streamlined user presence system:
+
+1. **Client-Side Tracking**:
+
+   - Each client maintains a `onlineUsers` state mapping channels to sets of online users
+   - When a user joins a channel, the server sends the current list of online users
+   - Real-time updates via WebSocket messages when users come online or go offline
+
+2. **Initialization Flow**:
+
+   - Server provides the current online users list when a client joins a channel
+   - Client adds itself to this list
+   - Other clients are notified via WebSocket when a new user comes online
+
+3. **Implementation Details**:
+   ```typescript
+   // When joining a channel, server returns online users
+   chatService.current.joinChannel(channelName, token, password).then((onlineUsersList) => {
+     // Initialize onlineUsers for this channel with server data plus current user
+     setOnlineUsers((prev) => ({
+       ...prev,
+       [channelName]: new Set([username!, ...onlineUsersList]),
+     }));
+     return true;
+   });
+   ```
+
 ## Error Handling
 
 The architecture implements centralized error handling:
 
-- **API Errors**: Captured in the service layer
+- **API Errors**: Captured in the service layer with the `executeApiCall` wrapper
 - **WebSocket Errors**: Handled with reconnection logic
 - **Message Parsing Errors**: Safely caught and logged
 - **State Management**: Error state propagated through contexts
+- **Rate Limiting**: Built-in rate limit detection and cooldown handling
 
 ## Best Practices
 
@@ -180,6 +302,8 @@ The architecture implements centralized error handling:
 5. **Error Boundaries**: Proper error handling at each layer
 6. **Clean Disconnection**: Proper cleanup of WebSocket connections
 7. **State Consistency**: Immediate UI updates with proper error handling
+8. **Optimized Rendering**: Use of React.memo and useCallback to minimize renders
+9. **Session Persistence**: Channel session saved in sessionStorage
 
 ## Future Improvements
 

@@ -30,10 +30,9 @@ type Channel struct {
 
 // Represents a user's status and metadata within a channel
 type ChannelMember struct {
-	Username    string     `json:"username"`
-	IsAdmin     bool       `json:"is_admin"`
-	JoinedAt    time.Time  `json:"joined_at"`
-	LastMessage *time.Time `json:"last_message,omitempty"`
+	Username string    `json:"username"`
+	IsAdmin  bool      `json:"is_admin"`
+	JoinedAt time.Time `json:"joined_at"`
 }
 
 func NewChannel(name string, creator string, description, password *string) (*Channel, error) {
@@ -107,19 +106,6 @@ func (c *Channel) IsAdmin(username string) bool {
 	defer c.mu.RUnlock()
 	member, exists := c.Members[username]
 	return exists && member.IsAdmin
-}
-
-func (c *Channel) UpdateLastMessage(username string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	member, exists := c.Members[username]
-	if !exists {
-		return ErrMemberNotFound
-	}
-
-	now := time.Now().UTC()
-	member.LastMessage = &now
-	return nil
 }
 
 func (c *Channel) GetMember(username string) (*ChannelMember, error) {

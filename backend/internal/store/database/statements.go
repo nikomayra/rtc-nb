@@ -66,7 +66,7 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 	}
 
 	if s.SelectUser, err = prepare(`
-        SELECT username, hashed_password, created_at, last_seen
+        SELECT username, hashed_password, created_at
         FROM users WHERE username = $1`); err != nil {
 		return nil, fmt.Errorf("prepare select user: %w", err)
 	}
@@ -123,7 +123,7 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 	}
 
 	if s.SelectChannelMembers, err = prepare(`
-        SELECT username, is_admin, joined_at, last_message
+        SELECT username, is_admin, joined_at
         FROM channel_member WHERE channel_name = $1`); err != nil {
 		return nil, fmt.Errorf("prepare select channel members: %w", err)
 	}
@@ -234,8 +234,6 @@ func (s *Statements) CloseStatements() error {
 		s.InsertUser,
 		s.SelectUser,
 		s.DeleteUser,
-		// s.UpsertUserStatus,
-		// s.SelectUserStatus,
 		s.InsertChannel,
 		s.SelectChannel,
 		s.SelectChannels,

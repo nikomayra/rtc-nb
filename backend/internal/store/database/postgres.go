@@ -133,7 +133,6 @@ func (s *Store) GetUser(ctx context.Context, username string) (*models.User, err
 		&user.Username,
 		&user.HashedPassword,
 		&user.CreatedAt,
-		&user.LastSeen,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -268,7 +267,6 @@ func (s *Store) loadChannelMembers(ctx context.Context, channel *models.Channel)
 			&member.Username,
 			&member.IsAdmin,
 			&member.JoinedAt,
-			&member.LastMessage,
 		)
 		if err != nil {
 			return err
@@ -276,6 +274,25 @@ func (s *Store) loadChannelMembers(ctx context.Context, channel *models.Channel)
 		channel.Members[member.Username] = member
 	}
 	return nil
+}
+
+func (s *Store) GetChannelMembers(ctx context.Context, channelName string) ([]*models.ChannelMember, error) {
+	rows, err := s.statements.SelectChannelMembers.QueryContext(ctx, channelName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query channel members: %w", err)
+	}
+	defer rows.Close()
+
+	members := []*models.ChannelMember{}
+	for rows.Next() {
+		member := &models.ChannelMember{}
+		err := rows.Scan(&member.Username, &member.IsAdmin, &member.JoinedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan channel member row: %w", err)
+		}
+		members = append(members, member)
+	}
+	return members, nil
 }
 
 func (s *Store) DeleteChannel(ctx context.Context, channelName string) error {

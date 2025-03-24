@@ -178,7 +178,6 @@ func (h *Handlers) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ChannelName     string  `json:"name"`
 		ChannelPassword *string `json:"password"`
 	}
 
@@ -187,7 +186,9 @@ func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.ChannelName == "" {
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	if channelName == "" {
 		responses.SendError(w, "Channel name required", http.StatusBadRequest)
 		return
 	}
@@ -199,18 +200,39 @@ func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	if err := h.chatService.JoinChannel(ctx, req.ChannelName, claims.Username, req.ChannelPassword); err != nil {
+
+	// Check if the user is already a member before joining
+	isFirstJoin := true
+	members, err := h.chatService.GetChannelMembers(ctx, channelName)
+	log.Printf("Members: %v", members)
+	if err == nil {
+		for _, member := range members {
+			if member.Username == claims.Username {
+				isFirstJoin = false
+				break
+			}
+		}
+	}
+
+	if err := h.chatService.JoinChannel(ctx, channelName, claims.Username, req.ChannelPassword); err != nil {
 		log.Printf("Error joining channel: %v", err)
 		responses.SendError(w, "Failed to join channel", http.StatusInternalServerError)
 		return
 	}
 
-	responses.SendSuccess(w, fmt.Sprintf("Joined channel: %s", req.ChannelName), http.StatusOK)
+	// Get online users for the channel
+	onlineUsers := h.chatService.GetOnlineUsers(channelName)
+
+	// Return success with online users data
+	responses.SendSuccess(w, map[string]interface{}{
+		"message":     fmt.Sprintf("Joined channel: %s", channelName),
+		"onlineUsers": onlineUsers,
+		"isFirstJoin": isFirstJoin,
+	}, http.StatusOK)
 }
 
 func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ChannelName        string  `json:"name"`
 		ChannelDescription *string `json:"description"`
 		ChannelPassword    *string `json:"password"`
 	}
@@ -220,10 +242,12 @@ func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if req.ChannelName == "" {
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	if channelName == "" {
 		responses.SendError(w, "Channel name required", http.StatusBadRequest)
 		return
-	} else if req.ChannelName == "system" {
+	} else if channelName == "system" {
 		responses.SendError(w, "'system' is a reserved channel name", http.StatusBadRequest)
 		return
 	}
@@ -242,7 +266,7 @@ func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		hashedPassword = &hashed
 	}
-	channel, err := models.NewChannel(req.ChannelName, claims.Username, req.ChannelDescription, hashedPassword)
+	channel, err := models.NewChannel(channelName, claims.Username, req.ChannelDescription, hashedPassword)
 	if err != nil {
 		responses.SendError(w, fmt.Sprintf("Invalid channel data: %v", err), http.StatusBadRequest)
 		return

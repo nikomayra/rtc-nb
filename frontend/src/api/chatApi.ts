@@ -33,9 +33,8 @@ export const chatApi = {
   // Create a new channel
   createChannel: async (channelName: string, token: string, description?: string, password?: string): Promise<void> => {
     const res = await axiosInstance.post(
-      `${BASE_URL}/createChannel`,
+      `${BASE_URL}/createChannel/${encodeURIComponent(channelName)}`,
       {
-        name: channelName,
         description: description || "",
         password: password || "",
       },
@@ -61,11 +60,14 @@ export const chatApi = {
   },
 
   // Join a channel (including private channels that require a password)
-  joinChannel: async (channelName: string, token: string, password?: string): Promise<void> => {
+  joinChannel: async (
+    channelName: string,
+    token: string,
+    password?: string
+  ): Promise<{ onlineUsers: string[]; isFirstJoin: boolean }> => {
     const res = await axiosInstance.patch(
-      `${BASE_URL}/joinChannel`,
+      `${BASE_URL}/joinChannel/${encodeURIComponent(channelName)}`,
       {
-        name: channelName,
         password: password || "",
       },
       {
@@ -76,11 +78,17 @@ export const chatApi = {
     if (!res.data.success) {
       throw new Error(`Failed to join channel: ${res.data.error}`);
     }
+
+    // Return online users and isFirstJoin flag from the response
+    return {
+      onlineUsers: res.data.data.onlineUsers || [],
+      isFirstJoin: res.data.data.isFirstJoin || false,
+    };
   },
 
   // Leave a channel
   leaveChannel: async (channelName: string, token: string): Promise<void> => {
-    const res = await axiosInstance.patch(`${BASE_URL}/leaveChannel/${encodeURIComponent(channelName)}`, {
+    const res = await axiosInstance.patch(`${BASE_URL}/leaveChannel/${encodeURIComponent(channelName)}`, null, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -92,7 +100,7 @@ export const chatApi = {
   // Update a member's role in a channel
   updateMemberRole: async (channelName: string, username: string, token: string, isAdmin: boolean): Promise<void> => {
     const response = await axiosInstance.patch(
-      `${BASE_URL}/channels/${channelName}/members/${username}/role`,
+      `${BASE_URL}/channels/${encodeURIComponent(channelName)}/members/${encodeURIComponent(username)}/role`,
       {
         is_admin: isAdmin,
       },

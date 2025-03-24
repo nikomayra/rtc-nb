@@ -23,6 +23,8 @@ type Manager interface {
 	// User Management
 	NotifyUser(username string, message []byte)
 	GetUserChannel(username string) (string, error)
+	GetOnlineUsers(channelName string) []string
+	GetOnlineCount(channelName string) int
 
 	// All
 	NotifyAll(message []byte)

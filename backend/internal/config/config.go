@@ -2,7 +2,6 @@ package config
 
 import (
 	"bufio"
-	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -11,15 +10,11 @@ import (
 	"strings"
 
 	_ "github.com/lib/pq"
-	goRedis "github.com/redis/go-redis/v9"
 )
 
-var ctx = context.Background()
-
-// Loads env variables & initializes db & redis clients
+// Loads env variables & initializes db
 type Config struct {
 	DB            *sql.DB
-	Redis         *goRedis.Client
 	FileStorePath string
 }
 
@@ -28,7 +23,6 @@ func Load() *Config {
 
 	return &Config{
 		DB:            initPostgres(),
-		Redis:         initRedis(),
 		FileStorePath: os.Getenv("FILESTORE_PATH"),
 	}
 }
@@ -53,21 +47,6 @@ func initPostgres() *sql.DB {
 	}
 	log.Println("Successfully connected to PostgreSQL")
 	return db
-}
-
-func initRedis() *goRedis.Client {
-	addr := os.Getenv("REDIS_ADDR")
-	opts, err := goRedis.ParseURL(addr)
-	if err != nil {
-		log.Println(err)
-	}
-	rdb := goRedis.NewClient(opts)
-	err = rdb.Ping(ctx).Err()
-	if err != nil {
-		log.Fatalf("Error connecting to Redis: %v", err)
-	}
-	log.Println("Successfully connected to Redis")
-	return rdb
 }
 
 // LoadEnv reads a .env file and sets environment variables
@@ -131,31 +110,3 @@ func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
-
-// func LoadEnv() {
-//     rootDir := filepath.Join("..") // Assuming you're running from 'backend'
-//     envPath := filepath.Join(rootDir, ".env")
-
-//     file, err := os.Open(envPath)
-//     if err != nil {
-//         log.Println("Failed to open .env file, relying on system environment variables:", err)
-//         return
-//     }
-//     defer file.Close()
-
-//     scanner := bufio.NewScanner(file)
-//     for scanner.Scan() {
-//         line := scanner.Text()
-//         if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#") {
-//             continue
-//         }
-//         parts := strings.SplitN(line, "=", 2)
-//         if len(parts) == 2 {
-//             os.Setenv(parts[0], parts[1])
-//         }
-//     }
-
-//     if err := scanner.Err(); err != nil {
-//         log.Println("Error reading .env file:", err)
-//     }
-// }

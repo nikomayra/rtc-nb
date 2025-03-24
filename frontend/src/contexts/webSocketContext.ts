@@ -18,7 +18,7 @@ export interface WebSocketContextType {
   actions: {
     connectSystem: (token: string) => void;
     connectChannel: (token: string, channelName: string) => void;
-    disconnect: () => void;
+    disconnectChannel: () => void;
     disconnectAll: () => void;
     send: (message: OutgoingMessage) => void;
     setMessageHandlers: (handlers: MessageHandlers) => void;
@@ -34,7 +34,7 @@ export const WebSocketContext = createContext<WebSocketContextType>({
   actions: {
     connectSystem: () => {},
     connectChannel: () => {},
-    disconnect: () => {},
+    disconnectChannel: () => {},
     disconnectAll: () => {},
     send: () => {},
     setMessageHandlers: () => {},

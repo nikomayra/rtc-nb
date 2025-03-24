@@ -43,8 +43,8 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 
 	// Chat routes
 	// -- Channel routes
-	protected.HandleFunc("/joinChannel", handlers.JoinChannelHandler).Methods("PATCH")
-	protected.HandleFunc("/createChannel", handlers.CreateChannelHandler).Methods("POST")
+	protected.HandleFunc("/joinChannel/{channelName}", handlers.JoinChannelHandler).Methods("PATCH")
+	protected.HandleFunc("/createChannel/{channelName}", handlers.CreateChannelHandler).Methods("POST")
 	protected.HandleFunc("/deleteChannel/{channelName}", handlers.DeleteChannelHandler).Methods("DELETE")
 	protected.HandleFunc("/leaveChannel/{channelName}", handlers.LeaveChannelHandler).Methods("PATCH")
 	protected.HandleFunc("/channels", handlers.GetChannelsHandler).Methods("GET")

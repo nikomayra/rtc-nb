@@ -60,20 +60,6 @@ func (cm *channelManager) CreateChannel(ctx context.Context, channel *models.Cha
 		return err
 	}
 
-	// updateMsg := &models.Message{
-	//     Type: models.TypeChannelUpdate,
-	//     Content: models.MessageContent{
-	//         ChannelUpdate: &models.ChannelUpdateData{
-	//             Action:  "created",
-	//             Channel: channel,
-	//         },
-	//     },
-	// }
-
-	// if msgBytes, err := json.Marshal(updateMsg); err == nil {
-	//     cm.connMgr.NotifyAll(msgBytes)
-	// }
-
 	return tx.Commit()
 }
 
@@ -261,4 +247,16 @@ func (cm *channelManager) UpdateMemberRole(ctx context.Context, channelName, use
 	}
 
 	return cm.db.UpdateChannelMemberRole(ctx, channelName, username, isAdmin)
+}
+
+func (cm *channelManager) GetChannelMembers(ctx context.Context, channelName string) ([]*models.ChannelMember, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	members, err := cm.db.GetChannelMembers(ctx, channelName)
+	if err != nil {
+		return nil, fmt.Errorf("get channel members: %w", err)
+	}
+
+	return members, nil
 }

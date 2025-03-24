@@ -28,6 +28,12 @@ export class WebSocketService {
   private protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   private baseUrl = `${this.protocol}//${window.location.host}${BASE_URL}/ws`;
 
+  // connection state change callbacks
+  private connectionStateCallbacks: {
+    onSystemConnectionChange?: (connected: boolean) => void;
+    onChannelConnectionChange?: (connected: boolean) => void;
+  } = {};
+
   private constructor() {}
 
   public static getInstance(): WebSocketService {
@@ -47,6 +53,46 @@ export class WebSocketService {
 
   public setMessageHandlers(handlers: MessageHandlers): void {
     this.messageHandlers = handlers;
+  }
+
+  // Register connection state change callbacks
+  public setConnectionStateCallbacks(callbacks: {
+    onSystemConnectionChange?: (connected: boolean) => void;
+    onChannelConnectionChange?: (connected: boolean) => void;
+  }): void {
+    this.connectionStateCallbacks = { ...callbacks };
+  }
+
+  // Helper method to update system connection state
+  private updateSystemConnected(connected: boolean): void {
+    // Only update if state actually changed
+    if (this.systemConnected !== connected) {
+      console.log(`WebSocketService: System connection state changing to ${connected}`);
+      this.systemConnected = connected;
+
+      // Call callback immediately outside of any potential React batching
+      if (this.connectionStateCallbacks.onSystemConnectionChange) {
+        setTimeout(() => {
+          this.connectionStateCallbacks.onSystemConnectionChange?.(connected);
+        }, 0);
+      }
+    }
+  }
+
+  // Helper method to update channel connection state
+  private updateChannelConnected(connected: boolean): void {
+    // Only update if state actually changed
+    if (this.channelConnected !== connected) {
+      console.log(`WebSocketService: Channel connection state changing to ${connected}`);
+      this.channelConnected = connected;
+
+      // Call callback immediately outside of any potential React batching
+      if (this.connectionStateCallbacks.onChannelConnectionChange) {
+        setTimeout(() => {
+          this.connectionStateCallbacks.onChannelConnectionChange?.(connected);
+        }, 0);
+      }
+    }
   }
 
   // Connect to the system socket - used for global updates
@@ -76,14 +122,14 @@ export class WebSocketService {
 
     this.systemSocket.onopen = () => {
       console.log("System WebSocket connected");
-      this.systemConnected = true;
+      this.updateSystemConnected(true);
       // Reset attempts counter on successful connection
       this.connectionAttempts.system = 0;
     };
 
     this.systemSocket.onclose = (event) => {
       console.log(`System WebSocket disconnected: ${event.code} ${event.reason}`);
-      this.systemConnected = false;
+      this.updateSystemConnected(false);
       this.attemptReconnect("system");
     };
 
@@ -125,14 +171,14 @@ export class WebSocketService {
 
     this.channelSocket.onopen = () => {
       console.log(`Channel WebSocket connected: ${channelName}`);
-      this.channelConnected = true;
+      this.updateChannelConnected(true);
       // Reset attempts counter on successful connection
       this.connectionAttempts.channel = 0;
     };
 
     this.channelSocket.onclose = (event) => {
       console.log(`Channel WebSocket disconnected: ${event.code} ${event.reason}`);
-      this.channelConnected = false;
+      this.updateChannelConnected(false);
       this.attemptReconnect("channel");
     };
 
@@ -148,9 +194,10 @@ export class WebSocketService {
   // Disconnect from current channel
   public disconnectChannel(): void {
     if (this.channelSocket) {
+      console.log("Disconnecting channel WebSocket");
       this.channelSocket.close();
       this.channelSocket = null;
-      this.channelConnected = false;
+      this.updateChannelConnected(false);
       this.currentChannelName = null;
 
       // Clear any pending reconnects
@@ -159,6 +206,28 @@ export class WebSocketService {
         this.reconnectTimeoutId = null;
       }
     }
+  }
+
+  // Disconnect system socket
+  public disconnectSystem(): void {
+    if (this.systemSocket) {
+      console.log("Disconnecting system WebSocket");
+      this.systemSocket.close();
+      this.systemSocket = null;
+      this.updateSystemConnected(false);
+    }
+  }
+
+  // Disconnect all sockets and reset state
+  // This should only be used during logout or app cleanup
+  public disconnectAll(): void {
+    console.log("Disconnecting all WebSockets");
+    this.disconnectSystem();
+    this.disconnectChannel();
+    this.currentToken = null;
+
+    // Reset connection attempts
+    this.connectionAttempts = { system: 0, channel: 0 };
   }
 
   // Send a message to the current channel
@@ -255,25 +324,5 @@ export class WebSocketService {
     } catch (error) {
       console.error("Error parsing message:", error);
     }
-  }
-
-  // Disconnect the channel socket only
-  public disconnect(): void {
-    this.disconnectChannel();
-  }
-
-  // Disconnect all sockets (aliased to disconnectAll for backward compatibility)
-  public disconnectAll(): void {
-    if (this.systemSocket) {
-      this.systemSocket.close();
-      this.systemSocket = null;
-      this.systemConnected = false;
-    }
-
-    this.disconnectChannel();
-    this.currentToken = null;
-
-    // Reset connection attempts
-    this.connectionAttempts = { system: 0, channel: 0 };
   }
 }

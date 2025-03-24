@@ -11,7 +11,6 @@ type User struct {
 	HashedPassword string    `json:"-"` // Never expose in JSON
 	IsOnline       bool      `json:"is_online"`
 	CreatedAt      time.Time `json:"created_at"`
-	LastSeen       time.Time `json:"last_seen"`
 }
 
 // NewUser creates a new user with proper initialization
@@ -29,6 +28,5 @@ func NewUser(username, hashedPassword string) (*User, error) {
 		HashedPassword: hashedPassword,
 		IsOnline:       true,
 		CreatedAt:      now,
-		LastSeen:       now,
 	}, nil
 }

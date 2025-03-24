@@ -33,6 +33,10 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
 
   const isAdmin = Object.values(channel.members).some((member) => member.username === username && member.isAdmin);
 
+  // Get online users for this channel
+  const onlineUsersSet = chatContext.state.onlineUsers[channel.name] || new Set();
+  const onlineCount = onlineUsersSet.size;
+
   // Ensure member uniqueness by username
   const uniqueMembers = Object.values(channel.members).reduce((acc, member) => {
     // Only keep the first occurrence of each username
@@ -71,11 +75,10 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
     }
   };
 
-  const isOnline = 1 === 1; // TODO: Remove this
-
   const membersList = (
     <>
       {sortedMembers.map((member) => {
+        const isUserOnline = onlineUsersSet.has(member.username);
         return (
           <div
             key={member.username}
@@ -84,8 +87,8 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
           >
             <div className="flex items-center gap-2 min-w-0">
               <div
-                className={`h-2 w-2 rounded-full ${isOnline ? "bg-green-500" : "bg-gray-400"}`}
-                title={isOnline ? "Online" : "Offline"}
+                className={`h-2 w-2 rounded-full ${isUserOnline ? "bg-green-500" : "bg-gray-400"}`}
+                title={isUserOnline ? "Online" : "Offline"}
               />
               <span
                 className={`text-xs px-1.5 py-0.5 rounded-full ${
@@ -130,13 +133,13 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
             </Dropdown>
             <div className="flex items-center gap-2 min-w-0 mr-2">
               <h2 className="font-medium text-text-light truncate">{channel.name}</h2>
-              <span className="text-xs text-text-light/50 flex-none">1 members</span>
-            </div>
-            {isOnline && (
-              <span className="flex ml-2 text-xs bg-green-600/20 text-green-400 px-2 py-0.5 rounded-full truncate whitespace-nowrap">
-                1 online
+              <span className="text-xs text-text-light/50 flex-none">
+                {Object.keys(channel.members).length} members
               </span>
-            )}
+            </div>
+            <span className="flex ml-2 text-xs bg-green-600/20 text-green-400 px-2 py-0.5 rounded-full truncate whitespace-nowrap">
+              {onlineCount} online
+            </span>
           </div>
 
           <div

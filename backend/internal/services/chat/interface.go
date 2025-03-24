@@ -14,6 +14,7 @@ type ChatManager interface {
 	// Connection operations (Service level operations)
 	GetUserConnection(username string) (*gorilla_websocket.Conn, bool)
 	ClearUserSession(ctx context.Context, username string) error
+	GetOnlineUsers(channelName string) []string
 
 	// User operations
 	GetUser(ctx context.Context, username string) (*models.User, error)
@@ -27,6 +28,7 @@ type ChatManager interface {
 	GetChannels(ctx context.Context) ([]*models.Channel, error)
 	DeleteChannel(ctx context.Context, channelName, username string) error
 	UpdateMemberRole(ctx context.Context, channelName, username string, isAdmin bool, updatedBy string) error
+	GetChannelMembers(ctx context.Context, channelName string) ([]*models.ChannelMember, error)
 
 	// File operations
 	HandleImageUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, channelName, username string) (interface{}, error)

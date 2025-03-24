@@ -1,3 +1,10 @@
+// How to run these tests:
+// 1. Navigate to the backend directory: cd backend
+// 2. Run the schema tests: go test ./internal/store/database -v
+//
+// These tests verify that the Go struct models align with the database schema.
+// They don't require a database connection as they only check field types and names.
+// Run these tests after making changes to model structs or database schema.
 package database
 
 import (
@@ -20,7 +27,6 @@ func TestUserStructAlignment(t *testing.T) {
 		"hashed_password": "string",
 		"is_online":       "bool",
 		"created_at":      "time.Time",
-		"last_seen":       "time.Time",
 	}
 
 	userType := reflect.TypeOf(models.User{})
@@ -97,10 +103,9 @@ func TestChannelStructAlignment(t *testing.T) {
 // TestChannelMemberStructAlignment verifies ChannelMember model matches database schema
 func TestChannelMemberStructAlignment(t *testing.T) {
 	expectedFields := map[string]string{
-		"username":     "string",
-		"is_admin":     "bool",
-		"joined_at":    "time.Time",
-		"last_message": "time.Time",
+		"username":  "string",
+		"is_admin":  "bool",
+		"joined_at": "time.Time",
 	}
 
 	memberType := reflect.TypeOf(models.ChannelMember{})
@@ -150,22 +155,15 @@ func TestPreparedStatements(t *testing.T) {
 		},
 		{
 			name:           "SelectUser",
-			statement:      `SELECT username, hashed_password, created_at, last_seen`,
-			expectedFields: []string{"username", "hashed_password", "created_at", "last_seen"},
+			statement:      `SELECT username, hashed_password, created_at`,
+			expectedFields: []string{"username", "hashed_password", "created_at"},
 			table:          "users",
 		},
 		{
 			name:           "UpdateUser",
-			statement:      `UPDATE users SET hashed_password = $2, last_seen = CURRENT_TIMESTAMP`,
-			expectedFields: []string{"hashed_password", "last_seen"},
+			statement:      `UPDATE users SET hashed_password = $2`,
+			expectedFields: []string{"hashed_password"},
 			table:          "users",
-		},
-		// User status statements
-		{
-			name:           "UpsertUserStatus",
-			statement:      `INSERT INTO user_status (username, is_online, last_seen)`,
-			expectedFields: []string{"username", "is_online", "last_seen"},
-			table:          "user_status",
 		},
 		// Channel statements
 		{
@@ -183,8 +181,8 @@ func TestPreparedStatements(t *testing.T) {
 		// Channel member statements
 		{
 			name:           "SelectChannelMembers",
-			statement:      `SELECT username, is_admin, joined_at, last_message`,
-			expectedFields: []string{"username", "is_admin", "joined_at", "last_message"},
+			statement:      `SELECT username, is_admin, joined_at`,
+			expectedFields: []string{"username", "is_admin", "joined_at"},
 			table:          "channel_member",
 		},
 		// Message statements
@@ -230,7 +228,7 @@ func TestStatementParameterCount(t *testing.T) {
 	}{
 		{"InsertUser", `VALUES ($1, $2)`, 2},
 		{"SelectUser", `WHERE username = $1`, 1},
-		{"UpdateUser", `SET hashed_password = $2, last_seen = CURRENT_TIMESTAMP WHERE username = $1`, 2},
+		{"UpdateUser", `SET hashed_password = $2 WHERE username = $1`, 2},
 		{"InsertChannel", `VALUES ($1, $2, $3, $4, $5)`, 5},
 		{"AddChannelMember", `VALUES ($1, $2, $3)`, 3},
 		{"InsertMessage", `VALUES ($1, $2, $3, $4, $5)`, 5},

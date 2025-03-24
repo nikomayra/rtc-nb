@@ -4,6 +4,7 @@ import { useContext } from "react";
 import { NotificationContext } from "../contexts/notificationContext";
 import { WebSocketContext } from "../contexts/webSocketContext";
 import { ChatService } from "../services/ChatService";
+import { WebSocketService } from "../services/WebsocketService";
 import {
   Channel,
   IncomingMessage,
@@ -37,13 +38,12 @@ export function useChat() {
   const chatService = useRef(ChatService.getInstance());
 
   // State
-  const [currentChannel, setCurrentChannel] = useState<string | null>(() => {
-    return sessionStorage.getItem("currentChannel");
-  });
+  const [currentChannel, setCurrentChannel] = useState<string | null>(null);
   const [messages, setMessages] = useState<Record<string, IncomingMessage[]>>({});
   const [channels, setChannels] = useState<Channel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, Error | null>>({});
+  const [onlineUsers, setOnlineUsers] = useState<Record<string, Set<string>>>({});
 
   // Refs for tracking state
   const rateLimitedUntilRef = useRef<number>(0);
@@ -55,6 +55,17 @@ export function useChat() {
     (message: string) => {
       notificationContext?.actions.addNotification({
         type: "info",
+        message,
+        duration: 5000,
+      });
+    },
+    [notificationContext]
+  );
+
+  const notifyError = useCallback(
+    (message: string) => {
+      notificationContext?.actions.addNotification({
+        type: "error",
         message,
         duration: 5000,
       });
@@ -180,29 +191,81 @@ export function useChat() {
     return result || null;
   }, [token, executeApiCall, channels]);
 
-  // WebSocket message handling
-  const handleMessage = useCallback((message: IncomingMessage) => {
-    console.log(`handleMessage received: ${MessageType[message.type]} message from ${message.username}`);
+  // Handle user status updates
+  const handleUserStatus = useCallback((message: IncomingMessage) => {
+    if (!message.content.userStatus) return;
 
-    // Skip sketch messages - they're handled by sketch hook
-    if (message.type === MessageType.Sketch) {
-      return;
-    }
+    const { channelName } = message;
+    const { username, action } = message.content.userStatus;
 
-    setMessages((prev) => {
-      // Check if we've already processed this message
-      if (prev[message.channelName]?.some((m) => m.id === message.id)) {
-        console.log(`Duplicate message ${message.id}, skipping`);
-        return prev;
+    console.log(`🟢 User status update: ${username} is ${action} in ${channelName}`);
+
+    setOnlineUsers((prev) => {
+      const channelUsers = new Set(prev[channelName] || []);
+
+      if (action === "online") {
+        channelUsers.add(username);
+      } else if (action === "offline") {
+        channelUsers.delete(username);
       }
 
-      console.log(`Adding message to channel ${message.channelName}`);
+      // Create a new Set to ensure state update
+      const newChannelUsers = new Set(channelUsers);
+
+      // Log the current online users for this channel
+      console.log(`Online users in ${channelName}:`, Array.from(newChannelUsers));
+
       return {
         ...prev,
-        [message.channelName]: [...(prev[message.channelName] || []), message],
+        [channelName]: newChannelUsers,
+      };
+    });
+
+    // Also add as a chat message
+    setMessages((prev) => {
+      const channelMessages = [...(prev[channelName] || [])];
+      if (!channelMessages.some((m) => m.id === message.id)) {
+        channelMessages.push(message);
+      }
+      return {
+        ...prev,
+        [channelName]: channelMessages,
       };
     });
   }, []);
+
+  // WebSocket message handling
+  const handleMessage = useCallback(
+    (message: IncomingMessage) => {
+      console.log(`handleMessage received: ${MessageType[message.type]} message from ${message.username}`);
+
+      // Skip sketch messages - they're handled by sketch hook
+      if (message.type === MessageType.Sketch) {
+        return;
+      }
+
+      // Handle user status messages
+      if (message.type === MessageType.UserStatus) {
+        handleUserStatus(message);
+        return;
+      }
+
+      setMessages((prev) => {
+        // Check if we've already processed this message
+        if (prev[message.channelName]?.some((m) => m.id === message.id)) {
+          console.log(`Duplicate message ${message.id}, skipping`);
+          return prev;
+        }
+
+        console.log(`Adding message to channel ${message.channelName}`);
+        return {
+          ...prev,
+          [message.channelName]: [...(prev[message.channelName] || []), message],
+        };
+      });
+    },
+    [handleUserStatus]
+  );
 
   const handleChannelUpdate = useCallback(
     (message: IncomingMessage) => {
@@ -298,95 +361,6 @@ export function useChat() {
     [handleMessage]
   );
 
-  const joinChannel = useCallback(
-    async (channelName: string, password?: string) => {
-      if (!token) return false;
-      if (channelName === currentChannel) return true;
-
-      // Leave current channel if any
-      if (currentChannel) {
-        const success = await executeApiCall(
-          "leaveChannel",
-          () => chatService.current.leaveChannel(currentChannel, token).then(() => true),
-          () => {
-            setCurrentChannel(null);
-            sessionStorage.removeItem("currentChannel");
-          }
-        );
-
-        if (!success) return false;
-      }
-
-      const success = await executeApiCall(
-        "joinChannel",
-        () => chatService.current.joinChannel(channelName, token, password).then(() => true),
-        () => {
-          setCurrentChannel(channelName);
-          sessionStorage.setItem("currentChannel", channelName);
-
-          // Reset message fetch status for this channel
-          messagesFetchedRef.current[channelName] = false;
-
-          notifyInfo(`Joined channel: ${channelName}`);
-        }
-      );
-
-      if (success) {
-        // Establish WebSocket connection to the channel
-        wsContext.actions.connectChannel(token, channelName);
-
-        // Only broadcast member update if the user is not already a member
-        const currChannel = channels.find((c) => c.name === channelName);
-        const isAlreadyMember =
-          currChannel && Object.values(currChannel.members).some((member) => member.username === username);
-
-        if (!isAlreadyMember) {
-          wsContext.actions.send({
-            type: MessageType.MemberUpdate,
-            channelName,
-            content: {
-              memberUpdate: {
-                action: MemberUpdateAction.Added,
-                username,
-                isAdmin: false,
-              },
-            },
-          });
-        }
-      }
-
-      return Boolean(success);
-    },
-    [token, currentChannel, username, channels, wsContext.actions, executeApiCall, notifyInfo]
-  );
-
-  const leaveChannel = useCallback(
-    async (channelName: string) => {
-      if (!token || channelName !== currentChannel) return false;
-
-      const success = await executeApiCall(
-        "leaveChannel",
-        () => chatService.current.leaveChannel(channelName, token).then(() => true),
-        () => {
-          setCurrentChannel(null);
-          sessionStorage.removeItem("currentChannel");
-
-          wsContext.actions.disconnect();
-
-          // Clear message fetch status
-          if (messagesFetchedRef.current[channelName]) {
-            delete messagesFetchedRef.current[channelName];
-          }
-
-          notifyInfo(`Left channel: ${channelName}`);
-        }
-      );
-
-      return Boolean(success);
-    },
-    [token, currentChannel, wsContext.actions, executeApiCall, notifyInfo]
-  );
-
   const createChannel = useCallback(
     async (channelName: string, description?: string, password?: string) => {
       if (!token) return false;
@@ -441,7 +415,7 @@ export function useChat() {
           if (currentChannel === channelName) {
             setCurrentChannel(null);
             sessionStorage.removeItem("currentChannel");
-            wsContext.actions.disconnect();
+            wsContext.actions.disconnectChannel();
           }
 
           // Filter out the deleted channel
@@ -466,6 +440,188 @@ export function useChat() {
       return Boolean(success);
     },
     [token, currentChannel, channels, wsContext.actions, executeApiCall, notifyInfo]
+  );
+
+  const leaveChannel = useCallback(
+    async (channelName: string) => {
+      if (!token || channelName !== currentChannel) return false;
+
+      // Send offline status before leaving
+      if (wsContext.state.channelConnected) {
+        wsContext.actions.send({
+          type: MessageType.UserStatus,
+          channelName,
+          content: {
+            userStatus: {
+              action: "offline",
+              username: username!,
+            },
+          },
+        });
+      }
+
+      const success = await executeApiCall(
+        "leaveChannel",
+        () => chatService.current.leaveChannel(channelName, token).then(() => true),
+        () => {
+          setCurrentChannel(null);
+          sessionStorage.removeItem("currentChannel");
+
+          wsContext.actions.disconnectChannel();
+
+          // Clear message fetch status
+          if (messagesFetchedRef.current[channelName]) {
+            delete messagesFetchedRef.current[channelName];
+          }
+
+          notifyInfo(`Left channel: ${channelName}`);
+        }
+      );
+
+      return Boolean(success);
+    },
+    [token, currentChannel, wsContext.state.channelConnected, wsContext.actions, executeApiCall, username, notifyInfo]
+  );
+
+  const joinChannel = useCallback(
+    async (channelName: string, password?: string) => {
+      if (!token) return false;
+      if (channelName === currentChannel) return true;
+
+      // Track connection state in sessionStorage
+      const wasConnected = sessionStorage.getItem("wasConnectedToChannel") === channelName;
+
+      // Leave current channel if any
+      if (currentChannel) {
+        const success = await leaveChannel(currentChannel);
+        if (!success) return false;
+      }
+
+      const success = await executeApiCall(
+        "joinChannel",
+        () =>
+          chatService.current.joinChannel(channelName, token, password).then((response) => {
+            // Initialize onlineUsers for this channel with server data plus current user
+            setOnlineUsers((prev) => ({
+              ...prev,
+              [channelName]: new Set([username!, ...response.onlineUsers]),
+            }));
+            return { success: true, isFirstJoin: response.isFirstJoin };
+          }),
+        () => {
+          setCurrentChannel(channelName);
+          sessionStorage.setItem("currentChannel", channelName);
+
+          // Reset message fetch status for this channel
+          messagesFetchedRef.current[channelName] = false;
+
+          notifyInfo(`Joined channel: ${channelName}`);
+        }
+      );
+
+      if (success?.success) {
+        // Store the isFirstJoin flag
+        const isFirstJoin = success.isFirstJoin;
+
+        // Establish WebSocket connection to the channel
+        wsContext.actions.connectChannel(token, channelName);
+
+        // Wait for WebSocket connection to be established
+        let attempts = 0;
+        const maxAttempts = 10;
+        const checkInterval = 200;
+
+        // Get direct access to the WebSocketService
+        const wsService = WebSocketService.getInstance();
+
+        while (attempts < maxAttempts) {
+          // Check both the context state AND the direct service state
+          if (wsContext.state.channelConnected || wsService.isChannelConnected) {
+            // If either shows we're connected, we're good
+            console.log(
+              "WebSocket connection verified - Context:",
+              wsContext.state.channelConnected,
+              "Service:",
+              wsService.isChannelConnected
+            );
+            break;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, checkInterval));
+          attempts++;
+
+          // Log progress every 2 attempts
+          if (attempts % 2 === 0) {
+            console.log(`Waiting for WebSocket connection... Attempt ${attempts}/${maxAttempts}`);
+            console.log(
+              `Current connection state: Context:`,
+              wsContext.state,
+              `Service: ${wsService.isChannelConnected}`
+            );
+          }
+        }
+
+        // When we get here, either:
+        // 1. We've connected (wsContext.state.channelConnected or wsService.isChannelConnected is true)
+        // 2. We've timed out (reached maxAttempts)
+
+        if (wsContext.state.channelConnected || wsService.isChannelConnected) {
+          console.log("WebSocket connection established successfully");
+
+          // Only send online status if this is a new session connection, not a refresh
+          if (!wasConnected) {
+            wsContext.actions.send({
+              type: MessageType.UserStatus,
+              channelName,
+              content: {
+                userStatus: {
+                  action: "online",
+                  username: username!,
+                },
+              },
+            });
+
+            // Mark that we've connected to this channel in this session
+            sessionStorage.setItem("wasConnectedToChannel", channelName);
+          }
+
+          // Only send the MemberUpdate message if this is the user's first join
+          if (isFirstJoin) {
+            wsContext.actions.send({
+              type: MessageType.MemberUpdate,
+              channelName,
+              content: {
+                memberUpdate: {
+                  action: MemberUpdateAction.Added,
+                  username: username!,
+                  isAdmin: false,
+                },
+              },
+            });
+          }
+
+          return true;
+        }
+
+        // We timed out and couldn't detect a connection
+        console.error("WebSocket connection not established after maximum attempts");
+        notifyError("Failed to establish WebSocket connection. Please try again.");
+        return false;
+      }
+
+      return Boolean(success);
+    },
+    [
+      token,
+      currentChannel,
+      executeApiCall,
+      leaveChannel,
+      username,
+      notifyInfo,
+      wsContext.actions,
+      wsContext.state,
+      notifyError,
+    ]
   );
 
   const updateMemberRole = useCallback(
@@ -605,27 +761,52 @@ export function useChat() {
     }
   }, [token, currentChannel, wsContext.state.channelConnected, fetchMessages]);
 
-  return {
-    // State
-    currentChannel,
-    messages,
-    channels,
-    isLoading,
-    errors,
-    connectionState: {
-      systemConnected: wsContext.state.systemConnected,
-      channelConnected: wsContext.state.channelConnected,
-    },
+  // Update useEffect for WebSocket disconnection
+  useEffect(() => {
+    return () => {
+      // Clean up WebSocket connection on component unmount
+      if (wsContext.state.channelConnected) {
+        const channelName = currentChannel;
+        if (channelName) {
+          wsContext.actions.send({
+            type: MessageType.UserStatus,
+            channelName,
+            content: {
+              userStatus: {
+                action: "offline",
+                username: username!,
+              },
+            },
+          });
+        }
+        wsContext.actions.disconnectChannel();
+      }
+      // Don't clear the sessionStorage here - we want it to persist on refresh
+    };
+  }, [currentChannel, username, wsContext]);
 
-    // Actions
-    fetchMessages,
-    fetchChannels,
-    joinChannel,
-    leaveChannel,
-    createChannel,
-    deleteChannel,
-    updateMemberRole,
-    uploadFile,
-    sendMessage,
+  return {
+    state: {
+      messages,
+      channels,
+      currentChannel,
+      isLoading,
+      errors,
+      connectionState: {
+        systemConnected: wsContext.state.systemConnected,
+        channelConnected: wsContext.state.channelConnected,
+      },
+      onlineUsers,
+    },
+    actions: {
+      sendMessage,
+      joinChannel,
+      createChannel,
+      deleteChannel,
+      leaveChannel,
+      fetchChannels,
+      updateMemberRole,
+      uploadFile,
+    },
   };
 }

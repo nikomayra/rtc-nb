@@ -49,6 +49,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
   const renderContent = () => {
     // Get the member update if available
     const memberUpdate = message.content.memberUpdate;
+    const userStatus = message.content.userStatus;
 
     switch (message.type) {
       case MessageType.Text:
@@ -69,7 +70,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
         switch (memberUpdate.action) {
           case MemberUpdateAction.RoleChanged:
             return (
-              <div className="px-3 py-1.5 text-text-light italic text-xs text-center">
+              <div className="px-3 py-1.5 text-primary/90 italic text-sm text-center">
                 {memberUpdate.isAdmin ? (
                   <p>
                     {message.username} made {memberUpdate.username} an admin.
@@ -83,8 +84,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
             );
           case MemberUpdateAction.Added:
             return (
-              <div className="px-3 py-1.5 text-text-light italic text-xs text-center">
-                <p>{memberUpdate.username} joined the channel.</p>
+              <div className="px-3 py-1.5 text-secondary-light italic text-sm text-center">
+                <p>{memberUpdate.username} became a member of the channel.</p>
               </div>
             );
           default:
@@ -131,10 +132,21 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
             )}
           </div>
         );
+      case MessageType.UserStatus:
+        if (!userStatus) return null;
+        return userStatus.action === "online" ? (
+          <div className="px-3 py-1.5 text-success/60 italic text-xs text-center">
+            <p>{message.username} is now online.</p>
+          </div>
+        ) : (
+          <div className="px-3 py-1.5 text-error/60 italic text-xs text-center">
+            <p>{message.username} is now offline.</p>
+          </div>
+        );
     }
   };
 
-  if (message.type == MessageType.MemberUpdate) {
+  if (message.type == MessageType.MemberUpdate || message.type == MessageType.UserStatus) {
     return <div>{renderContent()}</div>;
   } else {
     return (

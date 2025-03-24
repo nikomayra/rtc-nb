@@ -41,8 +41,12 @@ export class ChatService {
     this.cachedChannels = null; // Invalidate cache
   }
 
-  public async joinChannel(channelName: string, token: string, password?: string): Promise<void> {
-    await chatApi.joinChannel(channelName, token, password);
+  public async joinChannel(
+    channelName: string,
+    token: string,
+    password?: string
+  ): Promise<{ onlineUsers: string[]; isFirstJoin: boolean }> {
+    return await chatApi.joinChannel(channelName, token, password);
   }
 
   public async leaveChannel(channelName: string, token: string): Promise<void> {

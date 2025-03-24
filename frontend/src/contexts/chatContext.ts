@@ -12,6 +12,7 @@ export interface ChatContext {
       systemConnected: boolean;
       channelConnected: boolean;
     };
+    onlineUsers: Record<string, Set<string>>; // channelName -> Set of online usernames
   };
   actions: {
     sendMessage: (message: OutgoingMessage) => void;

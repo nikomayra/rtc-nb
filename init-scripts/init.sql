@@ -3,16 +3,8 @@ CREATE TABLE users (
     username VARCHAR(50) PRIMARY KEY,
     hashed_password VARCHAR(100) NOT NULL,
     is_online BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
--- -- Represents the current state of a user
--- CREATE TABLE user_status (
---     username VARCHAR(50) PRIMARY KEY REFERENCES users(username) ON DELETE CASCADE,
---     is_online BOOLEAN NOT NULL DEFAULT false,
---     last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
--- );
 
 -- Channel table - stores channel information
 CREATE TABLE channels (
@@ -30,7 +22,6 @@ CREATE TABLE channel_member (
     username VARCHAR(50) REFERENCES users(username) ON DELETE CASCADE,
     is_admin BOOLEAN NOT NULL DEFAULT false,
     joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_message TIMESTAMP,
     PRIMARY KEY (channel_name, username)
 );
 

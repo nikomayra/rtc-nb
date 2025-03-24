@@ -62,3 +62,8 @@ func (cs *Service) ClearUserSession(ctx context.Context, username string) error 
 	}
 	return nil
 }
+
+// GetOnlineUsers returns a list of online usernames in a channel
+func (cs *Service) GetOnlineUsers(channelName string) []string {
+	return cs.connMgr.GetOnlineUsers(channelName)
+}
