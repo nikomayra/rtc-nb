@@ -16,7 +16,7 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
   const {
     state: { username },
   } = useAuthContext();
-  const { showError, showSuccess } = useNotification();
+  const { showError } = useNotification();
 
   if (!chatContext) {
     throw new Error("ChannelInfo must be used within a ChatContext");
@@ -53,25 +53,15 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
 
   const handleRoleToggle = async (memberUsername: string, newIsAdmin: boolean) => {
     try {
-      console.log("🎭 Attempting role update:", {
-        channelName: channel.name,
-        username: memberUsername,
-        newIsAdmin,
-      });
-
       const success = await chatContext.actions.updateMemberRole(channel.name, memberUsername, newIsAdmin);
 
-      if (success) {
-        console.log("🎭 Role update success");
-        showSuccess(`${memberUsername} ${newIsAdmin ? "promoted to admin" : "demoted to user"}`);
-      } else {
-        const errorMsg = "Failed to update user role";
-        console.error(errorMsg);
+      if (!success) {
+        const errorMsg = "Failed to update user role. Please try again.";
         showError(errorMsg);
       }
     } catch (error) {
       console.error("Failed to update role:", error);
-      showError("Failed to update user role");
+      showError("Failed to update user role.");
     }
   };
 
@@ -122,21 +112,22 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
     <div className="relative flex flex-col items-start space-y-4">
       <div className="flex flex-col p-4 border-b border-primary/20 min-h-16 overflow-visible w-full">
         <div className="flex flex-col gap-2 w-full">
-          <div className="flex items-center justify-between w-full">
+          <div className="flex items-center justify-between w-full whitespace-nowrap">
             <Dropdown
-              trigger={<span>Members</span>}
+              trigger={
+                Object.keys(channel.members).length === 1 ? (
+                  <span>{Object.keys(channel.members).length} Member</span>
+                ) : (
+                  <span>{Object.keys(channel.members).length} Members</span>
+                )
+              }
               isOpenExternal={isOpen}
               setIsOpenExternal={setIsOpen}
               position="left"
             >
               {membersList}
             </Dropdown>
-            <div className="flex items-center gap-2 min-w-0 mr-2">
-              <h2 className="font-medium text-text-light truncate">{channel.name}</h2>
-              <span className="text-xs text-text-light/50 flex-none">
-                {Object.keys(channel.members).length} members
-              </span>
-            </div>
+            <h2 className="flex font-medium text-text-light truncate">{channel.name}</h2>
             <span className="flex ml-2 text-xs bg-green-600/20 text-green-400 px-2 py-0.5 rounded-full truncate whitespace-nowrap">
               {onlineCount} online
             </span>

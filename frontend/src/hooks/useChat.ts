@@ -1,8 +1,8 @@
 import { useCallback, useState, useEffect, useRef } from "react";
 import { useAuthContext } from "./useAuthContext";
 import { useContext } from "react";
-import { NotificationContext } from "../contexts/notificationContext";
 import { WebSocketContext } from "../contexts/webSocketContext";
+import { useNotification } from "./useNotification";
 import { ChatService } from "../services/ChatService";
 import { WebSocketService } from "../services/WebsocketService";
 import {
@@ -31,8 +31,7 @@ export function useChat() {
     throw new Error("useChat must be used within a WebSocketProvider");
   }
 
-  // Get the notification context
-  const notificationContext = useContext(NotificationContext);
+  const { showError, showSuccess, showWarning } = useNotification();
 
   // Create ChatService instance
   const chatService = useRef(ChatService.getInstance());
@@ -50,29 +49,6 @@ export function useChat() {
   const channelsFetchedRef = useRef(false);
   const messagesFetchedRef = useRef<Record<string, boolean>>({});
 
-  // Notification helper
-  const notifyInfo = useCallback(
-    (message: string) => {
-      notificationContext?.actions.addNotification({
-        type: "info",
-        message,
-        duration: 5000,
-      });
-    },
-    [notificationContext]
-  );
-
-  const notifyError = useCallback(
-    (message: string) => {
-      notificationContext?.actions.addNotification({
-        type: "error",
-        message,
-        duration: 5000,
-      });
-    },
-    [notificationContext]
-  );
-
   // Simple global rate limit check
   const isRateLimited = useCallback((): boolean => {
     return Date.now() < rateLimitedUntilRef.current;
@@ -89,6 +65,7 @@ export function useChat() {
     async <T>(apiOperation: string, apiCall: () => Promise<T>, onSuccess?: (result: T) => void): Promise<T | null> => {
       if (isRateLimited()) {
         console.log(`Rate limited, skipping ${apiOperation}`);
+        showWarning("Too many requests. Please wait a moment before trying again.");
         return null;
       }
 
@@ -125,10 +102,27 @@ export function useChat() {
           "response" in error &&
           error.response &&
           typeof error.response === "object" &&
-          "status" in error.response &&
-          error.response.status === 429
+          "status" in error.response
         ) {
-          markRateLimited();
+          if (error.response.status === 429) {
+            markRateLimited();
+            showWarning("Too many requests. Please wait a moment before trying again.");
+          } else {
+            // Extract error message from response if available
+            const errorMessage =
+              (error.response &&
+              "data" in error.response &&
+              typeof error.response.data === "object" &&
+              error.response.data
+                ? (error.response.data as { message?: string; error?: string }).message ||
+                  (error.response.data as { message?: string; error?: string }).error
+                : null) || `Failed to ${apiOperation.replace(/([A-Z])/g, " $1").toLowerCase()}. Please try again.`;
+            console.error(errorMessage);
+            showError(`Failed to ${apiOperation.replace(/([A-Z])/g, " $1").toLowerCase()}. Please try again.`);
+          }
+        } else {
+          // Generic error message based on the operation
+          showError(`Failed to ${apiOperation.replace(/([A-Z])/g, " $1").toLowerCase()}. Please try again.`);
         }
 
         const errorObj = error instanceof Error ? error : new Error(String(error));
@@ -139,7 +133,7 @@ export function useChat() {
         setIsLoading(false);
       }
     },
-    [isRateLimited, markRateLimited]
+    [isRateLimited, markRateLimited, showError, showWarning]
   );
 
   // Action functions
@@ -369,7 +363,7 @@ export function useChat() {
         "createChannel",
         () => chatService.current.createChannel(channelName, token, description, password).then(() => true),
         async () => {
-          notifyInfo(`Channel "${channelName}" created successfully`);
+          showSuccess(`Channel "${channelName}" created successfully`);
 
           // Refresh channels to get the new one
           channelsFetchedRef.current = false;
@@ -397,7 +391,7 @@ export function useChat() {
 
       return Boolean(success);
     },
-    [token, wsContext.actions, executeApiCall, notifyInfo]
+    [token, executeApiCall, showSuccess, wsContext.actions]
   );
 
   const deleteChannel = useCallback(
@@ -433,13 +427,13 @@ export function useChat() {
             },
           });
 
-          notifyInfo(`Channel "${channelName}" deleted successfully`);
+          showSuccess(`Channel "${channelName}" deleted successfully`);
         }
       );
 
       return Boolean(success);
     },
-    [token, currentChannel, channels, wsContext.actions, executeApiCall, notifyInfo]
+    [token, channels, executeApiCall, currentChannel, wsContext.actions, showSuccess]
   );
 
   const leaveChannel = useCallback(
@@ -473,14 +467,12 @@ export function useChat() {
           if (messagesFetchedRef.current[channelName]) {
             delete messagesFetchedRef.current[channelName];
           }
-
-          notifyInfo(`Left channel: ${channelName}`);
         }
       );
 
       return Boolean(success);
     },
-    [token, currentChannel, wsContext.state.channelConnected, wsContext.actions, executeApiCall, username, notifyInfo]
+    [token, currentChannel, wsContext.state.channelConnected, wsContext.actions, executeApiCall, username]
   );
 
   const joinChannel = useCallback(
@@ -514,8 +506,6 @@ export function useChat() {
 
           // Reset message fetch status for this channel
           messagesFetchedRef.current[channelName] = false;
-
-          notifyInfo(`Joined channel: ${channelName}`);
         }
       );
 
@@ -538,27 +528,11 @@ export function useChat() {
           // Check both the context state AND the direct service state
           if (wsContext.state.channelConnected || wsService.isChannelConnected) {
             // If either shows we're connected, we're good
-            console.log(
-              "WebSocket connection verified - Context:",
-              wsContext.state.channelConnected,
-              "Service:",
-              wsService.isChannelConnected
-            );
             break;
           }
 
           await new Promise((resolve) => setTimeout(resolve, checkInterval));
           attempts++;
-
-          // Log progress every 2 attempts
-          if (attempts % 2 === 0) {
-            console.log(`Waiting for WebSocket connection... Attempt ${attempts}/${maxAttempts}`);
-            console.log(
-              `Current connection state: Context:`,
-              wsContext.state,
-              `Service: ${wsService.isChannelConnected}`
-            );
-          }
         }
 
         // When we get here, either:
@@ -566,8 +540,6 @@ export function useChat() {
         // 2. We've timed out (reached maxAttempts)
 
         if (wsContext.state.channelConnected || wsService.isChannelConnected) {
-          console.log("WebSocket connection established successfully");
-
           // Only send online status if this is a new session connection, not a refresh
           if (!wasConnected) {
             wsContext.actions.send({
@@ -605,23 +577,13 @@ export function useChat() {
 
         // We timed out and couldn't detect a connection
         console.error("WebSocket connection not established after maximum attempts");
-        notifyError("Failed to establish WebSocket connection. Please try again.");
+        showError("Failed to join channel. Please try again.");
         return false;
       }
 
       return Boolean(success);
     },
-    [
-      token,
-      currentChannel,
-      executeApiCall,
-      leaveChannel,
-      username,
-      notifyInfo,
-      wsContext.actions,
-      wsContext.state,
-      notifyError,
-    ]
+    [token, currentChannel, executeApiCall, leaveChannel, username, wsContext.actions, wsContext.state, showError]
   );
 
   const updateMemberRole = useCallback(
@@ -644,14 +606,12 @@ export function useChat() {
               },
             },
           });
-
-          notifyInfo(`${memberUsername} ${isAdmin ? "promoted to admin" : "demoted to user"}`);
         }
       );
 
       return Boolean(success);
     },
-    [token, wsContext.actions, executeApiCall, notifyInfo]
+    [token, wsContext.actions, executeApiCall]
   );
 
   const uploadFile = useCallback(
@@ -661,6 +621,9 @@ export function useChat() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("channelName", channelName);
+
+      console.log("Form data:", formData);
+      console.log("file:", file);
 
       const uploadResult = await executeApiCall(
         "uploadFile",
@@ -724,13 +687,12 @@ export function useChat() {
     if (!token || !wsContext.state.systemConnected) return;
 
     if (channels.length === 0 && !channelsFetchedRef.current) {
-      console.log("Fetching channels after system connection");
-
       fetchChannels().catch((error) => {
         console.error("Error fetching channels:", error);
+        showError("Failed to fetch channels. Please try again.");
       });
     }
-  }, [token, wsContext.state.systemConnected, fetchChannels, channels.length]);
+  }, [token, wsContext.state.systemConnected, fetchChannels, channels.length, showError]);
 
   // STEP 3: Restore saved channel if available
   useEffect(() => {
@@ -739,27 +701,25 @@ export function useChat() {
 
     const storedChannel = sessionStorage.getItem("currentChannel");
     if (storedChannel && channels.some((c) => c.name === storedChannel)) {
-      console.log(`Restoring saved channel: ${storedChannel}`);
-
       joinChannel(storedChannel).catch((error) => {
         console.error(`Error joining saved channel ${storedChannel}:`, error);
+        showError("Failed to rejoin channel. Please try again.");
         sessionStorage.removeItem("currentChannel");
       });
     }
-  }, [token, wsContext.state.systemConnected, channels, currentChannel, joinChannel]);
+  }, [token, wsContext.state.systemConnected, channels, currentChannel, joinChannel, showError]);
 
   // STEP 4: Fetch messages when connected to a channel
   useEffect(() => {
     if (!token || !currentChannel || !wsContext.state.channelConnected) return;
 
     if (!messagesFetchedRef.current[currentChannel]) {
-      console.log(`Fetching messages for channel: ${currentChannel}`);
-
       fetchMessages(currentChannel).catch((error) => {
         console.error(`Error fetching messages for ${currentChannel}:`, error);
+        showError("Failed to fetch messages. Please try again.");
       });
     }
-  }, [token, currentChannel, wsContext.state.channelConnected, fetchMessages]);
+  }, [token, currentChannel, wsContext.state.channelConnected, fetchMessages, showError]);
 
   // Update useEffect for WebSocket disconnection
   useEffect(() => {

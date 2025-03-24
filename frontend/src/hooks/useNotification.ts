@@ -18,9 +18,9 @@ export const useNotification = () => {
     showNotification(message, "success", duration);
   };
 
-  const showInfo = (message: string, duration = 5000) => {
-    showNotification(message, "info", duration);
-  };
+  // const showInfo = (message: string, duration = 5000) => {
+  //   showNotification(message, "info", duration);
+  // };
 
   const showWarning = (message: string, duration = 5000) => {
     showNotification(message, "warning", duration);
@@ -33,7 +33,7 @@ export const useNotification = () => {
   return {
     showNotification,
     showSuccess,
-    showInfo,
+    // showInfo,
     showWarning,
     showError,
     removeNotification,

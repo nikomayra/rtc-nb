@@ -51,15 +51,15 @@ const NotificationToast = ({ notification, onClose }: NotificationToastProps) =>
   const getTypeStyles = () => {
     switch (notification.type) {
       case "info":
-        return "bg-blue-500/20 text-blue-400 border-blue-500/30";
+        return "bg-blue-500/40 text-blue-400 font-bold text-sm border-blue-500/30";
       case "success":
-        return "bg-green-500/20 text-green-400 border-green-500/30";
+        return "bg-green-500/40 text-green-400 font-bold text-sm border-green-500/30";
       case "warning":
-        return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+        return "bg-yellow-500/40 text-yellow-400 font-bold text-sm border-yellow-500/30";
       case "error":
-        return "bg-red-500/20 text-red-400 border-red-500/30";
+        return "bg-red-500/40 text-red-400 font-bold text-sm border-red-500/30";
       default:
-        return "bg-primary/20 text-primary border-primary/30";
+        return "bg-primary/40 text-primary font-bold text-sm border-primary/30";
     }
   };
 
@@ -67,7 +67,7 @@ const NotificationToast = ({ notification, onClose }: NotificationToastProps) =>
     <div
       className={`transform transition-all duration-300 ease-in-out ${
         isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
-      } ${getTypeStyles()} min-w-[300px] max-w-[600px] w-auto rounded-md border backdrop-blur-sm p-4 shadow-lg flex justify-between items-center`}
+      } ${getTypeStyles()} min-w-[300px] max-w-[600px] w-auto rounded-md border backdrop-blur-sm p-3 shadow-lg flex justify-between items-center`}
     >
       <div className="flex-1 pr-4 text-center">
         {typeof notification.message === "object" ? JSON.stringify(notification.message) : notification.message}

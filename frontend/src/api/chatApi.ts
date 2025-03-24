@@ -2,6 +2,7 @@ import { axiosInstance } from "./axiosInstance";
 import { BASE_URL } from "../utils/constants";
 import { z } from "zod";
 import { IncomingMessage, IncomingMessageSchema, Channel, ChannelSchema } from "../types/interfaces";
+import axios from "axios";
 
 export const chatApi = {
   // Fetch messages for a channel
@@ -116,9 +117,9 @@ export const chatApi = {
     }
   },
 
-  // Upload a file to a channel
+  // Upload a file to a channel - uses axios.post instead of axiosInstance.post to avoid interceptor issues
   uploadFile: async (formData: FormData, token: string): Promise<{ imagePath: string; thumbnailPath: string }> => {
-    const response = await axiosInstance.post(`${BASE_URL}/upload`, formData, {
+    const response = await axios.post(`${BASE_URL}/upload`, formData, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "multipart/form-data",

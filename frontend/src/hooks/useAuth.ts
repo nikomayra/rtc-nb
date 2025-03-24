@@ -69,7 +69,7 @@ export const useAuth = () => {
           sessionStorage.setItem("lastValidatedToken", storedToken);
           validationAttempted.current = true;
         } else {
-          console.error("Error validating token:", error);
+          showError("Login failed, invalid token");
           setIsLoggedIn(false);
           sessionStorage.removeItem("token");
           sessionStorage.removeItem("username");
@@ -103,13 +103,14 @@ export const useAuth = () => {
         validationAttempted.current = true; // Mark as validated on successful login
       } else {
         const errorMessage = response.error?.message || "Login failed";
-        showError(errorMessage);
+        showError("Login failed");
         throw new Error(errorMessage);
       }
     } catch (error) {
       // Ensure we handle both Error objects and plain objects
       const errorMessage = error instanceof Error ? error.message : "Login failed";
-      showError(errorMessage);
+      console.error(errorMessage);
+      showError("Login failed");
       setToken("");
       setUsername("");
       setIsLoggedIn(false);
@@ -130,13 +131,14 @@ export const useAuth = () => {
         validationAttempted.current = true; // Mark as validated on successful registration
       } else {
         const errorMessage = response.error?.message || "Registration failed";
-        showError(errorMessage);
+        showError("Registration failed");
         throw new Error(errorMessage);
       }
     } catch (error) {
       // Ensure we handle both Error objects and plain objects
       const errorMessage = error instanceof Error ? error.message : "Registration failed";
-      showError(errorMessage);
+      console.error(errorMessage);
+      showError("Registration failed");
       setToken("");
       setUsername("");
       setIsLoggedIn(false);
