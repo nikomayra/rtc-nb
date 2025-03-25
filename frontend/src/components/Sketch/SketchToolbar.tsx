@@ -1,82 +1,93 @@
-// import { useCallback, useContext } from "react";
-// import { WebSocketContext } from "../../contexts/webSocketContext";
-// import { AuthContext } from "../../contexts/authContext";
-// import { MessageType, SketchCommandType } from "../../types/interfaces";
-// import { axiosInstance } from "../../api/axiosInstance";
-// import { BASE_URL } from "../../utils/constants";
+import { useCallback } from "react";
+import { useSketchSync } from "../../hooks/useSketchSync";
 
-// interface SketchToolbarProps {
-//   onClear: () => void;
-//   currentSketchId: string;
-//   channelName: string;
-//   isDrawing: boolean;
-//   setIsDrawing: (value: boolean) => void;
-//   strokeWidth: number;
-//   setStrokeWidth: (value: number) => void;
-// }
+type Tool = "draw" | "erase" | "pan";
 
-// export const SketchToolbar = ({
-//   onClear,
-//   currentSketchId,
-//   channelName,
-//   isDrawing,
-//   setIsDrawing,
-//   strokeWidth,
-//   setStrokeWidth,
-// }: SketchToolbarProps) => {
-//   const wsService = useContext(WebSocketContext);
-//   const authContext = useContext(AuthContext);
-//   if (!wsService || !authContext) throw new Error("Context not found");
+interface SketchToolbarProps {
+  onClear: () => void;
+  currentSketchId: string;
+  channelName: string;
+  currentTool: Tool;
+  setCurrentTool: (tool: Tool) => void;
+  strokeWidth: number;
+  setStrokeWidth: (width: number) => void;
+}
 
-//   const handleClear = useCallback(async () => {
-//     try {
-//       const response = await axiosInstance.post(
-//         `${BASE_URL}/clearSketch`,
-//         {
-//           sketchId: currentSketchId,
-//           channelName: channelName,
-//         },
-//         {
-//           headers: {
-//             Authorization: `Bearer ${authContext.state.token}`,
-//           },
-//         }
-//       );
+export const SketchToolbar = ({
+  onClear,
+  currentSketchId,
+  channelName,
+  currentTool,
+  setCurrentTool,
+  strokeWidth,
+  setStrokeWidth,
+}: SketchToolbarProps) => {
+  // Initialize sync hook for real-time updates
+  const sketchSync = useSketchSync({
+    channelName,
+    sketchId: currentSketchId,
+    onUpdateFromServer: () => {}, // Handled by useSketch
+    onClearFromServer: () => {}, // Handled by useSketch
+  });
 
-//       if (response.data.success) {
-//         onClear();
-//         wsService.actions.send({
-//           channelName,
-//           type: MessageType.Sketch,
-//           content: {
-//             sketchCmd: {
-//               commandType: SketchCommandType.Clear,
-//               sketchId: currentSketchId,
-//             },
-//           },
-//         });
-//       }
-//     } catch (error) {
-//       console.error("Failed to clear sketch:", error);
-//     }
-//   }, [currentSketchId, channelName, onClear, wsService.actions, authContext.state.token]);
+  const handleClear = useCallback(async () => {
+    try {
+      onClear();
+      sketchSync.sendClear();
+    } catch (error) {
+      console.error("Failed to clear sketch:", error);
+    }
+  }, [onClear, sketchSync]);
 
-//   return (
-//     <div className="sketch-toolbar">
-//       <button onClick={() => setIsDrawing(true)} className={isDrawing ? "active" : ""}>
-//         Pen🖊️
-//       </button>
-//       <button onClick={() => setIsDrawing(false)} className={!isDrawing ? "active" : ""}>
-//         Eraser🧹
-//       </button>
-//       <select value={strokeWidth} onChange={(e) => setStrokeWidth(Number(e.target.value))}>
-//         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((width) => (
-//           <option key={width} value={width}>
-//             {width}
-//           </option>
-//         ))}
-//       </select>
-//       <button onClick={handleClear}>Clear🗑️</button>
-//     </div>
-//   );
-// };
+  return (
+    <div className="flex gap-2 p-3 justify-center border-t border-primary/20 bg-surface-dark/10">
+      <button
+        onClick={() => setCurrentTool("draw")}
+        className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+          currentTool === "draw"
+            ? "bg-primary/20 text-primary hover:bg-primary/30"
+            : "bg-surface-dark/50 text-text-light/70 hover:bg-red-500/10"
+        }`}
+      >
+        ✏️ Draw
+      </button>
+      <button
+        onClick={() => setCurrentTool("erase")}
+        className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+          currentTool === "erase"
+            ? "bg-primary/20 text-primary hover:bg-primary/30"
+            : "bg-surface-dark/50 text-text-light/70 hover:bg-red-500/10"
+        }`}
+      >
+        🧽 Erase
+      </button>
+      <button
+        onClick={() => setCurrentTool("pan")}
+        className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+          currentTool === "pan"
+            ? "bg-primary/20 text-primary hover:bg-primary/30"
+            : "bg-surface-dark/50 text-text-light/70 hover:bg-red-500/10"
+        }`}
+      >
+        👋 Pan
+      </button>
+      <select
+        value={strokeWidth}
+        onChange={(e) => setStrokeWidth(Number(e.target.value))}
+        className="px-2 py-1.5 rounded-md text-sm bg-surface-dark/50 text-text-light border border-primary/20"
+      >
+        {[3, 6, 9, 12, 15, 18, 21, 24, 27, 30].map((width) => (
+          <option key={width} value={width}>
+            {width}px
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={handleClear}
+        className="px-3 py-1.5 rounded-md text-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+      >
+        🗑️ Clear
+      </button>
+    </div>
+  );
+};

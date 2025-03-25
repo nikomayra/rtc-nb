@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 // ============= Enums =============
-
 export enum MessageType {
   Text = 0,
   Image = 1,
@@ -30,8 +29,7 @@ export enum MemberUpdateAction {
   Removed = "removed",
 }
 
-// ============= Zod Schemas =============
-
+// ============= Sketch Types =============
 export const PointSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -47,22 +45,6 @@ export const RegionSchema = z.object({
   start: PointSchema,
   end: PointSchema,
   paths: z.array(DrawPathSchema),
-});
-
-export const ChannelMemberSchema = z.object({
-  username: z.string().min(1),
-  isAdmin: z.boolean(),
-  joinedAt: z.string().min(1).datetime(),
-  lastMessage: z.string().datetime().optional().nullable(),
-});
-
-export const ChannelSchema = z.object({
-  name: z.string().min(1),
-  isPrivate: z.boolean(),
-  description: z.string().optional().nullable(),
-  createdBy: z.string().min(1),
-  createdAt: z.string().min(1).datetime(),
-  members: z.record(z.string(), ChannelMemberSchema),
 });
 
 export const SketchSchema = z.object({
@@ -89,12 +71,35 @@ export const SketchCommandSchema = z
       if (data.commandType === SketchCommandType.Update) {
         return data.region !== undefined;
       }
-      return true; // Clear and Delete only need sketchId
+      return true;
     },
     {
       message: "Invalid sketch command structure",
     }
   );
+
+export type Point = z.infer<typeof PointSchema>;
+export type DrawPath = z.infer<typeof DrawPathSchema>;
+export type Region = z.infer<typeof RegionSchema>;
+export type Sketch = z.infer<typeof SketchSchema>;
+export type SketchCommand = z.infer<typeof SketchCommandSchema>;
+
+// ============= Channel Types =============
+export const ChannelMemberSchema = z.object({
+  username: z.string().min(1),
+  isAdmin: z.boolean(),
+  joinedAt: z.string().min(1).datetime(),
+  lastMessage: z.string().datetime().optional().nullable(),
+});
+
+export const ChannelSchema = z.object({
+  name: z.string().min(1),
+  isPrivate: z.boolean(),
+  description: z.string().optional().nullable(),
+  createdBy: z.string().min(1),
+  createdAt: z.string().min(1).datetime(),
+  members: z.record(z.string(), ChannelMemberSchema),
+});
 
 export const ChannelUpdateSchema = z.object({
   action: z.nativeEnum(ChannelUpdateAction),
@@ -107,6 +112,12 @@ export const MemberUpdateSchema = z.object({
   isAdmin: z.boolean(),
 });
 
+export type Channel = z.infer<typeof ChannelSchema>;
+export type ChannelMember = z.infer<typeof ChannelMemberSchema>;
+export type ChannelUpdate = z.infer<typeof ChannelUpdateSchema>;
+export type MemberUpdate = z.infer<typeof MemberUpdateSchema>;
+
+// ============= Message Types =============
 export const UserStatusSchema = z.object({
   action: z.enum(["online", "offline"]),
   username: z.string().min(1),
@@ -119,7 +130,6 @@ const URLSchema = z.string().refine(
       new URL(val);
       return true;
     } catch {
-      // Allow paths starting with /
       return val.startsWith("/");
     }
   },
@@ -138,7 +148,6 @@ export const MessageContentSchema = z
   })
   .refine(
     (data) => {
-      // Ensure that if it's an image message, both fileUrl and thumbnailUrl are present
       if (data.fileUrl || data.thumbnailUrl) {
         return data.fileUrl && data.thumbnailUrl;
       }
@@ -164,24 +173,12 @@ export const IncomingMessageSchema = z.object({
   timestamp: z.string().datetime(),
 });
 
-// ============= Types =============
-
-// Infer types from Zod schemas
-export type Point = z.infer<typeof PointSchema>;
-export type DrawPath = z.infer<typeof DrawPathSchema>;
-export type Region = z.infer<typeof RegionSchema>;
-export type Channel = z.infer<typeof ChannelSchema>;
-export type ChannelMember = z.infer<typeof ChannelMemberSchema>;
-export type Sketch = z.infer<typeof SketchSchema>;
-export type SketchCommand = z.infer<typeof SketchCommandSchema>;
-export type ChannelUpdate = z.infer<typeof ChannelUpdateSchema>;
-export type MemberUpdate = z.infer<typeof MemberUpdateSchema>;
 export type UserStatus = z.infer<typeof UserStatusSchema>;
 export type MessageContent = z.infer<typeof MessageContentSchema>;
 export type OutgoingMessage = z.infer<typeof OutgoingMessageSchema>;
 export type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
 
-// API Response types
+// ============= API Types =============
 export interface APISuccessResponse<T> {
   success: true;
   data: T;

@@ -658,7 +658,14 @@ export function useChat() {
 
   // Setup WebSocket message handlers
   useEffect(() => {
-    console.log("Setting up message handlers");
+    if (DEBUG_PERFORMANCE) {
+      console.log("🔄 [useChat] Message handlers effect triggered with deps:", {
+        handleMessage: handleMessage.toString().slice(0, 50) + "...",
+        handleChannelUpdate: handleChannelUpdate.toString().slice(0, 50) + "...",
+        handleMemberUpdate: handleMemberUpdate.toString().slice(0, 50) + "...",
+        wsActions: Object.keys(wsContext.actions),
+      });
+    }
 
     const handlers = {
       onChatMessage: handleMessage,
@@ -667,13 +674,13 @@ export function useChat() {
     };
 
     wsContext.actions.setMessageHandlers(handlers);
-    console.log("Handlers registered:", handlers);
+    if (DEBUG_PERFORMANCE) console.log("Handlers registered:", handlers);
 
     return () => {
-      // Clear handlers when component unmounts
+      if (DEBUG_PERFORMANCE) console.log("🧹 [useChat] Cleaning up message handlers");
       wsContext.actions.setMessageHandlers({});
     };
-  }, [handleMessage, handleChannelUpdate, handleMemberUpdate, wsContext.actions, currentChannel]);
+  }, [handleMessage, handleChannelUpdate, handleMemberUpdate, wsContext.actions]);
 
   // STEP 1: Connect to system socket when token is available
   useEffect(() => {

@@ -101,6 +101,7 @@ Key services:
 
 - `ChatService.ts`: Manages channel operations, message fetching, and caching
 - `WebSocketService.ts`: Handles WebSocket connections and message formatting
+- `SketchService.ts`: Manages sketch operations, caching, and synchronization
 
 Service implementation highlights:
 
@@ -132,6 +133,7 @@ Located in `src/contexts/`, this layer provides application-wide state.
 - `chatContext.ts`: Provides chat-related state and actions
 - `authContext.ts`: Handles authentication state
 - `notificationContext.ts`: Manages notifications
+- `sketchContext.ts`: Manages sketch list and current sketch selection
 
 Each context follows a consistent pattern with clearly defined state and actions:
 
@@ -173,6 +175,10 @@ Located in `src/hooks/`, these custom hooks abstract away complex logic and stat
   - Handles user online status tracking
 - `useAuthContext.ts`: Simplifies authentication interactions
 - `useNotification.ts`: Manages user notifications
+- `useSketch.ts`: Orchestrates sketch drawing functionality
+- `useSketchState.ts`: Manages drawing state and path tracking
+- `useSketchSync.ts`: Handles real-time sketch synchronization
+- `useCanvasDrawing.ts`: Handles canvas rendering operations
 
 The `useChat` hook is central to the implementation and follows a clear initialization flow:
 
@@ -305,6 +311,66 @@ The architecture implements centralized error handling:
 8. **Optimized Rendering**: Use of React.memo and useCallback to minimize renders
 9. **Session Persistence**: Channel session saved in sessionStorage
 
+## Sketch Feature Architecture
+
+The sketch functionality follows a clean separation of concerns:
+
+### Component Responsibilities
+
+1. **SketchService**
+
+   - Handles API communication for sketches
+   - Implements caching for efficient loading
+   - Manages CRUD operations
+
+2. **SketchContext & Provider**
+
+   - Manages global sketch list
+   - Handles current sketch selection
+   - Coordinates sketch loading
+
+3. **useSketchState**
+
+   - Manages local drawing state and paths
+   - Tracks drawing mode (drawing/erasing)
+   - Provides path operations (add/update/remove)
+
+4. **useSketchSync**
+
+   - Handles real-time synchronization
+   - Processes incoming WebSocket messages
+   - Queues outgoing updates
+
+5. **useCanvasDrawing**
+
+   - Manages canvas rendering
+   - Handles drawing operations
+   - Provides utilities for point conversion
+
+6. **useSketch**
+
+   - Main orchestration hook
+   - Connects state, sync, and drawing
+   - Provides unified API for components
+
+7. **UI Components**
+   - SketchBoard: Main drawing interface
+   - SketchToolbar: Tool selection and controls
+
+### Sketch Data Flow
+
+1. **Drawing Flow**
+
+   ```
+   User Input → SketchBoard → useSketch → useSketchState → Canvas
+                                       → useSketchSync → WebSocket
+   ```
+
+2. **Sync Flow**
+   ```
+   WebSocket → useSketchSync → useSketch → useSketchState → Canvas
+   ```
+
 ## Future Improvements
 
 - Add more comprehensive unit tests for services and hooks
@@ -312,3 +378,6 @@ The architecture implements centralized error handling:
 - Add service worker for offline capability
 - Improve WebSocket reconnection logic with exponential backoff
 - Implement client-side encryption for private messages
+- Add undo/redo functionality for sketch operations
+- Optimize canvas rendering for better performance
+- Add support for more drawing tools

@@ -446,7 +446,9 @@ func (s *Store) GetSketches(ctx context.Context, channelName string) ([]*models.
 
 	sketches := []*models.Sketch{}
 	for rows.Next() {
-		sketch := &models.Sketch{}
+		sketch := &models.Sketch{
+			Regions: make(map[string]models.Region), // Initialize with empty regions map
+		}
 		err := rows.Scan(&sketch.ID, &sketch.ChannelName, &sketch.DisplayName, &sketch.Width, &sketch.Height, &sketch.CreatedAt, &sketch.CreatedBy)
 		if err != nil {
 			return nil, err

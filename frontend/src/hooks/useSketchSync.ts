@@ -6,6 +6,9 @@ import { DrawPath, IncomingMessage, MessageType, Region, SketchCommandType } fro
 import { BASE_URL } from "../utils/constants";
 import { axiosInstance } from "../api/axiosInstance";
 
+// Debug flag for logging control
+const DEBUG = true;
+
 interface UseSketchSyncProps {
   channelName: string;
   sketchId: string | undefined;
@@ -19,11 +22,6 @@ interface UseSketchSyncReturn {
   sendClear: () => void;
 }
 
-/**
- * Hook to handle all sketch synchronization with the server
- * This hook is responsible for sending updates to server
- * and processing incoming messages
- */
 export const useSketchSync = ({
   channelName,
   sketchId,
@@ -38,10 +36,10 @@ export const useSketchSync = ({
     throw new Error("Required contexts not found");
   }
 
+  // Refs to track current state
   const currentSketchIdRef = useRef(sketchId);
   const isProcessingMessage = useRef(false);
   const messageQueue = useRef<IncomingMessage[]>([]);
-  const processMessageRef = useRef<(message: IncomingMessage) => void>();
 
   // Update ref when sketch ID changes
   useEffect(() => {
@@ -52,7 +50,7 @@ export const useSketchSync = ({
   const sendUpdate = useCallback(
     (path: DrawPath) => {
       if (!channelName || !sketchId || !path.points.length) {
-        console.warn("Cannot send update: missing data");
+        if (DEBUG) console.warn("[useSketchSync] Cannot send update: missing data");
         return;
       }
 
@@ -64,8 +62,9 @@ export const useSketchSync = ({
         const maxX = Math.max(...points.map((p) => p.x));
         const maxY = Math.max(...points.map((p) => p.y));
 
-        console.log(`📤 [useSketchSync] Sending path: ${path.points.length} points, isDrawing=${path.isDrawing}`);
+        if (DEBUG) console.log(`📤 [useSketchSync] Sending path with ${path.points.length} points`);
 
+        // Create the region object
         const updatedRegion = {
           start: { x: minX, y: minY },
           end: { x: maxX, y: maxY },
@@ -78,6 +77,7 @@ export const useSketchSync = ({
           ],
         };
 
+        // Send the update via WebSocket
         wsService.actions.send({
           channelName,
           type: MessageType.Sketch,
@@ -90,7 +90,7 @@ export const useSketchSync = ({
           },
         });
       } catch (error) {
-        console.error("Failed to send sketch update:", error);
+        console.error("[useSketchSync] Failed to send update:", error);
       }
     },
     [wsService, channelName, sketchId]
@@ -99,13 +99,13 @@ export const useSketchSync = ({
   // Send a clear command to the server
   const sendClear = useCallback(() => {
     if (!channelName || !sketchId) {
-      console.warn("Cannot send clear: missing data");
+      if (DEBUG) console.warn("[useSketchSync] Cannot send clear: missing data");
       return;
     }
 
-    console.log(`🧹 [useSketchSync] Sending clear command`);
+    if (DEBUG) console.log(`🧹 [useSketchSync] Sending clear command`);
 
-    // Send websocket message to clear sketch for all clients
+    // Send WebSocket message for real-time update
     wsService.actions.send({
       channelName,
       type: MessageType.Sketch,
@@ -117,7 +117,7 @@ export const useSketchSync = ({
       },
     });
 
-    // Make HTTP request to clear sketch in database
+    // Also make HTTP request to persist the clear operation
     axiosInstance
       .post(
         `${BASE_URL}/clearSketch`,
@@ -131,9 +131,6 @@ export const useSketchSync = ({
           },
         }
       )
-      .then(() => {
-        console.log(`🧹 [useSketchSync] Sketch cleared in database`);
-      })
       .catch((error) => {
         console.error(`❌ [useSketchSync] Failed to clear sketch in database:`, error);
       });
@@ -144,45 +141,42 @@ export const useSketchSync = ({
     async (message: IncomingMessage) => {
       if (message.type !== MessageType.Sketch || !message.content.sketchCmd) return;
 
-      const cmd = message.content.sketchCmd;
-      console.log(`📥 [useSketchSync] From ${message.username}, cmd: ${cmd.commandType}`);
-
+      // Skip if we're already processing a message - will be handled by the queue
       if (isProcessingMessage.current) {
-        console.log(`⏳ [useSketchSync] Queue message (${messageQueue.current.length} pending)`);
+        if (DEBUG) console.log(`⏳ [useSketchSync] Queue message (${messageQueue.current.length + 1} pending)`);
         messageQueue.current.push(message);
         return;
       }
 
       try {
         isProcessingMessage.current = true;
+        const cmd = message.content.sketchCmd;
 
-        // Skip our own messages - we handle everything locally first
+        // Skip our own messages - handled locally already
         if (message.username === authContext.state.username) {
-          console.log(`🔄 [useSketchSync] Ignoring own message (already processed locally)`);
+          if (DEBUG) console.log(`🔄 [useSketchSync] Ignoring own message`);
           return;
         }
 
-        // Process messages from other users
+        // Process based on command type
         switch (cmd.commandType) {
           case SketchCommandType.Update:
             if (cmd.region && currentSketchIdRef.current === cmd.sketchId) {
-              console.log(`🔄 [useSketchSync] Update from ${message.username}: ${cmd.region.paths.length} paths`);
+              if (DEBUG) console.log(`🔄 [useSketchSync] Update: ${cmd.region.paths?.length || 0} paths`);
               onUpdateFromServer(cmd.region);
-            } else {
-              console.log(`⚠️ [useSketchSync] Skipping update - ID mismatch`);
             }
             break;
 
           case SketchCommandType.Clear:
             if (currentSketchIdRef.current === cmd.sketchId) {
-              console.log(`🧹 [useSketchSync] Clear from ${message.username}`);
+              if (DEBUG) console.log(`🧹 [useSketchSync] Clear from ${message.username}`);
               onClearFromServer();
             }
             break;
 
           case SketchCommandType.Delete:
-            console.log(`🗑️ [useSketchSync] Delete sketch: ${cmd.sketchId}`);
-            sketchContext.actions.removeSketch(cmd.sketchId);
+            if (DEBUG) console.log(`🗑️ [useSketchSync] Delete sketch: ${cmd.sketchId}`);
+            sketchContext.actions.deleteSketch(cmd.sketchId, authContext.state.token);
             if (currentSketchIdRef.current === cmd.sketchId) {
               sketchContext.actions.setCurrentSketch(null);
             }
@@ -190,8 +184,14 @@ export const useSketchSync = ({
 
           case SketchCommandType.New:
             if (cmd.sketchData) {
-              console.log(`📝 [useSketchSync] New sketch: ${cmd.sketchData.id}`);
-              sketchContext.actions.addSketch(cmd.sketchData);
+              if (DEBUG) console.log(`📝 [useSketchSync] New sketch: ${cmd.sketchData.id}`);
+              sketchContext.actions.createSketch(
+                channelName,
+                cmd.sketchData.displayName,
+                cmd.sketchData.width,
+                cmd.sketchData.height,
+                authContext.state.token
+              );
             }
             break;
         }
@@ -199,27 +199,26 @@ export const useSketchSync = ({
         console.error("❌ [useSketchSync] Error:", error);
       } finally {
         isProcessingMessage.current = false;
-        if (messageQueue.current.length > 0) {
+
+        // Process the next message if any are queued
+        if (messageQueue.current.length > 0 && !isProcessingMessage.current) {
           const nextMessage = messageQueue.current.shift();
           if (nextMessage) {
-            console.log(`⏭️ [useSketchSync] Processing next queued message`);
-            processMessageRef.current?.(nextMessage);
+            handleMessage(nextMessage); // Process the next message
           }
         }
       }
     },
-    [onUpdateFromServer, onClearFromServer, sketchContext.actions, authContext.state.username]
+    [authContext, sketchContext.actions, onUpdateFromServer, onClearFromServer, channelName]
   );
 
-  // Set up websocket handler
+  // Set up WebSocket handler
   useEffect(() => {
-    if (!wsService) return;
-
-    processMessageRef.current = handleMessage;
     wsService.actions.setMessageHandlers({
       onSketchMessage: handleMessage,
     });
 
+    // Clean up on unmount
     return () => {
       wsService.actions.setMessageHandlers({});
     };

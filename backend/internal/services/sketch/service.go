@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const MaxSketchesPerChannel = 8
+
 // TODO: More sophisticated error & context handling
 type Service struct {
 	dbStore *database.Store
@@ -23,6 +25,17 @@ func NewService(dbStore *database.Store, connMgr connections.Manager) *Service {
 func (s *Service) CreateSketch(ctx context.Context, channelName, displayName string, width, height int, createdBy string) (*models.Sketch, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
+	// Check if channel has reached sketch limit
+	sketches, err := s.dbStore.GetSketches(ctx, channelName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check sketch count: %w", err)
+	}
+
+	if len(sketches) >= MaxSketchesPerChannel {
+		return nil, fmt.Errorf("channel has reached the maximum limit of %d sketches", MaxSketchesPerChannel)
+	}
+
 	sketch := models.NewSketch(channelName, displayName, width, height, createdBy)
 	if err := s.dbStore.CreateSketch(ctx, sketch); err != nil {
 		return nil, fmt.Errorf("failed to create sketch: %w", err)

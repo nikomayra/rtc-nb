@@ -1,39 +1,33 @@
-import { Sketch, SketchSchema, MessageType, SketchCommandType } from "../../types/interfaces";
+import { useState, useContext } from "react";
+import { Sketch } from "../../types/interfaces";
 import SketchList from "./SketchList";
-import { axiosInstance, isAxiosError } from "../../api/axiosInstance";
-import { BASE_URL } from "../../utils/constants";
-import { useContext, useState } from "react";
-import { z } from "zod";
 import { Modal } from "../Generic/Modal";
 import { SketchContext } from "../../contexts/sketchContext";
-import { WebSocketContext } from "../../contexts/webSocketContext";
 import { useNotification } from "../../hooks/useNotification";
-
+import { AuthContext } from "../../contexts/authContext";
 interface SketchConfigProps {
   channelName: string;
-  token: string;
 }
 
 const MIN_SKETCH_DIMENSION = 100;
 const MAX_SKETCH_WIDTH = 1280;
 const MAX_SKETCH_HEIGHT = 720;
 
-export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
-  //  ChannelName string `json:"channelName"`
-  // 	DisplayName string `json:"displayName"`
-  // 	Width       int    `json:"width"`
-  // 	Height      int    `json:"height"`
-
+export const SketchConfig = ({ channelName }: SketchConfigProps) => {
   const [displayName, setDisplayName] = useState("");
   const [width, setWidth] = useState<string>("");
   const [height, setHeight] = useState<string>("");
   const [isOpen, setIsOpen] = useState(false);
 
   const sketchContext = useContext(SketchContext);
-  const wsService = useContext(WebSocketContext);
-  const { showError, showSuccess } = useNotification();
+  const authContext = useContext(AuthContext);
+  const { showError } = useNotification();
 
-  if (!sketchContext || !wsService) throw new Error("SketchContext or WebSocketContext not found");
+  if (!sketchContext || !authContext) throw new Error("SketchContext or AuthContext not found");
+  const { state, actions } = sketchContext;
+  const {
+    state: { token },
+  } = authContext;
 
   const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -67,147 +61,42 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
 
   const handleCreateSketch = async (e: React.FormEvent) => {
     e.preventDefault();
-    sketchContext.actions.setLoading(true);
-    sketchContext.actions.setError(null);
     const error = validateSketchDimensions(width, height);
     if (error) {
       showError(error);
-      sketchContext.actions.setLoading(false);
       return;
     }
+
     setIsOpen(false);
     try {
-      const response = await axiosInstance.post(
-        `${BASE_URL}/createSketch`,
-        {
-          channelName: channelName,
-          displayName: displayName,
-          width: parseInt(width),
-          height: parseInt(height),
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      await actions.createSketch(channelName, displayName, parseInt(width), parseInt(height), token);
 
-      if (response.data.success) {
-        const validatedSketch = SketchSchema.parse(response.data.data);
-        sketchContext.actions.addSketch(validatedSketch);
-        showSuccess(`Sketch "${displayName}" created successfully`);
-
-        // Broadcast new sketch to all clients
-        wsService.actions.send({
-          channelName,
-          type: MessageType.Sketch,
-          content: {
-            sketchCmd: {
-              commandType: SketchCommandType.New,
-              sketchId: validatedSketch.id,
-              sketchData: validatedSketch,
-            },
-          },
-        });
-
-        const fullSketchResponse = await axiosInstance.get(
-          `${BASE_URL}/channels/${channelName}/sketches/${validatedSketch.id}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-
-        if (fullSketchResponse.data.success) {
-          const sketchWithRegions = SketchSchema.parse(fullSketchResponse.data.data);
-          sketchContext.actions.setCurrentSketch(sketchWithRegions);
-        }
-        setIsOpen(false);
-
-        // Reset form fields
-        setDisplayName("");
-        setWidth("");
-        setHeight("");
-      } else {
-        showError(response.data.error || "Failed to create sketch");
-        sketchContext.actions.setError(response.data.error);
-      }
+      // Reset form fields
+      setDisplayName("");
+      setWidth("");
+      setHeight("");
     } catch (error) {
-      let errorMessage = "Failed to create sketch";
-      if (error instanceof z.ZodError) {
-        errorMessage = "Invalid sketch data received";
-      }
-      if (isAxiosError(error)) {
-        errorMessage = error.response?.data?.message || errorMessage;
-      }
-      showError(errorMessage);
-      sketchContext.actions.setError(errorMessage);
-    } finally {
-      sketchContext.actions.setLoading(false);
+      // Error handling is done in the context
+      console.error("Failed to create sketch:", error);
     }
   };
 
   const handleSelectSketch = async (sketch: Sketch) => {
-    sketchContext.actions.setLoading(true);
-    sketchContext.actions.setError(null);
     try {
-      const response = await axiosInstance.get(`${BASE_URL}/channels/${sketch.channelName}/sketches/${sketch.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.data.success) {
-        const sketchWithRegions = SketchSchema.parse(response.data.data);
-        sketchContext.actions.setCurrentSketch(sketchWithRegions);
-        showSuccess(`Sketch "${sketch.displayName}" loaded`);
-      } else {
-        showError(response.data.error || "Failed to load sketch");
-        sketchContext.actions.setError(response.data.error);
-        console.error("Failed to get sketch:", response.data.error);
-      }
+      await actions.loadSketch(channelName, sketch.id, token);
     } catch (error) {
-      let errorMessage = "Failed to load sketch";
-      if (error instanceof z.ZodError) {
-        errorMessage = "Invalid sketch data received";
-      }
-      if (isAxiosError(error)) {
-        errorMessage = error.response?.data?.message || errorMessage;
-        console.error("Failed to get sketch:", error.response?.data?.message);
-      }
-      showError(errorMessage);
-      sketchContext.actions.setError(errorMessage);
-    } finally {
-      sketchContext.actions.setLoading(false);
+      // Error handling is done in the context
+      console.error("Failed to load sketch:", error);
     }
   };
 
   const handleDeleteSketch = async (id: string) => {
     try {
-      const response = await axiosInstance.delete(`${BASE_URL}/deleteSketch/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.data.success) {
-        sketchContext.actions.removeSketch(id);
-        if (sketchContext.state.currentSketch?.id === id) {
-          sketchContext.actions.setCurrentSketch(null);
-        }
-        wsService.actions.send({
-          channelName,
-          type: MessageType.Sketch,
-          content: {
-            sketchCmd: {
-              commandType: SketchCommandType.Delete,
-              sketchId: id,
-            },
-          },
-        });
-        showSuccess("Sketch deleted successfully");
-      }
+      await actions.deleteSketch(id, token);
+      await actions.loadSketches(channelName, token);
     } catch (error) {
-      if (isAxiosError(error)) {
-        const message = error.response?.data?.error.message || "Failed to delete sketch";
-        showError(message);
-        sketchContext.actions.setError(message);
-      }
-      throw error;
+      // Error handling is done in the context
+      console.error("Failed to delete sketch:", error);
     }
   };
 
@@ -215,12 +104,12 @@ export const SketchConfig = ({ channelName, token }: SketchConfigProps) => {
     <div className="flex items-center justify-between p-4 border-b border-primary/20">
       <div className="flex items-center">
         <SketchList
-          sketches={sketchContext.state.sketches
+          sketches={state.sketches
             .slice()
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
           onSelect={handleSelectSketch}
           onDelete={handleDeleteSketch}
-          isLoading={sketchContext.state.isLoading}
+          isLoading={state.isLoading}
         />
         <button
           onClick={() => setIsOpen(true)}

@@ -2,6 +2,13 @@ import axios from "axios";
 import type { AxiosResponse, InternalAxiosRequestConfig } from "axios";
 import { convertKeysToCamelCase, convertKeysToSnakeCase } from "../utils/dataFormatter";
 
+// Extend AxiosRequestConfig to include requestId
+declare module "axios" {
+  export interface InternalAxiosRequestConfig {
+    requestId?: string;
+  }
+}
+
 const axiosInstance = axios.create();
 
 // Export the error type checker
@@ -117,7 +124,7 @@ axiosInstance.interceptors.response.use(
   }
 );
 
-// Request interceptor: Transform outgoing requests to snake_case
+// Request interceptor: Transform outgoing requests to snake_case and track loading
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     if (config.data) {
@@ -130,7 +137,9 @@ axiosInstance.interceptors.request.use(
 
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    return Promise.reject(error);
+  }
 );
 
 export { axiosInstance, isAxiosError };

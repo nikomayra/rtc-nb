@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
@@ -14,4 +14,7 @@ export default defineConfig({
       },
     },
   },
-});
+  define: {
+    DEV: JSON.stringify(command === "serve"),
+  },
+}));

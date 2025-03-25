@@ -1,42 +1,44 @@
-import { useState, useCallback, memo, useContext, useRef } from "react";
+import { useState, useCallback, memo, useRef } from "react";
 import { Point } from "../../types/interfaces";
-import { SketchContext } from "../../contexts/sketchContext";
 import { useSketch } from "../../hooks/useSketch";
+import { SketchToolbar } from "./SketchToolbar";
+
+// Define tools for the board
+type Tool = "draw" | "erase" | "pan";
 
 interface SketchBoardProps {
   channelName: string;
 }
 
-type Tool = "draw" | "erase" | "pan";
+// Shared state across renders
+const sharedState = {
+  toolState: {
+    tool: "draw" as Tool,
+    strokeWidth: 3,
+  },
+};
 
 export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
-  const [currentTool, setCurrentTool] = useState<Tool>("draw");
-  const [strokeWidth, setStrokeWidth] = useState(3);
+  // Use shared state to maintain tool selection across remounts
+  const [currentTool, setCurrentTool] = useState<Tool>(sharedState.toolState.tool);
+  const [strokeWidth, setStrokeWidth] = useState(sharedState.toolState.strokeWidth);
   const [isInteracting, setIsInteracting] = useState(false);
   const [panStart, setPanStart] = useState<Point | null>(null);
 
   // Reference to the scroll container for panning
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const sketchContext = useContext(SketchContext);
-  if (!sketchContext) throw new Error("Context missing");
-
-  // Use our new useSketch hook
-  const sketch = useSketch({
-    channelName,
-    currentSketch: sketchContext.state.currentSketch,
-  });
+  const sketch = useSketch({ channelName });
+  const { canvasState, currentSketch } = sketch;
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!sketch.canvasRef.current) return;
+      if (!sketch.canvasRef.current || !currentSketch || !canvasState.ctx) return;
 
-      console.log(`👇 [SketchBoard] Tool: ${currentTool}`);
       setIsInteracting(true);
 
       if (currentTool === "pan") {
         setPanStart({ x: e.clientX, y: e.clientY });
-        // Change cursor to "grabbing" when panning
         e.currentTarget.style.cursor = "grabbing";
         return;
       }
@@ -47,14 +49,14 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
         return;
       }
 
-      sketch.startPath(point, currentTool === "draw", strokeWidth);
+      sketch.handleDraw(point, currentTool === "draw", strokeWidth, false);
     },
-    [sketch, currentTool, strokeWidth]
+    [sketch, currentTool, strokeWidth, currentSketch, canvasState.ctx]
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!isInteracting) return;
+      if (!isInteracting || !currentSketch || !canvasState.ctx) return;
 
       if (currentTool === "pan" && panStart) {
         const container = scrollContainerRef.current;
@@ -64,11 +66,11 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
         const dx = e.clientX - panStart.x;
         const dy = e.clientY - panStart.y;
 
-        // Update scroll position (subtract because scroll direction is opposite to drag)
+        // Update scroll position
         container.scrollLeft -= dx;
         container.scrollTop -= dy;
 
-        // Update the pan start position for next move event
+        // Update the pan start position
         setPanStart({ x: e.clientX, y: e.clientY });
         return;
       }
@@ -76,31 +78,44 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
       const point = sketch.getCanvasPoint(e);
       if (!point || !sketch.isValidPoint(point)) return;
 
-      sketch.continuePath(point);
+      sketch.handleDraw(point, currentTool === "draw", strokeWidth, false);
     },
-    [isInteracting, currentTool, panStart, sketch]
+    [isInteracting, currentTool, panStart, sketch, strokeWidth, currentSketch, canvasState.ctx]
   );
 
-  const handleMouseUp = useCallback(() => {
-    if (!isInteracting) return;
+  const handleMouseUp = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!isInteracting || !currentSketch || !canvasState.ctx) return;
 
-    if (currentTool === "pan") {
-      // Reset cursor back to grab when done panning
-      if (sketch.canvasRef.current) {
-        sketch.canvasRef.current.style.cursor = "grab";
+      if (currentTool === "pan") {
+        if (sketch.canvasRef.current) {
+          sketch.canvasRef.current.style.cursor = "grab";
+        }
+      } else {
+        const point = sketch.getCanvasPoint(e);
+        if (point && sketch.isValidPoint(point)) {
+          sketch.handleDraw(point, currentTool === "draw", strokeWidth, true);
+        }
       }
-    } else {
-      sketch.completePath();
-    }
 
-    setIsInteracting(false);
-    setPanStart(null);
-  }, [isInteracting, currentTool, sketch]);
+      setIsInteracting(false);
+      setPanStart(null);
+    },
+    [isInteracting, currentTool, sketch, strokeWidth, currentSketch, canvasState.ctx]
+  );
+
+  if (!currentSketch) {
+    return (
+      <div className="flex w-full flex-col h-full items-center justify-center text-text-light/50">
+        Please select a sketch to start drawing
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full flex-col h-full">
       <div className="text-center py-3 border-b border-primary/20">
-        <h2 className="font-medium text-text-light">{sketchContext.state.currentSketch?.displayName}</h2>
+        <h2 className="font-medium text-text-light">{currentSketch.displayName}</h2>
       </div>
       <div
         ref={scrollContainerRef}
@@ -110,6 +125,8 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
         <div className="min-w-min">
           <canvas
             ref={sketch.canvasRef}
+            width={canvasState.width}
+            height={canvasState.height}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -123,60 +140,16 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
           />
         </div>
       </div>
-      <div className="flex gap-2 p-3 justify-center border-t border-primary/20 bg-surface-dark/10">
-        <button
-          onClick={() => setCurrentTool("draw")}
-          disabled={isInteracting}
-          className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-            currentTool === "draw"
-              ? "bg-primary/20 text-primary hover:bg-primary/30"
-              : "bg-surface-dark/50 text-text-light/70 hover:bg-red-500/10"
-          }`}
-        >
-          ✏️ Draw
-        </button>
-        <button
-          onClick={() => setCurrentTool("erase")}
-          disabled={isInteracting}
-          className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-            currentTool === "erase"
-              ? "bg-primary/20 text-primary hover:bg-primary/30"
-              : "bg-surface-dark/50 text-text-light/70 hover:bg-red-500/10"
-          }`}
-        >
-          🧽 Erase
-        </button>
-        <button
-          onClick={() => setCurrentTool("pan")}
-          disabled={isInteracting}
-          className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-            currentTool === "pan"
-              ? "bg-primary/20 text-primary hover:bg-primary/30"
-              : "bg-surface-dark/50 text-text-light/70 hover:bg-red-500/10"
-          }`}
-        >
-          👋 Pan
-        </button>
-        <select
-          value={strokeWidth}
-          onChange={(e) => setStrokeWidth(Number(e.target.value))}
-          disabled={isInteracting}
-          className="px-2 py-1.5 rounded-md text-sm bg-surface-dark/50 text-text-light border border-primary/20"
-        >
-          {[3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45].map((width) => (
-            <option key={width} value={width}>
-              {width}px
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={sketch.clear}
-          disabled={isInteracting}
-          className="px-3 py-1.5 rounded-md text-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-        >
-          🗑️ Clear
-        </button>
-      </div>
+
+      <SketchToolbar
+        currentTool={currentTool}
+        setCurrentTool={(tool: Tool) => setCurrentTool(tool)}
+        strokeWidth={strokeWidth}
+        setStrokeWidth={setStrokeWidth}
+        onClear={sketch.clearCanvas}
+        currentSketchId={currentSketch.id}
+        channelName={channelName}
+      />
     </div>
   );
 });

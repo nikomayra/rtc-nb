@@ -25,7 +25,11 @@ const SketchList = ({ sketches, onSelect, onDelete, isLoading = false }: SketchL
   };
 
   const handleDelete = () => {
-    onDelete(confirmDeleteSketchID!);
+    if (!confirmDeleteSketchID) {
+      console.error("No sketch selected for deletion");
+      return;
+    }
+    onDelete(confirmDeleteSketchID);
     setConfirmDeleteSketchID(null);
   };
 
@@ -61,6 +65,7 @@ const SketchList = ({ sketches, onSelect, onDelete, isLoading = false }: SketchL
             <button
               onClick={() => setConfirmDeleteSketchID(sketch.id)}
               className="ml-2 p-1.5 text-text-light/50 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors"
+              aria-label="Delete sketch"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -80,7 +85,7 @@ const SketchList = ({ sketches, onSelect, onDelete, isLoading = false }: SketchL
   return (
     <>
       <Dropdown
-        trigger={<span>{isOpen ? "Sketches" : "Sketches"}</span>}
+        trigger={<span>Sketches</span>}
         isOpenExternal={isOpen}
         setIsOpenExternal={setIsOpen}
         className="mr-2"

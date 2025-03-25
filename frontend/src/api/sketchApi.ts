@@ -1,6 +1,7 @@
 import { axiosInstance } from "./axiosInstance";
 import { BASE_URL } from "../utils/constants";
-import { Sketch } from "../types/interfaces";
+import { z } from "zod";
+import { Sketch, SketchSchema, APIResponse, APISuccessResponse, APIErrorResponse } from "../types/interfaces";
 
 export const sketchApi = {
   // Save a sketch to the server
@@ -10,8 +11,8 @@ export const sketchApi = {
     width: number,
     height: number,
     token: string
-  ): Promise<void> => {
-    const res = await axiosInstance.post(
+  ): Promise<Sketch> => {
+    const res = await axiosInstance.post<APIResponse<Sketch>>(
       `${BASE_URL}/createSketch`,
       {
         channelName,
@@ -25,55 +26,67 @@ export const sketchApi = {
     );
 
     if (!res.data.success) {
-      throw new Error(`Failed to save sketch: ${res.data.error}`);
+      throw new Error((res.data as APIErrorResponse).error.message);
     }
+
+    // Validate response data
+    return SketchSchema.parse((res.data as APISuccessResponse<Sketch>).data);
   },
 
   // Load a sketch from the server
   getSketch: async (channelName: string, sketchId: string, token: string): Promise<Sketch | null> => {
-    const res = await axiosInstance.get(
+    const res = await axiosInstance.get<APIResponse<Sketch>>(
       `${BASE_URL}/channels/${encodeURIComponent(channelName)}/sketches/${encodeURIComponent(sketchId)}`,
       {
         headers: { Authorization: `Bearer ${token}` },
       }
     );
 
-    if (res.data.success) {
-      return res.data.data as Sketch;
-    } else if (res.data.error === "Sketch not found") {
-      return null;
-    } else {
-      throw new Error(`Failed to load sketch: ${res.data.error}`);
+    if (!res.data.success) {
+      if ((res.data as APIErrorResponse).error.message === "Sketch not found") {
+        return null;
+      }
+      throw new Error((res.data as APIErrorResponse).error.message);
     }
+
+    // Validate response data
+    return SketchSchema.parse((res.data as APISuccessResponse<Sketch>).data);
   },
 
   // Get all sketches for a channel
   getSketches: async (channelName: string, token: string): Promise<Sketch[]> => {
-    const res = await axiosInstance.get(`${BASE_URL}/channels/${encodeURIComponent(channelName)}/sketches`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await axiosInstance.get<APIResponse<Sketch[]>>(
+      `${BASE_URL}/channels/${encodeURIComponent(channelName)}/sketches`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
 
-    if (res.data.success) {
-      return res.data.data as Sketch[];
-    } else {
-      throw new Error(`Failed to load sketches: ${res.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message);
     }
+
+    // Validate response data
+    return z.array(SketchSchema).parse((res.data as APISuccessResponse<Sketch[]>).data);
   },
 
   // Delete a sketch from the server
   deleteSketch: async (sketchId: string, token: string): Promise<void> => {
-    const res = await axiosInstance.delete(`${BASE_URL}/deleteSketch/${encodeURIComponent(sketchId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await axiosInstance.delete<APIResponse<void>>(
+      `${BASE_URL}/deleteSketch/${encodeURIComponent(sketchId)}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
 
     if (!res.data.success) {
-      throw new Error(`Failed to delete sketch: ${res.data.error}`);
+      throw new Error((res.data as APIErrorResponse).error.message);
     }
   },
 
   // Clear a sketch from the server
   clearSketch: async (channelName: string, sketchId: string, token: string): Promise<void> => {
-    const res = await axiosInstance.post(
+    const res = await axiosInstance.post<APIResponse<void>>(
       `${BASE_URL}/clearSketch`,
       {
         channelName,
@@ -85,7 +98,7 @@ export const sketchApi = {
     );
 
     if (!res.data.success) {
-      throw new Error(`Failed to clear sketch: ${res.data.error}`);
+      throw new Error((res.data as APIErrorResponse).error.message);
     }
   },
 };
