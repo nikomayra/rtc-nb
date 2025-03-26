@@ -1,6 +1,6 @@
 import { FormEvent, useContext, useRef, useState } from "react";
 import { OutgoingMessage, MessageType } from "../../types/interfaces";
-import { ChatContext } from "../../contexts/chatContext";
+import { ChatContext } from "../../contexts/systemContext";
 import { AuthContext } from "../../contexts/authContext";
 
 export const SendMessageForm = () => {

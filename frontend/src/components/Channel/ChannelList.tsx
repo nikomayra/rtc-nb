@@ -1,77 +1,81 @@
-import { useCallback, useContext } from "react";
-import { ChatContext } from "../../contexts/chatContext";
+import { useCallback, useContext, useRef, useState } from "react";
+import { ChatContext } from "../../contexts/systemContext";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { ChannelItem } from "./ChannelItem";
 import { CreateChannelForm } from "./CreateChannelForm";
-import { WebSocketContext } from "../../contexts/webSocketContext";
+import { Channel } from "../../types/interfaces";
+import { ChatService } from "../../services/ChatService";
 
 export const ChannelList = () => {
-  const chatContext = useContext(ChatContext);
+  // const chatContext = useContext(ChatContext);
   const authContext = useAuthContext();
-  const wsContext = useContext(WebSocketContext);
+  // const wsContext = useContext(WebSocketContext);
+
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const chatService = useRef(ChatService.getInstance());
 
   // Create wrapper functions with defensive programming
   const handleJoinChannel = useCallback(
     async (channelName: string, password?: string) => {
-      if (!chatContext) return;
-      await chatContext.actions.joinChannel(channelName, password);
+      if (!chatService) return;
+      await chatService.joinChannel(channelName, authContext.state.token, password);
     },
-    [chatContext]
+    [chatService, authContext.state.token]
   );
 
   const handleLeaveChannel = useCallback(
     async (channelName: string) => {
-      if (!chatContext) return;
-      await chatContext.actions.leaveChannel(channelName);
+      if (!chatService) return;
+      await chatService.leaveChannel(channelName, authContext.state.token);
     },
-    [chatContext]
+    [chatService, authContext.state.token]
   );
 
   const handleDeleteChannel = useCallback(
     async (channelName: string) => {
-      if (!chatContext) return;
-      await chatContext.actions.deleteChannel(channelName);
+      if (!chatService) return;
+      await chatService.deleteChannel(channelName, authContext.state.token);
     },
-    [chatContext]
+    [chatService, authContext.state.token]
   );
 
   const handleCreateChannel = useCallback(
     async (name: string, description?: string, password?: string) => {
-      if (!chatContext) return;
-      await chatContext.actions.createChannel(name, description, password);
+      if (!chatService) return;
+      await chatService.createChannel(name, authContext.state.token, description, password);
     },
-    [chatContext]
+    [chatService, authContext.state.token]
   );
 
   // Enhanced logout handler that disconnects all websocket connections
-  const handleLogout = useCallback(async () => {
-    if (wsContext) {
-      console.log("Disconnecting all WebSockets before logout");
-      wsContext.actions.disconnectAll();
-    }
-    await authContext.actions.logout();
-  }, [authContext.actions, wsContext]);
+  // const handleLogout = useCallback(async () => {
+  //   if (wsContext) {
+  //     console.log("Disconnecting all WebSockets before logout");
+  //     wsContext.actions.disconnectAll();
+  //   }
+  //   await authContext.actions.logout();
+  // }, [authContext.actions, wsContext]);
 
   // Early return if contexts are not available
-  if (!chatContext || !authContext) return null;
+  // if (!chatContext || !authContext) return null;
 
-  const {
-    state: { channels, currentChannel },
-  } = chatContext;
+  // const {
+  //   state: { channels, currentChannel },
+  // } = chatContext;
 
-  const {
-    state: { username },
-  } = authContext;
+  // const {
+  //   state: { username },
+  // } = authContext;
 
   return (
     <div className="flex flex-col h-full">
       {/* User Section */}
-      <div className="flex items-center justify-between p-2 mb-4 border-b border-primary/20">
+      {/* <div className="flex items-center justify-between p-2 mb-4 border-b border-primary/20">
         <span className="text-text-light font-medium truncate pr-2">{username}</span>
         <button onClick={handleLogout} className="text-sm text-text-light/70 hover:text-primary transition-colors">
           Logout
         </button>
-      </div>
+      </div> */}
 
       {/* Channels Section */}
       <div className="flex-1 min-h-0 flex flex-col">

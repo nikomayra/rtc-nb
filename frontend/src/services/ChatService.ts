@@ -1,4 +1,4 @@
-import { chatApi } from "../api/chatApi";
+import { chatApi } from "../api/systemApi";
 import { IncomingMessage, Channel } from "../types/interfaces";
 
 export class ChatService {
@@ -31,9 +31,10 @@ export class ChatService {
     token: string,
     description?: string,
     password?: string
-  ): Promise<void> {
-    await chatApi.createChannel(channelName, token, description, password);
+  ): Promise<Channel> {
+    const channel = await chatApi.createChannel(channelName, token, description, password);
     this.cachedChannels = null; // Invalidate cache
+    return channel;
   }
 
   public async deleteChannel(channelName: string, token: string): Promise<void> {
@@ -70,7 +71,7 @@ export class ChatService {
     return messages;
   }
 
-  // File operations
+  // File operations - Image message + text (optional)
   public async uploadFile(formData: FormData, token: string): Promise<{ imagePath: string; thumbnailPath: string }> {
     return chatApi.uploadFile(formData, token);
   }

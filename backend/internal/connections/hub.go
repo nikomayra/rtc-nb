@@ -15,7 +15,6 @@ type Hub struct {
 	systemConns   map[string]*websocket.Conn          // System-level connections: username -> connection
 	channels      map[string]map[*websocket.Conn]bool // channelName -> user connections: bool
 	connToChannel map[*websocket.Conn]string          // Maps connections to their channel
-	onlineUsers   map[string]map[string]bool          // channelName -> username -> bool
 }
 
 func NewHub() *Hub {
@@ -24,7 +23,6 @@ func NewHub() *Hub {
 		systemConns:   make(map[string]*websocket.Conn),
 		channels:      make(map[string]map[*websocket.Conn]bool),
 		connToChannel: make(map[*websocket.Conn]string),
-		onlineUsers:   make(map[string]map[string]bool),
 	}
 }
 
@@ -35,7 +33,6 @@ func (h *Hub) InitializeChannel(channelName string) error {
 		return fmt.Errorf("channel already exists: %s", channelName)
 	}
 	h.channels[channelName] = make(map[*websocket.Conn]bool)
-	h.onlineUsers[channelName] = make(map[string]bool)
 	return nil
 }
 
@@ -128,18 +125,9 @@ func (h *Hub) AddClientToChannel(channelName string, userConn *websocket.Conn) {
 	defer h.mu.Unlock()
 	if _, ok := h.channels[channelName]; !ok {
 		h.channels[channelName] = make(map[*websocket.Conn]bool)
-		h.onlineUsers[channelName] = make(map[string]bool)
 	}
 	h.channels[channelName][userConn] = true
 	h.connToChannel[userConn] = channelName
-
-	// Find username for this connection and mark as online
-	for username, conn := range h.connections {
-		if conn == userConn {
-			h.onlineUsers[channelName][username] = true
-			break
-		}
-	}
 	log.Printf("Added client to channel: %s\n", channelName)
 }
 
@@ -150,14 +138,6 @@ func (h *Hub) RemoveClientFromChannel(channelName string, userConn *websocket.Co
 	if conns, ok := h.channels[channelName]; ok {
 		delete(conns, userConn)
 		delete(h.connToChannel, userConn)
-
-		// Find and remove username from online users
-		for username, conn := range h.connections {
-			if conn == userConn {
-				delete(h.onlineUsers[channelName], username)
-				break
-			}
-		}
 	}
 	log.Printf("Removed client from channel: %s\n", channelName)
 }
@@ -219,30 +199,34 @@ func (h *Hub) GetSystemConnection(username string) (*websocket.Conn, bool) {
 	return conn, ok
 }
 
-// GetOnlineUsers returns a list of online usernames in a channel
-func (h *Hub) GetOnlineUsers(channelName string) []string {
+func (h *Hub) GetOnlineUsersInChannel(channelName string) []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	if users, ok := h.onlineUsers[channelName]; ok {
-		onlineUsers := make([]string, 0, len(users))
-		for username := range users {
-			onlineUsers = append(onlineUsers, username)
+	usernames := make([]string, 0)
+	if channelConns, ok := h.channels[channelName]; ok {
+		// For each connection in the channel
+		for conn := range channelConns {
+			// Find the username associated with this connection
+			for username, userConn := range h.connections {
+				if userConn == conn {
+					usernames = append(usernames, username)
+					break
+				}
+			}
 		}
-		return onlineUsers
 	}
-	return []string{}
+	return usernames
 }
 
-// GetOnlineCount returns the number of online users in a channel
-func (h *Hub) GetOnlineCount(channelName string) int {
+func (h *Hub) GetAllOnlineUsers() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	if users, ok := h.onlineUsers[channelName]; ok {
-		return len(users)
+	usernames := make([]string, 0)
+	for username := range h.systemConns {
+		usernames = append(usernames, username)
 	}
-	return 0
+	return usernames
 }
 
 // AUTOMATIC CLEANUP

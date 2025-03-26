@@ -3,7 +3,7 @@ import { ChannelList } from "./Channel/ChannelList";
 import { MessageList } from "./Message/MessageList";
 import { useAuthContext } from "../hooks/useAuthContext";
 import { SketchContainer } from "./Sketch/SketchContainer";
-import { ChatContext } from "../contexts/chatContext";
+import { ChatContext } from "../contexts/systemContext";
 import { useContext } from "react";
 import { ChannelInfo } from "./Channel/ChannelInfo";
 import { NotificationTest } from "./NotificationTest";

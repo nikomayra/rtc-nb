@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef } from "react";
-import { ChatContext } from "../../contexts/chatContext";
+import { ChatContext } from "../../contexts/systemContext";
 import { MessageItem } from "./MessageItem";
 import { SendMessageForm } from "./SendMessageForm";
 

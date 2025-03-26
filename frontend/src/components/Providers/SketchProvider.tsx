@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useContext, useRef } from "react";
 import { initialState, SketchContext } from "../../contexts/sketchContext";
 import { AuthContext } from "../../contexts/authContext";
-import { ChatContext } from "../../contexts/chatContext";
+import { ChatContext } from "../../contexts/systemContext";
 import { Sketch, DrawPath } from "../../types/interfaces";
 import { SketchService } from "../../services/SketchService";
 import { useNotification } from "../../hooks/useNotification";

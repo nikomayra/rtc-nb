@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { Channel } from "../../types/interfaces";
-import { ChatContext } from "../../contexts/chatContext";
+import { ChatContext } from "../../contexts/systemContext";
 import { Dropdown } from "../Generic/Dropdown";
 import { useNotification } from "../../hooks/useNotification";
 

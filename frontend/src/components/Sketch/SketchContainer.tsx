@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { SketchBoard } from "./SketchBoard";
-import { ChatContext } from "../../contexts/chatContext";
+import { ChatContext } from "../../contexts/systemContext";
 import { AuthContext } from "../../contexts/authContext";
 import { SketchConfig } from "./SketchConfig";
 import { SketchContext } from "../../contexts/sketchContext";

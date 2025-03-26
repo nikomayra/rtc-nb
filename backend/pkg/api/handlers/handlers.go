@@ -202,17 +202,17 @@ func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Check if the user is already a member before joining
-	isFirstJoin := true
-	members, err := h.chatService.GetChannelMembers(ctx, channelName)
-	log.Printf("Members: %v", members)
-	if err == nil {
-		for _, member := range members {
-			if member.Username == claims.Username {
-				isFirstJoin = false
-				break
-			}
-		}
-	}
+	// isFirstJoin := true
+	// members, err := h.chatService.GetChannelMembers(ctx, channelName)
+	// // log.Printf("Members: %v", members)
+	// if err == nil {
+	// 	for _, member := range members {
+	// 		if member.Username == claims.Username {
+	// 			isFirstJoin = false
+	// 			break
+	// 		}
+	// 	}
+	// }
 
 	if err := h.chatService.JoinChannel(ctx, channelName, claims.Username, req.ChannelPassword); err != nil {
 		log.Printf("Error joining channel: %v", err)
@@ -221,14 +221,10 @@ func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get online users for the channel
-	onlineUsers := h.chatService.GetOnlineUsers(channelName)
+	// onlineUsers := h.connMgr.GetOnlineUsersInChannel(channelName)
 
 	// Return success with online users data
-	responses.SendSuccess(w, map[string]interface{}{
-		"message":     fmt.Sprintf("Joined channel: %s", channelName),
-		"onlineUsers": onlineUsers,
-		"isFirstJoin": isFirstJoin,
-	}, http.StatusOK)
+	responses.SendSuccess(w, fmt.Sprintf("Joined channel: %s", channelName), http.StatusOK)
 }
 
 func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) {
@@ -669,4 +665,29 @@ func (h *Handlers) UpdateChannelMemberRole(w http.ResponseWriter, r *http.Reques
 	}
 
 	responses.SendSuccess(w, "Success", http.StatusOK)
+}
+
+func (h *Handlers) GetAllOnlineUsersHandler(w http.ResponseWriter, r *http.Request) {
+
+	_, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	onlineUsers := h.connMgr.GetAllOnlineUsers()
+
+	responses.SendSuccess(w, onlineUsers, http.StatusOK)
+}
+
+func (h *Handlers) GetOnlineUsersInChannelHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	if channelName == "" {
+		responses.SendError(w, "Channel name required", http.StatusBadRequest)
+		return
+	}
+
+	onlineUsers := h.connMgr.GetOnlineUsersInChannel(channelName)
+	responses.SendSuccess(w, onlineUsers, http.StatusOK)
 }
