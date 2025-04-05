@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/connections"
+	"rtc-nb/backend/internal/messaging"
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/services/chat"
 	"rtc-nb/backend/internal/services/sketch"
@@ -21,13 +22,15 @@ type Handlers struct {
 	connMgr       connections.Manager
 	chatService   chat.ChatManager
 	sketchService *sketch.Service
+	msgProcessor  *messaging.Processor
 }
 
-func NewHandlers(connMgr connections.Manager, chatService chat.ChatManager, sketchService *sketch.Service) *Handlers {
+func NewHandlers(connMgr connections.Manager, chatService chat.ChatManager, sketchService *sketch.Service, msgProcessor *messaging.Processor) *Handlers {
 	return &Handlers{
 		connMgr:       connMgr,
 		chatService:   chatService,
 		sketchService: sketchService,
+		msgProcessor:  msgProcessor,
 	}
 }
 
@@ -44,6 +47,11 @@ func (h *Handlers) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	if req.Username == "" || req.Password == "" {
 		responses.SendError(w, "Username and password are required", http.StatusBadRequest)
+		return
+	}
+
+	if strings.ToLower(req.Username) == "system" {
+		responses.SendError(w, "Username cannot be 'system'", http.StatusBadRequest)
 		return
 	}
 
@@ -201,29 +209,30 @@ func (h *Handlers) JoinChannelHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Check if the user is already a member before joining
-	// isFirstJoin := true
-	// members, err := h.chatService.GetChannelMembers(ctx, channelName)
-	// // log.Printf("Members: %v", members)
-	// if err == nil {
-	// 	for _, member := range members {
-	// 		if member.Username == claims.Username {
-	// 			isFirstJoin = false
-	// 			break
-	// 		}
-	// 	}
-	// }
-
-	if err := h.chatService.JoinChannel(ctx, channelName, claims.Username, req.ChannelPassword); err != nil {
+	// Call the service method, capturing the wasAdded flag
+	wasAdded, err := h.chatService.JoinChannel(ctx, channelName, claims.Username, req.ChannelPassword)
+	if err != nil {
 		log.Printf("Error joining channel: %v", err)
-		responses.SendError(w, "Failed to join channel", http.StatusInternalServerError)
+		// Determine appropriate error code based on the error type
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "invalid password") {
+			statusCode = http.StatusUnauthorized // Or StatusNotFound / StatusBadRequest depending on context
+		}
+		responses.SendError(w, fmt.Sprintf("Failed to join channel: %v", err), statusCode)
 		return
 	}
 
-	// Get online users for the channel
-	// onlineUsers := h.connMgr.GetOnlineUsersInChannel(channelName)
+	// Only broadcast MemberUpdate if the user was newly added to the channel members
+	if wasAdded {
+		// Broadcast MemberUpdate channel message for the new member
+		memberUpdateMsg := models.NewMemberUpdateMessage(channelName, claims.Username, claims.Username, "added", false) // Actor and Target are the same, new members are not admin
+		if broadcastErr := h.msgProcessor.ProcessMessage(memberUpdateMsg); broadcastErr != nil {
+			log.Printf("Error broadcasting member added update for %s in channel %s: %v", claims.Username, channelName, broadcastErr)
+			// Log error but continue, join operation itself was successful
+		}
+	}
 
-	// Return success with online users data
+	// Return success
 	responses.SendSuccess(w, fmt.Sprintf("Joined channel: %s", channelName), http.StatusOK)
 }
 
@@ -243,7 +252,7 @@ func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) 
 	if channelName == "" {
 		responses.SendError(w, "Channel name required", http.StatusBadRequest)
 		return
-	} else if channelName == "system" {
+	} else if strings.ToLower(channelName) == "system" {
 		responses.SendError(w, "'system' is a reserved channel name", http.StatusBadRequest)
 		return
 	}
@@ -273,6 +282,13 @@ func (h *Handlers) CreateChannelHandler(w http.ResponseWriter, r *http.Request) 
 		log.Printf("Error creating channel: %v", err)
 		responses.SendError(w, "Failed to create channel", http.StatusInternalServerError)
 		return
+	}
+
+	// Broadcast ChannelUpdate system message
+	channelUpdateMsg := models.NewChannelUpdateMessage("created", channel)
+	if err := h.msgProcessor.ProcessMessage(channelUpdateMsg); err != nil {
+		log.Printf("Error broadcasting channel create update for %s: %v", channelName, err)
+		// Log error but continue, channel creation was successful
 	}
 
 	responses.SendSuccess(w, channel, http.StatusCreated)
@@ -306,11 +322,30 @@ func (h *Handlers) DeleteChannelHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ctx := r.Context()
+	// Retrieve channel details before deleting for broadcasting
+	channel, err := h.chatService.GetChannel(ctx, channelName)
+	if err != nil {
+		log.Printf("Error retrieving channel for deletion %s: %v", channelName, err)
+		// Decide how to handle - maybe channel already deleted? Still try to delete.
+	}
+
 	if err := h.chatService.DeleteChannel(ctx, channelName, claims.Username); err != nil {
 		log.Printf("Error deleting channel: %v", err)
 		responses.SendError(w, "Failed to delete channel", http.StatusInternalServerError)
 		return
 	}
+
+	// Broadcast ChannelUpdate system message
+	if channel != nil { // Only broadcast if we could retrieve channel info
+		channelUpdateMsg := models.NewChannelUpdateMessage("deleted", channel)
+		if err := h.msgProcessor.ProcessMessage(channelUpdateMsg); err != nil {
+			log.Printf("Error broadcasting channel delete update for %s: %v", channelName, err)
+			// Log error but continue, channel deletion was successful
+		}
+	}
+
+	// Force disconnect clients from the deleted channel's WS pool
+	h.connMgr.RemoveAllClientsFromChannel(channelName)
 
 	responses.SendSuccess(w, fmt.Sprintf("Deleted channel: %s", channelName), http.StatusOK)
 }
@@ -336,6 +371,7 @@ func (h *Handlers) LeaveChannelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Return success with online users data
 	responses.SendSuccess(w, fmt.Sprintf("Left channel: %s", channelName), http.StatusOK)
 }
 
@@ -664,6 +700,13 @@ func (h *Handlers) UpdateChannelMemberRole(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Broadcast MemberUpdate channel message
+	memberUpdateMsg := models.NewMemberUpdateMessage(channelName, claims.Username, username, "role_changed", req.IsAdmin)
+	if err := h.msgProcessor.ProcessMessage(memberUpdateMsg); err != nil {
+		log.Printf("Error broadcasting member role update for %s in channel %s: %v", username, channelName, err)
+		// Log error but continue, role update was successful
+	}
+
 	responses.SendSuccess(w, "Success", http.StatusOK)
 }
 
@@ -675,7 +718,7 @@ func (h *Handlers) GetAllOnlineUsersHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	onlineUsers := h.connMgr.GetAllOnlineUsers()
+	onlineUsers := h.connMgr.GetCountOfAllOnlineUsers()
 
 	responses.SendSuccess(w, onlineUsers, http.StatusOK)
 }
@@ -690,4 +733,21 @@ func (h *Handlers) GetOnlineUsersInChannelHandler(w http.ResponseWriter, r *http
 
 	onlineUsers := h.connMgr.GetOnlineUsersInChannel(channelName)
 	responses.SendSuccess(w, onlineUsers, http.StatusOK)
+}
+
+func (h *Handlers) GetChannelMembersHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	channelName := vars["channelName"]
+	if channelName == "" {
+		responses.SendError(w, "Channel name required", http.StatusBadRequest)
+		return
+	}
+
+	members, err := h.chatService.GetChannelMembers(r.Context(), channelName)
+	if err != nil {
+		responses.SendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	responses.SendSuccess(w, members, http.StatusOK)
 }

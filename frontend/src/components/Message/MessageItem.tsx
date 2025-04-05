@@ -1,9 +1,9 @@
-import { useContext, useState } from "react";
+import { useState } from "react";
 import { IncomingMessage, MemberUpdateAction, MessageType } from "../../types/interfaces";
 import helpers from "../../utils/helpers";
 import { Modal } from "../Generic/Modal";
 import axios from "axios";
-import { AuthContext } from "../../contexts/authContext";
+import { useAuthContext } from "../../hooks/useAuthContext";
 
 type MessageItemProps = {
   message: IncomingMessage;
@@ -12,11 +12,9 @@ type MessageItemProps = {
 export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const authContext = useContext(AuthContext);
+  const { token, username } = useAuthContext().state;
 
-  if (!authContext) throw new Error("AuthContext not found");
-  const token = authContext.state.token;
-  const myMessage = authContext.state.username == message.username;
+  const myMessage = username == message.username;
 
   const cleanAuthPath = (path: string) => {
     if (!path) return "";

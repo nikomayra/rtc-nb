@@ -1,19 +1,25 @@
-import { createContext } from "react";
+import { createContext, Dispatch, SetStateAction } from "react";
 import { Channel } from "../types/interfaces";
 
 export interface SystemContext {
   state: {
     channels: Channel[];
     currentChannel: Channel | null;
-    onlineUsers: string[];
+    onlineUsersCount: number;
   };
   actions: {
-    joinChannel: (channelName: string, password?: string) => Promise<boolean>;
-    createChannel: (channelName: string, description?: string, password?: string) => Promise<boolean>;
-    deleteChannel: (channelName: string) => Promise<boolean>;
-    leaveChannel: (channelName: string) => Promise<boolean>;
-    fetchChannels: () => Promise<Channel[] | null>;
-    fetchAllOnlineUsers: () => Promise<string[] | null>;
+    // State setters - proper React pattern using SetStateAction
+    setChannels: Dispatch<SetStateAction<Channel[]>>;
+    setCurrentChannel: Dispatch<SetStateAction<Channel | null>>;
+    setOnlineUsersCount: Dispatch<SetStateAction<number>>;
+
+    // Channel actions
+    joinChannel: (channelName: string, password?: string) => Promise<void>;
+    createChannel: (channelName: string, description?: string, password?: string) => Promise<void>;
+    deleteChannel: (channelName: string) => Promise<void>;
+    leaveChannel: (channelName: string) => Promise<void>;
+    fetchChannels: () => Promise<void>;
+    fetchCountOfAllOnlineUsers: () => Promise<void>;
   };
 }
 

@@ -1,15 +1,7 @@
-import { OutgoingMessage, IncomingMessage, MessageType } from "../types/interfaces";
+import { OutgoingMessage, MessageType, IncomingMessageSchema } from "../types/interfaces";
 import { BASE_URL } from "../utils/constants";
 import { convertKeysToSnakeCase, convertKeysToCamelCase } from "../utils/dataFormatter";
-
-type MessageHandler = (message: IncomingMessage) => void;
-
-export interface MessageHandlers {
-  onChatMessage?: MessageHandler;
-  onChannelUpdate?: MessageHandler;
-  onMemberUpdate?: MessageHandler;
-  onSketchMessage?: MessageHandler;
-}
+import { SystemMessageHandler, ChannelMessageHandler } from "../contexts/webSocketContext";
 
 export class WebSocketService {
   private static instance: WebSocketService;
@@ -18,12 +10,13 @@ export class WebSocketService {
   private channelSocket: WebSocket | null = null;
   private systemConnected = false;
   private channelConnected = false;
-  private messageHandlers: MessageHandlers = {};
   private reconnectTimeoutId: number | null = null;
   private currentChannelName: string | null = null;
   private currentToken: string | null = null;
   private connectionAttempts = { system: 0, channel: 0 };
-  private maxReconnectAttempts = 3;
+  private maxReconnectAttempts = 5;
+  private static connectionLock = false;
+  private lastChannelConnectionAttemptTimestamp: number | null = null;
 
   private protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   private baseUrl = `${this.protocol}//${window.location.host}${BASE_URL}/ws`;
@@ -33,6 +26,9 @@ export class WebSocketService {
     onSystemConnectionChange?: (connected: boolean) => void;
     onChannelConnectionChange?: (connected: boolean) => void;
   } = {};
+
+  private systemHandlers: SystemMessageHandler | null = null;
+  private channelHandlers: ChannelMessageHandler | null = null;
 
   private constructor() {}
 
@@ -51,8 +47,12 @@ export class WebSocketService {
     return this.channelConnected;
   }
 
-  public setMessageHandlers(handlers: MessageHandlers): void {
-    this.messageHandlers = handlers;
+  public setSystemHandlers(handlers: SystemMessageHandler): void {
+    this.systemHandlers = handlers;
+  }
+
+  public setChannelHandlers(handlers: ChannelMessageHandler): void {
+    this.channelHandlers = handlers;
   }
 
   // Register connection state change callbacks
@@ -67,7 +67,9 @@ export class WebSocketService {
   private updateSystemConnected(connected: boolean): void {
     // Only update if state actually changed
     if (this.systemConnected !== connected) {
-      console.log(`WebSocketService: System connection state changing to ${connected}`);
+      if (import.meta.env.DEV) {
+        console.log(`[WebSocketService] System connection state changing to ${connected}`);
+      }
       this.systemConnected = connected;
 
       // Call callback immediately outside of any potential React batching
@@ -83,7 +85,9 @@ export class WebSocketService {
   private updateChannelConnected(connected: boolean): void {
     // Only update if state actually changed
     if (this.channelConnected !== connected) {
-      console.log(`WebSocketService: Channel connection state changing to ${connected}`);
+      if (import.meta.env.DEV) {
+        console.log(`[WebSocketService] Channel connection state changing to ${connected}`);
+      }
       this.channelConnected = connected;
 
       // Call callback immediately outside of any potential React batching
@@ -97,110 +101,181 @@ export class WebSocketService {
 
   // Connect to the system socket - used for global updates
   public connectSystem(token: string): void {
+    // If already connected with same token, do nothing
     if (this.systemSocket?.readyState === WebSocket.OPEN && this.currentToken === token) {
-      console.log("System socket already connected");
       return;
     }
 
-    // Check if we've exceeded max reconnect attempts
-    if (this.connectionAttempts.system >= this.maxReconnectAttempts) {
-      console.log("Max system connection attempts reached, giving up");
+    // If locked, another connection attempt is in progress
+    if (WebSocketService.connectionLock) {
+      console.warn("[WebSocketService] System connection attempt skipped: lock active.");
       return;
     }
 
-    // Close existing connection first
+    WebSocketService.connectionLock = true;
+    this.currentToken = token;
+
+    this.establishSystemConnection();
+  }
+
+  private establishSystemConnection(): void {
+    if (!this.currentToken) {
+      WebSocketService.connectionLock = false;
+      return;
+    }
+
+    // Close existing connection if any
     if (this.systemSocket) {
-      this.systemSocket.close();
+      this.systemSocket.close(1000);
       this.systemSocket = null;
     }
 
-    this.currentToken = token;
+    if (import.meta.env.DEV) {
+      console.log("[WebSocketService] Establishing system WebSocket connection...");
+    }
     this.connectionAttempts.system++;
 
-    console.log("Connecting to system WebSocket...");
-    this.systemSocket = new WebSocket(`${this.baseUrl}/system`, ["Authentication", token]);
+    this.systemSocket = new WebSocket(`${this.baseUrl}/system`, ["Authentication", this.currentToken]);
 
     this.systemSocket.onopen = () => {
-      console.log("System WebSocket connected");
+      if (import.meta.env.DEV) {
+        console.log("[WebSocketService] System WebSocket connected");
+      }
+      WebSocketService.connectionLock = false;
       this.updateSystemConnected(true);
-      // Reset attempts counter on successful connection
       this.connectionAttempts.system = 0;
     };
 
     this.systemSocket.onclose = (event) => {
-      console.log(`System WebSocket disconnected: ${event.code} ${event.reason}`);
+      console.log(`[WebSocketService] System WebSocket disconnected: ${event.code} ${event.reason}`);
+      WebSocketService.connectionLock = false;
       this.updateSystemConnected(false);
-      this.attemptReconnect("system");
+
+      if (event.code !== 1000 && this.connectionAttempts.system < this.maxReconnectAttempts) {
+        this.attemptReconnect("system");
+      } else if (event.code !== 1000) {
+        console.warn(
+          `[WebSocketService] Max reconnect attempts (${this.maxReconnectAttempts}) reached for system socket. Giving up.`
+        );
+        this.connectionAttempts.system = 0;
+      } else {
+        this.connectionAttempts.system = 0;
+      }
     };
 
     this.systemSocket.onerror = (error) => {
-      console.error("System WebSocket error:", error);
+      console.error("[WebSocketService] System WebSocket error:", error);
     };
 
     this.systemSocket.onmessage = ((event: MessageEvent) => {
-      this.handleIncomingMessage(event, "system");
+      this.handleIncomingMessage(event);
     }).bind(this);
   }
 
   // Connect to a specific channel
   public connectChannel(token: string, channelName: string): void {
+    // If already connected to the same channel with the same token, do nothing
     if (
       this.channelSocket?.readyState === WebSocket.OPEN &&
-      this.currentChannelName === channelName &&
-      this.currentToken === token
+      this.currentToken === token &&
+      this.currentChannelName === channelName
     ) {
-      console.log(`Already connected to channel: ${channelName}`);
       return;
     }
 
-    // Check if we've exceeded max reconnect attempts
-    if (this.connectionAttempts.channel >= this.maxReconnectAttempts) {
-      console.log("Max channel connection attempts reached, giving up");
+    // If locked, another connection attempt is in progress
+    if (WebSocketService.connectionLock) {
+      console.warn("[WebSocketService] Channel connection attempt skipped: lock active.");
       return;
     }
 
-    // Disconnect from previous channel if connected
-    this.disconnectChannel();
-
+    WebSocketService.connectionLock = true;
     this.currentToken = token;
     this.currentChannelName = channelName;
-    this.connectionAttempts.channel++;
 
-    console.log(`Connecting to channel WebSocket: ${channelName}`);
-    this.channelSocket = new WebSocket(`${this.baseUrl}/${channelName}`, ["Authentication", token]);
+    this.establishChannelConnection();
+  }
+
+  private establishChannelConnection(): void {
+    if (!this.currentToken || !this.currentChannelName) {
+      WebSocketService.connectionLock = false;
+      return;
+    }
+
+    // Close existing connection if any
+    if (this.channelSocket) {
+      this.channelSocket.close(1000);
+      this.channelSocket = null;
+    }
+
+    if (import.meta.env.DEV) {
+      console.log(`[WebSocketService] Establishing channel WebSocket connection: ${this.currentChannelName}`);
+    }
+    this.connectionAttempts.channel++;
+    this.lastChannelConnectionAttemptTimestamp = Date.now();
+
+    this.channelSocket = new WebSocket(`${this.baseUrl}/${this.currentChannelName}`, [
+      "Authentication",
+      this.currentToken,
+    ]);
 
     this.channelSocket.onopen = () => {
-      console.log(`Channel WebSocket connected: ${channelName}`);
+      if (import.meta.env.DEV) {
+        console.log(`[WebSocketService] Channel WebSocket connected: ${this.currentChannelName}`);
+      }
+      WebSocketService.connectionLock = false;
       this.updateChannelConnected(true);
-      // Reset attempts counter on successful connection
       this.connectionAttempts.channel = 0;
     };
 
     this.channelSocket.onclose = (event) => {
-      console.log(`Channel WebSocket disconnected: ${event.code} ${event.reason}`);
+      console.log(`[WebSocketService] Channel WebSocket disconnected: ${event.code} ${event.reason}`);
+      WebSocketService.connectionLock = false;
       this.updateChannelConnected(false);
-      this.attemptReconnect("channel");
+
+      const timeSinceAttempt = this.lastChannelConnectionAttemptTimestamp
+        ? Date.now() - this.lastChannelConnectionAttemptTimestamp
+        : Infinity;
+
+      if (event.code !== 1000 && timeSinceAttempt < 2000) {
+        console.warn(
+          `[WebSocketService] Channel socket closed quickly (${timeSinceAttempt}ms) after connection attempt (code: ${event.code}). Aborting automatic reconnect. Check token or channel validity.`
+        );
+        this.connectionAttempts.channel = 0;
+      } else if (event.code !== 1000 && this.connectionAttempts.channel < this.maxReconnectAttempts) {
+        this.attemptReconnect("channel");
+      } else if (event.code !== 1000) {
+        console.warn(
+          `[WebSocketService] Max reconnect attempts (${this.maxReconnectAttempts}) reached for channel socket. Giving up.`
+        );
+        this.connectionAttempts.channel = 0;
+      } else {
+        this.connectionAttempts.channel = 0;
+      }
     };
 
     this.channelSocket.onerror = (error) => {
-      console.error("Channel WebSocket error:", error);
+      console.error("[WebSocketService] Channel WebSocket error:", error);
     };
 
     this.channelSocket.onmessage = ((event: MessageEvent) => {
-      this.handleIncomingMessage(event, "channel");
+      this.handleIncomingMessage(event);
     }).bind(this);
   }
 
   // Disconnect from current channel
   public disconnectChannel(): void {
     if (this.channelSocket) {
-      console.log("Disconnecting channel WebSocket");
-      this.channelSocket.close();
+      if (import.meta.env.DEV) {
+        console.log("[WebSocketService] Disconnecting channel WebSocket");
+      }
+      // Use normal closure code (1000) to indicate intentional disconnect
+      this.channelSocket.close(1000);
       this.channelSocket = null;
       this.updateChannelConnected(false);
       this.currentChannelName = null;
 
-      // Clear any pending reconnects
+      // Clear any pending explicit reconnect timeouts (though onclose handles implicit ones)
       if (this.reconnectTimeoutId) {
         window.clearTimeout(this.reconnectTimeoutId);
         this.reconnectTimeoutId = null;
@@ -211,8 +286,11 @@ export class WebSocketService {
   // Disconnect system socket
   public disconnectSystem(): void {
     if (this.systemSocket) {
-      console.log("Disconnecting system WebSocket");
-      this.systemSocket.close();
+      if (import.meta.env.DEV) {
+        console.log("[WebSocketService] Disconnecting system WebSocket");
+      }
+      // Use normal closure code (1000) to indicate intentional disconnect
+      this.systemSocket.close(1000);
       this.systemSocket = null;
       this.updateSystemConnected(false);
     }
@@ -221,57 +299,66 @@ export class WebSocketService {
   // Disconnect all sockets and reset state
   // This should only be used during logout or app cleanup
   public disconnectAll(): void {
-    console.log("Disconnecting all WebSockets");
+    console.log("[WebSocketService] Disconnecting all WebSockets");
     this.disconnectSystem();
     this.disconnectChannel();
     this.currentToken = null;
-
-    // Reset connection attempts
+    this.currentChannelName = null;
     this.connectionAttempts = { system: 0, channel: 0 };
   }
 
   // Send a message to the current channel
   public send(message: OutgoingMessage): void {
+    // NOTE: ChannelUpdate messages are now exclusively sent by the backend
+    //       in response to API actions (create/delete channel). This frontend
+    //       service no longer needs to route them to the system socket.
+
+    if (message.type === MessageType.ChannelUpdate) {
+      console.error("[WebSocketService] Frontend should not send ChannelUpdate messages.");
+      return;
+    }
+
+    if (!this.channelSocket || this.channelSocket.readyState !== WebSocket.OPEN) {
+      console.error("[WebSocketService] Cannot send message: channel socket not connected or not open.");
+      // Optional: Queue message or handle error appropriately
+      return;
+    }
+
     try {
       // Convert to snake_case for backend
       const snakeCaseMessage = convertKeysToSnakeCase(message) as OutgoingMessage;
 
-      // Only ChannelUpdate messages go through system socket
-      if (message.type === MessageType.ChannelUpdate) {
-        if (!this.systemSocket || this.systemSocket.readyState !== WebSocket.OPEN) {
-          console.error("Cannot send system message: system socket not connected");
-          return;
-        }
-        console.log(`Sending system message type: ${message.type}`);
-        this.systemSocket.send(JSON.stringify(snakeCaseMessage));
-        return;
+      if (import.meta.env.DEV) {
+        console.log(`[WebSocketService] Sending message type: ${message.type} to channel: ${message.channelName}`);
       }
-
-      // All other messages go through channel socket
-      if (!this.channelSocket || this.channelSocket.readyState !== WebSocket.OPEN) {
-        console.error("Cannot send message: channel socket not connected");
-        return;
-      }
-      console.log(`Sending message type: ${message.type} to channel: ${message.channelName}`);
       this.channelSocket.send(JSON.stringify(snakeCaseMessage));
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("[WebSocketService] Error sending message:", error);
     }
   }
 
   // Handle reconnection logic
-  private attemptReconnect(socketType: "system" | "channel", delay = 3000): void {
+  private attemptReconnect(socketType: "system" | "channel"): void {
     if (this.reconnectTimeoutId) {
       window.clearTimeout(this.reconnectTimeoutId);
     }
 
-    this.reconnectTimeoutId = window.setTimeout(() => {
-      console.log(`Attempting to reconnect ${socketType} socket...`);
+    const attempts = socketType === "system" ? this.connectionAttempts.system : this.connectionAttempts.channel;
+    const delay = Math.min(1000 * Math.pow(2, attempts), 30000);
 
+    if (import.meta.env.DEV) {
+      console.log(
+        `[WebSocketService] Attempting to reconnect ${socketType} socket in ${delay / 1000}s (Attempt ${
+          attempts + 1
+        })...`
+      );
+    }
+
+    this.reconnectTimeoutId = window.setTimeout(() => {
       if (socketType === "system" && this.currentToken) {
-        this.connectSystem(this.currentToken);
+        this.establishSystemConnection();
       } else if (socketType === "channel" && this.currentToken && this.currentChannelName) {
-        this.connectChannel(this.currentToken, this.currentChannelName);
+        this.establishChannelConnection();
       }
 
       this.reconnectTimeoutId = null;
@@ -279,50 +366,73 @@ export class WebSocketService {
   }
 
   // Process incoming messages
-  private handleIncomingMessage(event: MessageEvent, socketType: "system" | "channel"): void {
+  private handleIncomingMessage(event: MessageEvent): void {
     try {
-      if (typeof event.data !== "string") {
-        console.error("Invalid message format:", event.data);
-        return;
+      const data = JSON.parse(event.data);
+      const message = IncomingMessageSchema.parse(convertKeysToCamelCase(data));
+
+      // Add DEV flag for received message log
+      if (import.meta.env.DEV) {
+        console.log(`[WebSocketService] Received message type: ${message.type}`, message);
       }
 
-      // Parse and convert from snake_case to camelCase
-      const rawMessage = JSON.parse(event.data);
-      const message = convertKeysToCamelCase(rawMessage) as IncomingMessage;
-
-      console.log(`Received ${socketType} message type: ${message.type} from channel: ${message.channelName}`);
-
-      // Handle system messages (ChannelUpdate only)
-      if (socketType === "system") {
-        if (message.type === MessageType.ChannelUpdate) {
-          this.messageHandlers.onChannelUpdate?.(message);
-        } else {
-          console.warn("Received non-system message type on system socket:", message.type);
-        }
-        return;
-      }
-
-      // Handle all channel messages
+      // Route messages based on type
       switch (message.type) {
-        case MessageType.Text:
-        case MessageType.Image:
-        case MessageType.UserStatus:
-          this.messageHandlers.onChatMessage?.(message);
+        // System messages
+        case MessageType.ChannelUpdate:
+          if (message.content.channelUpdate && this.systemHandlers?.onChannelUpdate) {
+            const { action, channel } = message.content.channelUpdate;
+            this.systemHandlers.onChannelUpdate(action, channel);
+          } else {
+            console.warn("[WebSocketService] Received ChannelUpdate but no system handler available");
+          }
           break;
 
-        case MessageType.Sketch:
-          this.messageHandlers.onSketchMessage?.(message);
+        case MessageType.SystemUserStatus:
+          if (message.content.systemUserStatus) {
+            const count = message.content.systemUserStatus.count;
+            console.log("📊 Received system user count:", count);
+
+            if (this.systemHandlers?.onSystemUserStatus) {
+              console.log("📊 Calling system user status handler");
+              this.systemHandlers.onSystemUserStatus(count);
+            } else {
+              console.warn("[WebSocketService] Received SystemUserStatus but no handler available");
+            }
+          }
+          break;
+
+        // Channel messages
+        case MessageType.Text:
+        case MessageType.Image:
+          if (this.channelHandlers?.onChatMessage) {
+            this.channelHandlers.onChatMessage(message);
+          } else {
+            console.warn("[WebSocketService] Received chat message but no channel handler available");
+          }
           break;
 
         case MessageType.MemberUpdate:
-          this.messageHandlers.onMemberUpdate?.(message);
+          if (message.content.memberUpdate && this.channelHandlers?.onMemberUpdate) {
+            this.channelHandlers.onMemberUpdate(message);
+          } else {
+            console.warn("[WebSocketService] Received MemberUpdate but no channel handler available");
+          }
+          break;
+
+        case MessageType.UserStatus:
+          if (message.content.userStatus && this.channelHandlers?.onUserStatus) {
+            this.channelHandlers.onUserStatus(message.username, message.content.userStatus.action);
+          } else {
+            console.warn("[WebSocketService] Received UserStatus but no channel handler available");
+          }
           break;
 
         default:
-          console.warn("Unhandled message type:", message.type);
+          console.warn(`[WebSocketService] Unhandled message type: ${message.type}`);
       }
     } catch (error) {
-      console.error("Error parsing message:", error);
+      console.error("[WebSocketService] Error handling message:", error);
     }
   }
 }

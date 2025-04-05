@@ -16,6 +16,7 @@ const (
 	MessageTypeChannelUpdate
 	MessageTypeMemberUpdate
 	MessageTypeUserStatus
+	MessageTypeSystemUserStatus
 )
 
 type ChannelUpdate struct {
@@ -32,6 +33,10 @@ type MemberUpdate struct {
 type UserStatus struct {
 	Action   string `json:"action"` // "online", "offline"
 	Username string `json:"username"`
+}
+
+type SystemUserStatus struct {
+	Count int `json:"count"`
 }
 
 type SketchCommandType string
@@ -52,13 +57,14 @@ type SketchCommand struct {
 }
 
 type MessageContent struct {
-	Text          *string        `json:"text,omitempty"`
-	FileURL       *string        `json:"file_url,omitempty"`
-	ThumbnailURL  *string        `json:"thumbnail_url,omitempty"`
-	SketchCmd     *SketchCommand `json:"sketch_cmd,omitempty"`
-	ChannelUpdate *ChannelUpdate `json:"channel_update,omitempty"`
-	MemberUpdate  *MemberUpdate  `json:"member_update,omitempty"`
-	UserStatus    *UserStatus    `json:"user_status,omitempty"`
+	Text             *string           `json:"text,omitempty"`
+	FileURL          *string           `json:"file_url,omitempty"`
+	ThumbnailURL     *string           `json:"thumbnail_url,omitempty"`
+	SketchCmd        *SketchCommand    `json:"sketch_cmd,omitempty"`
+	ChannelUpdate    *ChannelUpdate    `json:"channel_update,omitempty"`
+	MemberUpdate     *MemberUpdate     `json:"member_update,omitempty"`
+	UserStatus       *UserStatus       `json:"user_status,omitempty"`
+	SystemUserStatus *SystemUserStatus `json:"system_user_status,omitempty"`
 }
 
 type IncomingMessage struct {
@@ -149,6 +155,10 @@ func (m *IncomingMessage) Validate() error {
 		default:
 			return errors.New("invalid user status action")
 		}
+	case MessageTypeSystemUserStatus:
+		if m.Content.SystemUserStatus == nil {
+			return errors.New("system user status data required")
+		}
 	default:
 		return errors.New("invalid message type")
 	}
@@ -169,6 +179,44 @@ func NewMessage(incoming *IncomingMessage, username string) (*Message, error) {
 		Content:     incoming.Content,
 		Timestamp:   time.Now().UTC(),
 	}, nil
+}
+
+// NewChannelUpdateMessage creates a system message for channel lifecycle events.
+// The username is set to "system" as these are global notifications.
+func NewChannelUpdateMessage(action string, channel *Channel) *Message {
+	return &Message{
+		ID:          uuid.NewString(),
+		ChannelName: "system", // System messages don't belong to a specific channel context
+		Username:    "system",
+		Type:        MessageTypeChannelUpdate,
+		Timestamp:   time.Now().UTC(),
+		Content: MessageContent{
+			ChannelUpdate: &ChannelUpdate{
+				Action:  action,
+				Channel: channel,
+			},
+		},
+	}
+}
+
+// NewMemberUpdateMessage creates a channel message for member status changes.
+// The actorUsername is the user performing the action (e.g., added, role_changed).
+// The targetUsername is the user whose status is changing.
+func NewMemberUpdateMessage(channelName, actorUsername, targetUsername, action string, isAdmin bool) *Message {
+	return &Message{
+		ID:          uuid.NewString(),
+		ChannelName: channelName,
+		Username:    actorUsername, // User performing the action
+		Type:        MessageTypeMemberUpdate,
+		Timestamp:   time.Now().UTC(),
+		Content: MessageContent{
+			MemberUpdate: &MemberUpdate{
+				Action:   action,
+				Username: targetUsername, // User being acted upon
+				IsAdmin:  isAdmin,
+			},
+		},
+	}
 }
 
 // func (m *Message) RequiresPersistence() bool {

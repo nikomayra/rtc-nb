@@ -1,24 +1,27 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Channel } from "../../types/interfaces";
 import { useAuthContext } from "../../hooks/useAuthContext";
+import { useSystemContext } from "../../hooks/useSystemContext";
+import { useNotification } from "../../hooks/useNotification";
 
 type ChannelItemProps = {
   channel: Channel;
-  onJoin: (channelName: string, password?: string) => Promise<void>;
-  onDelete: (channelName: string) => Promise<void>;
-  onLeave: (channelName: string) => Promise<void>;
-  currentChannel: string | null;
+  // onJoin: (channelName: string, password?: string) => Promise<void>;
+  // onDelete: (channelName: string) => Promise<void>;
+  // onLeave: (channelName: string) => Promise<void>;
 };
 
-export const ChannelItem: React.FC<ChannelItemProps> = ({ channel, onJoin, onDelete, onLeave, currentChannel }) => {
+export const ChannelItem: React.FC<ChannelItemProps> = ({ channel }) => {
   const [password, setPassword] = useState("");
   const [showPasswordInput, setShowPasswordInput] = useState(false);
   const passwordInputRef = useRef<HTMLDivElement>(null);
-  const {
-    state: { username },
-  } = useAuthContext();
+  const { username } = useAuthContext().state;
+  const { showError } = useNotification();
+  const systemContext = useSystemContext();
 
-  const isActive = currentChannel === channel.name;
+  const { state: systemState, actions: systemActions } = systemContext;
+
+  const isActive = systemState.currentChannel?.name === channel.name;
   const isOwner = channel.createdBy === username;
 
   useEffect(() => {
@@ -40,11 +43,31 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel, onJoin, onDel
     }
 
     try {
-      await onJoin(channel.name, channel.isPrivate ? password : undefined);
-      setShowPasswordInput(false);
-      setPassword("");
+      await systemActions.joinChannel(channel.name, channel.isPrivate ? password : undefined);
     } catch (error) {
       console.error("Failed to join channel:", error);
+      showError("Failed to join channel");
+    }
+
+    setShowPasswordInput(false);
+    setPassword("");
+  };
+
+  const onLeave = async () => {
+    try {
+      await systemActions.leaveChannel(channel.name);
+    } catch (error) {
+      console.error("Failed to leave channel:", error);
+      showError("Failed to leave channel");
+    }
+  };
+
+  const onDelete = async () => {
+    try {
+      await systemActions.deleteChannel(channel.name);
+    } catch (error) {
+      console.error("Failed to delete channel:", error);
+      showError("Failed to delete channel");
     }
   };
 
@@ -70,17 +93,14 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel, onJoin, onDel
           )}
           {isActive && (
             <button
-              onClick={() => onLeave(channel.name)}
+              onClick={onLeave}
               className="text-xs px-2 py-1 rounded bg-error/10 text-error hover:bg-error/20 transition-colors"
             >
               Leave
             </button>
           )}
           {isOwner && (
-            <button
-              onClick={() => onDelete(channel.name)}
-              className="text-xs text-error/70 hover:text-error transition-colors"
-            >
+            <button onClick={onDelete} className="text-xs text-error/70 hover:text-error transition-colors">
               Delete
             </button>
           )}

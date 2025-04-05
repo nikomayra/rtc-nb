@@ -1,27 +1,16 @@
-import { useContext } from "react";
 import { SketchBoard } from "./SketchBoard";
-import { ChatContext } from "../../contexts/systemContext";
-import { AuthContext } from "../../contexts/authContext";
 import { SketchConfig } from "./SketchConfig";
-import { SketchContext } from "../../contexts/sketchContext";
+import { useSketchContext } from "../../hooks/useSketchContext";
+import { useSystemContext } from "../../hooks/useSystemContext";
 
 export const SketchContainer = () => {
-  const sketchContext = useContext(SketchContext);
-  const chatContext = useContext(ChatContext);
-  const authContext = useContext(AuthContext);
+  const sketchContext = useSketchContext();
+  const systemContext = useSystemContext();
 
-  if (!sketchContext || !chatContext || !authContext) {
-    throw new Error("Context not found");
-  }
+  const { state: systemState } = systemContext;
+  const { state: sketchState } = sketchContext;
 
-  const {
-    state: { currentChannel },
-  } = chatContext;
-  const {
-    state: { currentSketch },
-  } = sketchContext;
-
-  if (!currentChannel) {
+  if (!systemState.currentChannel) {
     return (
       <div className="h-full w-full flex flex-col bg-surface-dark/10 rounded-md overflow-hidden">
         <div className="flex-1 flex items-center justify-center p-6">
@@ -34,10 +23,10 @@ export const SketchContainer = () => {
     );
   }
 
-  if (!currentSketch) {
+  if (!sketchState.currentSketch) {
     return (
       <div className="h-full w-full flex flex-col bg-surface-dark/10 rounded-md overflow-hidden">
-        <SketchConfig channelName={currentChannel} />
+        <SketchConfig channelName={systemState.currentChannel.name} />
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center p-6 bg-surface-dark/20 rounded-lg border border-primary/10 max-w-md">
             <h3 className="text-lg font-medium text-text-light mb-3">No Sketch Selected</h3>
@@ -52,9 +41,9 @@ export const SketchContainer = () => {
 
   return (
     <div className="h-full w-full max-w-full flex flex-col bg-surface-dark/10 rounded-md overflow-hidden">
-      <SketchConfig channelName={currentChannel} />
+      <SketchConfig channelName={systemState.currentChannel.name} />
       <div className="flex flex-1 w-full overflow-hidden">
-        <SketchBoard channelName={currentChannel} />
+        <SketchBoard channelName={systemState.currentChannel.name} />
       </div>
     </div>
   );

@@ -1,22 +1,20 @@
-import { FormEvent, useContext, useRef, useState } from "react";
-import { OutgoingMessage, MessageType } from "../../types/interfaces";
-import { ChatContext } from "../../contexts/systemContext";
-import { AuthContext } from "../../contexts/authContext";
+import { FormEvent, useRef, useState } from "react";
+import { useSystemContext } from "../../hooks/useSystemContext";
+import { useChannelContext } from "../../hooks/useChannelContext";
+import { useChannelSocket } from "../../hooks/useChannelSocket";
 
 export const SendMessageForm = () => {
-  const chatContext = useContext(ChatContext);
-  const authContext = useContext(AuthContext);
+  const systemContext = useSystemContext();
+  const channelContext = useChannelContext();
+  const channelSocket = useChannelSocket();
   const messageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedFile, setDraggedFile] = useState<File | null>(null);
 
-  if (!chatContext || !authContext) return null;
-
-  const {
-    state: { currentChannel },
-    actions: { sendMessage, uploadFile },
-  } = chatContext;
+  const { state: systemState } = systemContext;
+  const { actions: channelActions } = channelContext;
+  const { sendChatMessage, sendImageMessage } = channelSocket;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -38,21 +36,17 @@ export const SendMessageForm = () => {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!currentChannel) return;
+    if (!systemState.currentChannel) return;
 
     const message = messageInputRef.current?.value || "";
     const file = draggedFile || fileInputRef.current?.files?.[0] || null;
 
     if (file) {
       // Use the uploadFile action from the chat context
-      await uploadFile(currentChannel, file, message);
+      const { imagePath, thumbnailPath } = await channelActions.uploadFile(file);
+      sendImageMessage(message.trim(), imagePath, thumbnailPath);
     } else if (message.trim()) {
-      const outgoingMessage: OutgoingMessage = {
-        channelName: currentChannel,
-        type: MessageType.Text,
-        content: { text: message },
-      };
-      sendMessage(outgoingMessage);
+      sendChatMessage(message.trim());
     }
 
     // Clear form

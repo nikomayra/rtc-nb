@@ -1,11 +1,13 @@
 import { FormEvent } from "react";
+import { useSystemContext } from "../../hooks/useSystemContext";
+import { useNotification } from "../../hooks/useNotification";
 
-type CreateChannelFormProps = {
-  onSubmit: (name: string, description?: string, password?: string) => Promise<void>;
-};
+export const CreateChannelForm = () => {
+  const systemContext = useSystemContext();
+  const { showError } = useNotification();
+  const { actions: systemActions } = systemContext;
 
-export const CreateChannelForm = ({ onSubmit }: CreateChannelFormProps) => {
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const formData = new FormData(e.target as HTMLFormElement);
@@ -13,13 +15,17 @@ export const CreateChannelForm = ({ onSubmit }: CreateChannelFormProps) => {
     const description = formData.get("description") as string | undefined;
     const password = formData.get("password") as string | undefined;
 
-    onSubmit(name, description, password);
-    (e.target as HTMLFormElement).reset();
+    try {
+      await systemActions.createChannel(name, description, password);
+      (e.target as HTMLFormElement).reset();
+    } catch (error) {
+      console.error("Failed to create channel:", error);
+      showError("Failed to create channel");
+    }
   };
 
   return (
     <div className="w-full">
-      <h3 className="text-sm font-medium text-text-light/70 uppercase tracking-wider mb-3">Create Channel</h3>
       <form onSubmit={handleSubmit} className="space-y-2">
         <input
           type="text"

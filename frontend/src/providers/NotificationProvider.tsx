@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
-import { NotificationContext, NotificationProviderProps, Notification } from "../../contexts/notificationContext";
-import { NotificationContainer } from "../Generic/NotificationContainer";
+import { NotificationContext, NotificationProviderProps, Notification } from "../contexts/notificationContext";
+import { NotificationContainer } from "../components/Generic/NotificationContainer";
 
 // Define interface for our custom event
 interface ApiErrorEvent extends CustomEvent {

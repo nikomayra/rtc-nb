@@ -63,59 +63,71 @@ func (cm *channelManager) CreateChannel(ctx context.Context, channel *models.Cha
 	return tx.Commit()
 }
 
-// JoinChannel adds a user to a channel
-func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username string, password *string) error {
+// JoinChannel adds a user to a channel. It returns true if the user was newly added as a member.
+func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username string, password *string) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
+	wasAdded := false // Initialize return value
+
+	tx, err := cm.db.BeginTx(ctx)
+	if err != nil {
+		return wasAdded, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	channel, err := cm.db.GetChannel(ctx, channelName)
 	if err != nil {
-		return fmt.Errorf("get channel: %w", err)
+		return wasAdded, fmt.Errorf("get channel: %w", err)
 	}
 	if channel == nil {
-		return fmt.Errorf("channel not found")
+		return wasAdded, fmt.Errorf("channel not found")
 	}
 
 	if channel.IsPrivate {
 		if password == nil || *password == "" {
-			return fmt.Errorf("password required for private channel")
+			return wasAdded, fmt.Errorf("password required for private channel")
 		}
 		if channel.HashedPassword == nil {
-			return fmt.Errorf("channel configuration error: missing password hash")
+			return wasAdded, fmt.Errorf("channel configuration error: missing password hash")
 		}
 		// Verify password using auth package
 		if err := auth.CheckPassword(*channel.HashedPassword, *password); err != nil {
-			return fmt.Errorf("invalid password")
+			return wasAdded, fmt.Errorf("invalid password")
 		}
 	}
 
-	currentChannel, err := cm.db.GetUserChannel(ctx, username)
-	if err != nil {
-		return fmt.Errorf("get user channel: %w", err)
-	}
-	tx, err := cm.db.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	if currentChannel != "" && currentChannel != channelName {
-		// Leave current channel before joining new one
-		if conn, ok := cm.connMgr.GetConnection(username); ok {
-			cm.connMgr.RemoveClientFromChannel(currentChannel, conn)
+	// Check if the user is already a member before joining
+	isFirstJoin := true
+	members, err := cm.GetChannelMembers(ctx, channelName)
+	if err == nil {
+		for _, member := range members {
+			if member.Username == username {
+				isFirstJoin = false
+				break
+			}
 		}
-		// if err := cm.db.RemoveChannelMember(ctx, currentChannel, username); err != nil {
-		// 	return fmt.Errorf("remove from current channel: %w", err)
-		// }
 	}
 
-	if currentChannel != channelName {
+	// Leave current channel websocket pool before joining new one
+	if conn, ok := cm.connMgr.GetConnection(username); ok {
+		// Determine the *actual* current channel the user is connected to
+		currentUserChannel, userChannelErr := cm.connMgr.GetUserChannel(username)
+		if userChannelErr == nil && currentUserChannel != "" {
+			cm.connMgr.RemoveClientFromChannel(currentUserChannel, conn)
+		} // else: user might not be in a channel or error fetching it, proceed cautiously
+	}
+
+	// Add as member if first time joining
+	if isFirstJoin {
 		isAdmin, err := cm.db.IsUserAdmin(ctx, channelName, username)
 		if err != nil {
-			return fmt.Errorf("is user admin: %w", err)
+			// If user doesn't exist in members table yet, IsUserAdmin might fail.
+			// Assume non-admin for first join unless specific logic dictates otherwise.
+			isAdmin = false
 		}
 
 		member := &models.ChannelMember{
@@ -125,18 +137,19 @@ func (cm *channelManager) JoinChannel(ctx context.Context, channelName, username
 		}
 
 		if err := cm.db.AddChannelMember(ctx, channelName, member); err != nil {
-			return fmt.Errorf("add channel member: %w", err)
+			return wasAdded, fmt.Errorf("add channel member: %w", err)
 		}
+		wasAdded = true // Set flag since member was added
+	}
+
+	if err := tx.Commit(); err != nil {
+		return wasAdded, fmt.Errorf("commit transaction: %w", err)
 	}
 
 	if conn, ok := cm.connMgr.GetConnection(username); ok {
 		cm.connMgr.AddClientToChannel(channelName, conn)
 	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
-	}
-	return nil
+	return wasAdded, nil
 }
 
 // LeaveChannel removes a user from a channel
@@ -259,4 +272,11 @@ func (cm *channelManager) GetChannelMembers(ctx context.Context, channelName str
 	}
 
 	return members, nil
+}
+
+func (cm *channelManager) GetChannel(ctx context.Context, channelName string) (*models.Channel, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	return cm.db.GetChannel(ctx, channelName)
 }

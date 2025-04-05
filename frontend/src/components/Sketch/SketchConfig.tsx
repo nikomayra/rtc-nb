@@ -1,10 +1,11 @@
-import { useState, useContext } from "react";
+import { useState } from "react";
 import { Sketch } from "../../types/interfaces";
 import SketchList from "./SketchList";
 import { Modal } from "../Generic/Modal";
-import { SketchContext } from "../../contexts/sketchContext";
 import { useNotification } from "../../hooks/useNotification";
-import { AuthContext } from "../../contexts/authContext";
+import { useSketchContext } from "../../hooks/useSketchContext";
+import { useAuthContext } from "../../hooks/useAuthContext";
+
 interface SketchConfigProps {
   channelName: string;
 }
@@ -19,15 +20,13 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
   const [height, setHeight] = useState<string>("");
   const [isOpen, setIsOpen] = useState(false);
 
-  const sketchContext = useContext(SketchContext);
-  const authContext = useContext(AuthContext);
+  const sketchContext = useSketchContext();
+  const authContext = useAuthContext();
   const { showError } = useNotification();
 
   if (!sketchContext || !authContext) throw new Error("SketchContext or AuthContext not found");
-  const { state, actions } = sketchContext;
-  const {
-    state: { token },
-  } = authContext;
+  const { state: sketchState, actions: sketchActions } = sketchContext;
+  const { state: authState } = authContext;
 
   const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -69,7 +68,7 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
 
     setIsOpen(false);
     try {
-      await actions.createSketch(channelName, displayName, parseInt(width), parseInt(height), token);
+      await sketchActions.createSketch(channelName, displayName, parseInt(width), parseInt(height), authState.token);
 
       // Reset form fields
       setDisplayName("");
@@ -83,7 +82,7 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
 
   const handleSelectSketch = async (sketch: Sketch) => {
     try {
-      await actions.loadSketch(channelName, sketch.id, token);
+      await sketchActions.loadSketch(channelName, sketch.id, authState.token);
     } catch (error) {
       // Error handling is done in the context
       console.error("Failed to load sketch:", error);
@@ -92,8 +91,8 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
 
   const handleDeleteSketch = async (id: string) => {
     try {
-      await actions.deleteSketch(id, token);
-      await actions.loadSketches(channelName, token);
+      await sketchActions.deleteSketch(id, authState.token);
+      await sketchActions.loadSketches(channelName, authState.token);
     } catch (error) {
       // Error handling is done in the context
       console.error("Failed to delete sketch:", error);
@@ -104,12 +103,12 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
     <div className="flex items-center justify-between p-4 border-b border-primary/20">
       <div className="flex items-center">
         <SketchList
-          sketches={state.sketches
+          sketches={sketchState.sketches
             .slice()
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
           onSelect={handleSelectSketch}
           onDelete={handleDeleteSketch}
-          isLoading={state.isLoading}
+          isLoading={sketchState.isLoading}
         />
         <button
           onClick={() => setIsOpen(true)}

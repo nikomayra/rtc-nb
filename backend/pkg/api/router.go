@@ -8,6 +8,7 @@ import (
 
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/connections"
+	"rtc-nb/backend/internal/messaging"
 	"rtc-nb/backend/internal/services/chat"
 	"rtc-nb/backend/internal/services/sketch"
 	"rtc-nb/backend/internal/websocket"
@@ -16,17 +17,17 @@ import (
 )
 
 func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager connections.Manager, chatService chat.ChatManager, sketchService *sketch.Service,
-	fileStorePath string) {
+	fileStorePath string, msgProcessor *messaging.Processor) {
 
-	// Apply global middleware to all routes
-	limiter := middleware.NewRateLimiter()
-	router.Use(limiter.RateLimit)
+	// Apply global middleware to all routes - TODO: Add rate limiter for production!
+	// limiter := middleware.NewRateLimiter()
+	// router.Use(limiter.RateLimit)
 
 	// Create a subrouter for /api with common middleware
 	apiRouter := router.PathPrefix("/api").Subrouter()
 	apiRouter.Use(middleware.LoggingMiddleware)
 
-	handlers := handlers.NewHandlers(connManager, chatService, sketchService)
+	handlers := handlers.NewHandlers(connManager, chatService, sketchService, msgProcessor)
 
 	// Unprotected routes
 	apiRouter.HandleFunc("/", defaultRoute).Methods("GET")
@@ -49,6 +50,8 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 	protected.HandleFunc("/leaveChannel/{channelName}", handlers.LeaveChannelHandler).Methods("PATCH")
 	protected.HandleFunc("/channels", handlers.GetChannelsHandler).Methods("GET")
 	protected.HandleFunc("/channels/{channelName}/members/{username}/role", handlers.UpdateChannelMemberRole).Methods("PATCH")
+	protected.HandleFunc("/channels/{channelName}/members", handlers.GetChannelMembersHandler).Methods("GET")
+
 	// -- Messages routes
 	protected.HandleFunc("/upload", handlers.UploadHandler).Methods("POST")
 	protected.HandleFunc("/getMessages/{channelName}", handlers.GetMessagesHandler).Methods("GET")
@@ -60,7 +63,7 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 
 	// Online users routes
 	protected.HandleFunc("/onlineUsers/{channelName}", handlers.GetOnlineUsersInChannelHandler).Methods("GET")
-	protected.HandleFunc("/onlineUsers", handlers.GetAllOnlineUsersHandler).Methods("GET")
+	protected.HandleFunc("/onlineUsersCount", handlers.GetAllOnlineUsersHandler).Methods("GET")
 
 	// Sketch routes
 	protected.HandleFunc("/createSketch", handlers.CreateSketchHandler).Methods("POST")

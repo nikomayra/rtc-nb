@@ -1,74 +1,76 @@
-import { useState, useContext } from "react";
+import { useState, useEffect } from "react";
 import { useAuthContext } from "../../hooks/useAuthContext";
-import { Channel } from "../../types/interfaces";
-import { ChatContext } from "../../contexts/systemContext";
 import { Dropdown } from "../Generic/Dropdown";
 import { useNotification } from "../../hooks/useNotification";
+import { useChannelContext } from "../../hooks/useChannelContext";
+import { useSystemContext } from "../../hooks/useSystemContext";
+import { channelApi } from "../../api/channelApi";
+import { useWebSocketContext } from "../../hooks/useWebSocketContext";
 
-interface ChannelInfoProps {
-  channel?: Channel;
-}
-
-export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
+export const ChannelInfo = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-  const chatContext = useContext(ChatContext);
+  const [onlineUserCount, setOnlineUserCount] = useState(0);
+  const { state: wsState } = useWebSocketContext();
+
   const {
-    state: { username },
+    state: { username, token },
   } = useAuthContext();
   const { showError } = useNotification();
+  const { currentChannel } = useSystemContext().state;
+  const { members } = useChannelContext().state;
 
-  if (!chatContext) {
-    throw new Error("ChannelInfo must be used within a ChatContext");
-  }
+  // Get channel connection status, default to false if context is unavailable
+  const channelConnected = wsState ? wsState.channelConnected : false;
 
-  // Early return if no channel is provided
-  if (!channel || !channel.members) {
-    return (
-      <div className="flex flex-col p-4 border-b border-primary/20 min-h-16 overflow-visible w-full">
-        <div className="text-text-light/50 text-sm">Loading channel information...</div>
-      </div>
-    );
-  }
+  const isAdmin = members && Object.values(members).some((member) => member.username === username && member.isAdmin);
 
-  const isAdmin = Object.values(channel.members).some((member) => member.username === username && member.isAdmin);
+  useEffect(() => {
+    setOnlineUserCount(members.filter((m) => m.isOnline).length);
+  }, [members]);
 
-  // Get online users for this channel
-  const onlineUsersSet = chatContext.state.onlineUsers[channel.name] || new Set();
-  const onlineCount = onlineUsersSet.size;
+  // Get sorted members
+  const sortedMembers =
+    members &&
+    Object.values(members).sort((a, b) => {
+      if (a.isAdmin === b.isAdmin) return a.username.localeCompare(b.username);
+      return a.isAdmin ? -1 : 1;
+    });
 
-  // Ensure member uniqueness by username
-  const uniqueMembers = Object.values(channel.members).reduce((acc, member) => {
-    // Only keep the first occurrence of each username
-    if (!acc[member.username]) {
-      acc[member.username] = member;
+  const handlePromoteMember = (memberUsername: string) => {
+    // Ensure currentChannel and token exist
+    if (!currentChannel || !token) {
+      showError("Cannot promote member: channel or auth token missing.");
+      return;
     }
-    return acc;
-  }, {} as Record<string, (typeof channel.members)[0]>);
 
-  const sortedMembers = Object.values(uniqueMembers).sort((a, b) => {
-    if (a.isAdmin === b.isAdmin) return a.username.localeCompare(b.username);
-    return a.isAdmin ? -1 : 1;
-  });
-
-  const handleRoleToggle = async (memberUsername: string, newIsAdmin: boolean) => {
-    try {
-      const success = await chatContext.actions.updateMemberRole(channel.name, memberUsername, newIsAdmin);
-
-      if (!success) {
-        const errorMsg = "Failed to update user role. Please try again.";
-        showError(errorMsg);
-      }
-    } catch (error) {
-      console.error("Failed to update role:", error);
-      showError("Failed to update user role.");
-    }
+    // API Call first
+    channelApi.updateMemberRole(currentChannel.name, memberUsername, token, true).catch((error) => {
+      console.error("Failed to promote member:", error);
+      showError(`Failed to promote ${memberUsername}. Please try again.`);
+    });
   };
 
-  const membersList = (
+  const handleDemoteMember = (memberUsername: string) => {
+    // Ensure currentChannel and token exist
+    if (!currentChannel || !token) {
+      showError("Cannot demote member: channel or auth token missing.");
+      return;
+    }
+
+    // API Call first
+    channelApi.updateMemberRole(currentChannel.name, memberUsername, token, false).catch((error) => {
+      console.error("Failed to demote member:", error);
+      showError(`Failed to demote ${memberUsername}. Please try again.`);
+    });
+  };
+
+  const membersList = sortedMembers && (
     <>
       {sortedMembers.map((member) => {
-        const isUserOnline = onlineUsersSet.has(member.username);
+        // Check if user is online based on activeMembers from channel context
+        const isUserOnline = members.some((m) => m.username === member.username && m.isOnline);
+
         return (
           <div
             key={member.username}
@@ -90,9 +92,11 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
               <span className="text-sm truncate flex-1">{member.username}</span>
             </div>
 
-            {isAdmin && member.username !== username && member.username !== channel.createdBy && (
+            {isAdmin && member.username !== username && member.username !== currentChannel?.createdBy && (
               <button
-                onClick={() => handleRoleToggle(member.username, !member.isAdmin)}
+                onClick={() =>
+                  member.isAdmin ? handleDemoteMember(member.username) : handlePromoteMember(member.username)
+                }
                 className={`text-xs px-2 py-1 rounded flex-none ml-2 ${
                   member.isAdmin
                     ? "bg-primary/10 text-primary hover:bg-primary/20"
@@ -110,16 +114,22 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
 
   return (
     <div className="relative flex flex-col items-start space-y-4">
+      {/* Overlay when not connected */}
+      {!channelConnected && (
+        <div className="absolute inset-0 bg-surface-dark/80 flex items-center justify-center z-10">
+          <span className="text-text-light/70 text-sm animate-pulse">Loading channel info...</span>
+          {/* Optionally add a spinner component here */}
+        </div>
+      )}
+
       <div className="flex flex-col p-4 border-b border-primary/20 min-h-16 overflow-visible w-full">
         <div className="flex flex-col gap-2 w-full">
           <div className="flex items-center justify-between w-full whitespace-nowrap">
             <Dropdown
               trigger={
-                Object.keys(channel.members).length === 1 ? (
-                  <span>{Object.keys(channel.members).length} Member</span>
-                ) : (
-                  <span>{Object.keys(channel.members).length} Members</span>
-                )
+                <span>
+                  {members.length} {members.length === 1 ? "Member" : "Members"}
+                </span>
               }
               isOpenExternal={isOpen}
               setIsOpenExternal={setIsOpen}
@@ -127,9 +137,9 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
             >
               {membersList}
             </Dropdown>
-            <h2 className="flex font-medium text-text-light truncate">{channel.name}</h2>
+            <h2 className="flex font-medium text-text-light truncate">{currentChannel?.name}</h2>
             <span className="flex ml-2 text-xs bg-green-600/20 text-green-400 px-2 py-0.5 rounded-full truncate whitespace-nowrap">
-              {onlineCount} online
+              {onlineUserCount} online
             </span>
           </div>
 
@@ -142,7 +152,7 @@ export const ChannelInfo = ({ channel }: ChannelInfoProps) => {
                 isDescriptionExpanded ? "whitespace-normal break-words" : "truncate"
               } text-left group-hover:text-primary/70 transition-colors w-full max-w-full`}
             >
-              {channel.description || "No description provided"}
+              {currentChannel?.description || "No description provided"}
             </p>
           </div>
         </div>

@@ -51,6 +51,9 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 		// Only channel updates are system-wide messages
 		log.Printf("Broadcasting system message type %d to all system connections", msg.Type)
 		p.connManager.NotifyAll(outgoingMsgBytes)
+	case models.MessageTypeSystemUserStatus:
+		log.Printf("Broadcasting system user status message type %d to all system connections", msg.Type)
+		p.connManager.NotifyAll(outgoingMsgBytes)
 
 	default:
 		// All other messages are channel-specific

@@ -1,22 +1,26 @@
-import { AuthProvider } from "./components/Providers/AuthProvider";
+import { AuthProvider } from "./providers/AuthProvider";
 import { AppContent } from "./components/AppContent";
-import { ChatProvider } from "./components/Providers/SystemProvider/";
-import { WebSocketProvider } from "./components/Providers/WebSocketProvider";
-import { SketchProvider } from "./components/Providers/SketchProvider";
-import { NotificationProvider } from "./components/Providers/NotificationProvider";
-import { AuthStateListener } from "./components/Providers/AuthStateListener";
+import { NotificationProvider } from "./providers/NotificationProvider";
+import { SystemProvider } from "./providers/SystemProvider";
+import { ChannelProvider } from "./providers/ChannelProvider";
+import { SketchProvider } from "./providers/SketchProvider";
+import { WebSocketProvider } from "./providers/WebSocketProvider";
 
 function App() {
+  if (import.meta.env.DEV) {
+    console.log("[App] Rendering App component.");
+  }
   return (
     <NotificationProvider>
       <AuthProvider>
         <WebSocketProvider>
-          <AuthStateListener />
-          <ChatProvider>
-            <SketchProvider>
-              <AppContent />
-            </SketchProvider>
-          </ChatProvider>
+          <SystemProvider>
+            <ChannelProvider>
+              <SketchProvider>
+                <AppContent />
+              </SketchProvider>
+            </ChannelProvider>
+          </SystemProvider>
         </WebSocketProvider>
       </AuthProvider>
     </NotificationProvider>

@@ -1,15 +1,19 @@
-import { createContext } from "react";
-import { OutgoingMessage, IncomingMessage } from "../types/interfaces";
+import React from "react";
+import { OutgoingMessage, ChannelUpdateAction, Channel, IncomingMessage } from "../types/interfaces";
 
-// Define MessageHandlers interface here instead of importing from service
-export interface MessageHandlers {
-  onChatMessage?: (message: IncomingMessage) => void;
-  onChannelUpdate?: (message: IncomingMessage) => void;
-  onMemberUpdate?: (message: IncomingMessage) => void;
-  onSketchMessage?: (message: IncomingMessage) => void;
+export interface SystemMessageHandler {
+  onChannelUpdate?: (action: ChannelUpdateAction, channel: Channel) => void;
+  onSystemUserStatus?: (count: number) => void;
+  // ... other system message types
 }
 
-// Define the WebSocketContext interface
+export interface ChannelMessageHandler {
+  onChatMessage?: (message: IncomingMessage) => void;
+  onMemberUpdate?: (message: IncomingMessage) => void;
+  onUserStatus?: (username: string, status: "online" | "offline") => void;
+  // ... other channel message types
+}
+
 export interface WebSocketContextType {
   state: {
     systemConnected: boolean;
@@ -21,22 +25,9 @@ export interface WebSocketContextType {
     disconnectChannel: () => void;
     disconnectAll: () => void;
     send: (message: OutgoingMessage) => void;
-    setMessageHandlers: (handlers: MessageHandlers) => void;
+    setSystemHandlers: (handlers: SystemMessageHandler) => void;
+    setChannelHandlers: (handlers: ChannelMessageHandler) => void;
   };
 }
 
-// Create the context with a proper default value
-export const WebSocketContext = createContext<WebSocketContextType>({
-  state: {
-    systemConnected: false,
-    channelConnected: false,
-  },
-  actions: {
-    connectSystem: () => {},
-    connectChannel: () => {},
-    disconnectChannel: () => {},
-    disconnectAll: () => {},
-    send: () => {},
-    setMessageHandlers: () => {},
-  },
-});
+export const WebSocketContext = React.createContext<WebSocketContextType | null>(null);

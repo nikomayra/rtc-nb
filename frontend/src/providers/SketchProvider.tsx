@@ -1,19 +1,20 @@
-import { useState, useMemo, useEffect, useContext, useRef } from "react";
-import { initialState, SketchContext } from "../../contexts/sketchContext";
-import { AuthContext } from "../../contexts/authContext";
-import { ChatContext } from "../../contexts/systemContext";
-import { Sketch, DrawPath } from "../../types/interfaces";
-import { SketchService } from "../../services/SketchService";
-import { useNotification } from "../../hooks/useNotification";
-
+import { useState, useMemo, useEffect, useRef } from "react";
+import { initialState, SketchContext } from "../contexts/sketchContext";
+import { Sketch, DrawPath } from "../types/interfaces";
+import { SketchService } from "../services/SketchService";
+import { useNotification } from "../hooks/useNotification";
+import { useAuthContext } from "../hooks/useAuthContext";
+import { useSystemContext } from "../hooks/useSystemContext";
 const DEBUG = true;
 
 export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const authContext = useContext(AuthContext);
-  const chatContext = useContext(ChatContext);
+  const authContext = useAuthContext();
+  const systemContext = useSystemContext();
   const { showError, showSuccess } = useNotification();
 
   const [state, setState] = useState(initialState);
+  const { state: systemState } = systemContext;
+  const { state: authState } = authContext;
 
   // Keep track of the last loaded channel to prevent unnecessary reloads
   const lastLoadedChannelRef = useRef<string | null>(null);
@@ -195,39 +196,30 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Load sketches when channel is ready
   useEffect(() => {
-    const channel = chatContext?.state.currentChannel;
-    const connected = chatContext?.state.connectionState?.channelConnected;
-    const token = authContext?.state.token;
+    const channel = systemState.currentChannel;
+    // const connected = systemState.channelConnected;
+    const token = authState.token;
 
-    if (!channel || !connected || !token) {
+    if (!channel || !token) {
       if (DEBUG) console.log("⏭ [SketchProvider] Channel not ready");
       return;
     }
 
     // Load sketches for the new channel
-    actions.loadSketches(channel).catch((err) => {
+    actions.loadSketches(channel.name).catch((err) => {
       if (DEBUG) console.error("[SketchProvider] Error loading sketches:", err);
     });
-  }, [
-    chatContext?.state.currentChannel,
-    chatContext?.state.connectionState?.channelConnected,
-    authContext?.state.token,
-    actions,
-  ]);
+  }, [systemState.currentChannel, authState.token, actions]);
 
   // Clear last loaded channel when disconnecting
-  useEffect(() => {
-    if (!chatContext?.state.connectionState.channelConnected) {
-      lastLoadedChannelRef.current = null;
-    }
-  }, [chatContext?.state.connectionState.channelConnected]);
+  // useEffect(() => {
+  //   if (!systemState.channelConnected) {
+  //     lastLoadedChannelRef.current = null;
+  //   }
+  // }, [systemState.channelConnected]);
 
   // Stable context value
   const value = useMemo(() => ({ state, actions }), [state, actions]);
-
-  if (!authContext || !chatContext) {
-    throw new Error("Required contexts not found");
-  }
 
   return <SketchContext.Provider value={value}>{children}</SketchContext.Provider>;
 };

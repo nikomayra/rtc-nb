@@ -11,6 +11,9 @@ import (
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/pkg/api/responses"
 
+	"time"
+
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
@@ -70,12 +73,14 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	h.connMgr.AddConnection(claims.Username, conn)
 	h.connMgr.AddClientToChannel(channelName, conn)
 	log.Printf("Added user %s to channel %s", claims.Username, channelName)
+	h.broadcastUserStatus(channelName, claims.Username, "online")
 
 	// Cleanup on disconnect
 	defer func() {
 		h.connMgr.RemoveConnection(claims.Username)
 		h.connMgr.RemoveClientFromChannel(channelName, conn)
 		log.Printf("Removed user %s from channel %s", claims.Username, channelName)
+		h.broadcastUserStatus(channelName, claims.Username, "offline")
 		conn.Close()
 	}()
 
@@ -108,6 +113,33 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) broadcastUserStatus(channelName, username, status string) {
+	// Create user status message
+	msg := &models.Message{
+		ID:          uuid.NewString(),
+		ChannelName: channelName,
+		Username:    username,
+		Type:        models.MessageTypeUserStatus,
+		Timestamp:   time.Now().UTC(),
+		Content: models.MessageContent{
+			UserStatus: &models.UserStatus{
+				Action:   status,
+				Username: username,
+			},
+		},
+	}
+
+	// Serialize the message
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("Error marshaling user status message: %v", err)
+		return
+	}
+
+	// Broadcast to the channel
+	h.connMgr.NotifyChannel(channelName, msgBytes)
+}
+
 // HandleSystemWebSocket handles WebSocket connections for system-wide messages
 func (h *Handler) HandleSystemWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Verify authentication
@@ -130,10 +162,12 @@ func (h *Handler) HandleSystemWebSocket(w http.ResponseWriter, r *http.Request) 
 
 	// Register the system connection (separate from channel connections)
 	h.connMgr.AddSystemConnection(username, conn)
+	h.broadcastSystemUserCount()
 	defer func() {
 		log.Printf("Closing system WebSocket connection for user: %s", username)
 		conn.Close()
 		h.connMgr.RemoveSystemConnection(username)
+		h.broadcastSystemUserCount()
 	}()
 
 	// Process incoming system messages
@@ -174,4 +208,32 @@ func (h *Handler) HandleSystemWebSocket(w http.ResponseWriter, r *http.Request) 
 			log.Printf("Error processing system message: %v", err)
 		}
 	}
+}
+
+func (h *Handler) broadcastSystemUserCount() {
+	count := h.connMgr.GetCountOfAllOnlineUsers()
+
+	// Create and broadcast the system user status message
+	msg := &models.Message{
+		ChannelName: "system",
+		Username:    "system",
+		ID:          uuid.NewString(),
+		Type:        models.MessageTypeSystemUserStatus,
+		Timestamp:   time.Now().UTC(),
+		Content: models.MessageContent{
+			SystemUserStatus: &models.SystemUserStatus{
+				Count: count,
+			},
+		},
+	}
+
+	// Serialize the message
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("Error marshaling system user count message: %v", err)
+		return
+	}
+
+	// Broadcast to all system connections
+	h.connMgr.NotifyAll(msgBytes)
 }

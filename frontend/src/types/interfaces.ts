@@ -8,6 +8,7 @@ export enum MessageType {
   ChannelUpdate = 3,
   MemberUpdate = 4,
   UserStatus = 5,
+  SystemUserStatus = 6,
 }
 
 export enum SketchCommandType {
@@ -123,6 +124,10 @@ export const UserStatusSchema = z.object({
   username: z.string().min(1),
 });
 
+export const SystemUserStatusSchema = z.object({
+  count: z.number().min(0),
+});
+
 // Custom URL validator that accepts both URLs and paths
 const URLSchema = z.string().refine(
   (val) => {
@@ -145,6 +150,7 @@ export const MessageContentSchema = z
     channelUpdate: ChannelUpdateSchema.optional(),
     memberUpdate: MemberUpdateSchema.optional(),
     userStatus: UserStatusSchema.optional(),
+    systemUserStatus: SystemUserStatusSchema.optional(),
   })
   .refine(
     (data) => {

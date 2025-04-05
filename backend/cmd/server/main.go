@@ -51,7 +51,7 @@ func main() {
 
 	// Setup router and routes
 	router := mux.NewRouter()
-	api.RegisterRoutes(router, wsHandler, connManager, chatService, sketchService, cfg.FileStorePath)
+	api.RegisterRoutes(router, wsHandler, connManager, chatService, sketchService, cfg.FileStorePath, msgProcessor)
 
 	log.Println("Server started on :8080")
 	if err := http.ListenAndServe(":8080", router); err != nil {

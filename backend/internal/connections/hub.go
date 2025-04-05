@@ -219,14 +219,10 @@ func (h *Hub) GetOnlineUsersInChannel(channelName string) []string {
 	return usernames
 }
 
-func (h *Hub) GetAllOnlineUsers() []string {
+func (h *Hub) GetCountOfAllOnlineUsers() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	usernames := make([]string, 0)
-	for username := range h.systemConns {
-		usernames = append(usernames, username)
-	}
-	return usernames
+	return len(h.systemConns)
 }
 
 // AUTOMATIC CLEANUP
