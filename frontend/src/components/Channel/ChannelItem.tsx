@@ -78,7 +78,7 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel }) => {
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-          <div className={`flex-none w-2 h-2 rounded-full ${channel.isPrivate ? "bg-warning" : "bg-success"}`} />
+          <div className={`flex-none w-2 h-2 rounded-full ${channel.isPrivate ? "bg-warning" : "bg-info"}`} />
           <span className="font-medium truncate">{channel.name}</span>
         </div>
 

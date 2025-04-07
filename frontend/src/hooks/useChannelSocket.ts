@@ -15,39 +15,50 @@ export const useChannelSocket = () => {
   } = useAuthContext();
 
   const { actions: channelActions } = channelContext;
-  const { actions: websocketActions } = websocketContext;
+  // Destructure state and actions from WebSocket context
+  const { state: wsState, actions: wsActions } = websocketContext;
+  const { channelConnected } = wsState; // Get connection state
+  const { send, setChannelHandlers, connectChannel, disconnectChannel } = wsActions;
+
   const { state: systemState } = systemContext;
-  const { send, setChannelHandlers, connectChannel, disconnectChannel } = websocketActions;
   const currentChannelName = systemState.currentChannel?.name;
 
-  // Effect to CONNECT to the channel when conditions are met
+  // --- Connection Effect ---
   useEffect(() => {
-    // Connect only if logged in, have a token, and a channel is selected
+    // Guard: Only proceed if logged in and a channel is selected
     if (token && currentChannelName) {
       if (import.meta.env.DEV) {
-        console.log(`[useChannelSocket] Attempting to connect to channel: ${currentChannelName}`);
+        console.log(`[useChannelSocket] Effect: Attempting connect to channel: ${currentChannelName}`);
       }
+      // connectChannel is idempotent and handles internal state checking
       connectChannel(token, currentChannelName);
 
-      // Return the cleanup function ONLY if a connection was attempted
+      // Cleanup function: Disconnect when channel changes or component unmounts
       return () => {
         if (import.meta.env.DEV) {
-          console.log(
-            `[useChannelSocket] Cleaning up connection for channel (via effect cleanup): ${currentChannelName}`
-          );
+          console.log(`[useChannelSocket] Effect Cleanup: Disconnecting from channel: ${currentChannelName}`);
         }
+        // disconnectChannel handles clearing timeouts and internal state
         disconnectChannel();
       };
+    } else {
+      // If no channel is selected, ensure disconnect is called (e.g., switching from a channel to null)
+      // Note: disconnectChannel handles the case where there's nothing to disconnect.
+      if (import.meta.env.DEV) {
+        console.log("[useChannelSocket] Effect Cleanup: No channel selected, ensuring disconnect.");
+      }
+      disconnectChannel();
+      return undefined; // Explicitly return undefined for clarity
     }
-    // No cleanup function is returned if token/currentChannelName are missing
-    return undefined;
+    // Dependencies: Effect should re-run if token or channel name changes.
+    // connectChannel/disconnectChannel functions are stable references from context.
   }, [token, currentChannelName, connectChannel, disconnectChannel]);
 
-  // Memoize handlers
+  // --- Message Handlers ---
   const handleUserStatus = useCallback(
     (username: string, status: "online" | "offline") => {
       if (import.meta.env.DEV) {
-        console.log(`[useChannelSocket] Received user status update: ${username} is ${status}`);
+        console.log(`[useChannelSocket] Handler: User status update: ${username} is ${status}`);
       }
       channelActions.updateMemberOnlineStatus(username, status === "online");
     },
@@ -57,52 +68,81 @@ export const useChannelSocket = () => {
   const handleChatMessage = useCallback(
     (message: IncomingMessage) => {
       if (import.meta.env.DEV) {
-        console.log("[useChannelSocket] Received chat message:", message);
+        console.log("[useChannelSocket] Handler: Chat message received:", message);
       }
-      channelActions.setMessages((prev: IncomingMessage[]) => [...prev, message]);
+      // Add message only if it belongs to the currently viewed channel
+      if (message.channelName === currentChannelName) {
+        channelActions.setMessages((prev: IncomingMessage[]) => [...prev, message]);
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn(
+            `[useChannelSocket] Handler: Received chat message for ${message.channelName} while in ${currentChannelName}. Ignoring.`
+          );
+        }
+      }
     },
-    [channelActions]
+    [channelActions, currentChannelName] // Add currentChannelName dependency
   );
 
   const handleMemberUpdate = useCallback(
     (message: IncomingMessage) => {
-      if (!message.content.memberUpdate) return;
-      if (import.meta.env.DEV) {
-        console.log("[useChannelSocket] Received member update:", message);
+      if (!message.content.memberUpdate || message.channelName !== currentChannelName) {
+        if (import.meta.env.DEV && message.channelName !== currentChannelName) {
+          console.warn(
+            `[useChannelSocket] Handler: Received member update for ${message.channelName} while in ${currentChannelName}. Ignoring.`
+          );
+        }
+        return; // Ignore if no data or wrong channel
       }
-      switch (message.content.memberUpdate.action) {
+
+      if (import.meta.env.DEV) {
+        console.log("[useChannelSocket] Handler: Member update received:", message);
+      }
+
+      const { username, action, isAdmin } = message.content.memberUpdate!; // Use non-null assertion after guard
+
+      switch (action) {
         case MemberUpdateAction.Added:
-          channelActions.setMembers((prev) => [
-            ...prev,
-            {
-              ...ChannelMemberSchema.parse({
-                username: message.content.memberUpdate!.username,
-                isAdmin: message.content.memberUpdate!.isAdmin,
-                joinedAt: new Date().toISOString(),
-                lastMessage: null,
-              }),
-              isOnline: true, // Assume online on join
-            },
-          ]);
+          channelActions.setMembers((prev) => {
+            // Avoid adding duplicates
+            if (prev.some((m) => m.username === username)) return prev;
+            return [
+              ...prev,
+              {
+                ...ChannelMemberSchema.parse({
+                  // Parse to ensure structure
+                  username: username,
+                  isAdmin: isAdmin,
+                  joinedAt: new Date().toISOString(), // Or use timestamp from message if available
+                  lastMessage: null,
+                }),
+                isOnline: true, // Assume online on join
+              },
+            ];
+          });
+          // Also add the system message associated with the join
+          channelActions.setMessages((prev: IncomingMessage[]) => [...prev, message]);
+          break;
+        case MemberUpdateAction.Removed:
+          channelActions.setMembers((prev) => prev.filter((m) => m.username !== username));
+          // Also add the system message associated with leaving
           channelActions.setMessages((prev: IncomingMessage[]) => [...prev, message]);
           break;
         case MemberUpdateAction.RoleChanged:
           channelActions.setMembers((prev) =>
-            prev.map((member) =>
-              member.username === message.content.memberUpdate!.username
-                ? { ...member, isAdmin: message.content.memberUpdate!.isAdmin }
-                : member
-            )
+            prev.map((member) => (member.username === username ? { ...member, isAdmin: isAdmin } : member))
           );
+          // Also add the system message associated with role change
           channelActions.setMessages((prev: IncomingMessage[]) => [...prev, message]);
           break;
         default:
-          console.warn(`[useChannelSocket] Unhandled member update action: ${message.content.memberUpdate?.action}`);
+          console.warn(`[useChannelSocket] Handler: Unhandled member update action: ${action}`);
       }
     },
-    [channelActions]
+    [channelActions, currentChannelName]
   );
 
+  // Memoize the handlers object based on the callback functions
   const handlers = useMemo<ChannelMessageHandler>(
     () => ({
       onUserStatus: handleUserStatus,
@@ -112,90 +152,113 @@ export const useChannelSocket = () => {
     [handleUserStatus, handleChatMessage, handleMemberUpdate]
   );
 
-  // Effect to SET/CLEAR message handlers based on channel selection
+  // --- Handler Registration Effect ---
   useEffect(() => {
-    // If a channel is selected, set the handlers in the service.
-    // The service itself ensures messages are only processed when connected.
+    // If a channel is selected, register the handlers.
     if (currentChannelName) {
       if (import.meta.env.DEV) {
-        console.log(`[useChannelSocket] Setting channel handlers for: ${currentChannelName}`);
+        console.log(`[useChannelSocket] Effect: Setting channel handlers for: ${currentChannelName}`);
       }
       setChannelHandlers(handlers);
     } else {
-      // If no channel is selected, clear the handlers.
+      // If no channel is selected, ensure handlers are cleared.
       if (import.meta.env.DEV) {
-        console.log("[useChannelSocket] Clearing channel handlers (no channel selected)");
+        console.log("[useChannelSocket] Effect: Clearing channel handlers (no channel selected).");
       }
       setChannelHandlers({});
     }
 
-    // Cleanup: Ensure handlers are cleared when the component unmounts
-    // or if the channel name becomes null/undefined for any reason.
+    // Cleanup: Clear handlers when the channel changes or the hook unmounts.
     return () => {
       if (import.meta.env.DEV) {
-        console.log("[useChannelSocket] Cleaning up channel handlers on effect cleanup");
+        console.log("[useChannelSocket] Effect Cleanup: Clearing channel handlers.");
       }
+      // Pass empty object to clear handlers in the service
       setChannelHandlers({});
     };
-    // Depend only on the channel name and the stable handlers object.
-    // No longer depend on websocketState.channelConnected here.
+    // This effect depends on the selected channel name and the memoized handlers object.
   }, [currentChannelName, handlers, setChannelHandlers]);
 
-  // SENDING MESSAGES
+  // --- Send Actions ---
   const sendChatMessage = useCallback(
     (text: string) => {
-      if (!currentChannelName) return;
-
+      if (!currentChannelName) {
+        console.warn("[useChannelSocket] sendChatMessage: No current channel selected.");
+        return;
+      }
+      if (!channelConnected) {
+        console.warn("[useChannelSocket] sendChatMessage: Channel socket not connected.");
+        return;
+      }
       send({
         type: MessageType.Text,
         channelName: currentChannelName,
         content: { text },
       });
     },
-    [currentChannelName, send]
+    [currentChannelName, send, channelConnected]
   );
 
   const sendImageMessage = useCallback(
     (message: string, fileUrl: string, thumbnailUrl: string) => {
-      if (!currentChannelName) return;
-
+      if (!currentChannelName) {
+        console.warn("[useChannelSocket] sendImageMessage: No current channel selected.");
+        return;
+      }
+      if (!channelConnected) {
+        console.warn("[useChannelSocket] sendImageMessage: Channel socket not connected.");
+        return;
+      }
       send({
         type: MessageType.Image,
         channelName: currentChannelName,
         content: { text: message, fileUrl, thumbnailUrl },
       });
     },
-    [currentChannelName, send]
+    [currentChannelName, send, channelConnected]
   );
 
   const promoteMemberRole = useCallback(
     (username: string) => {
-      if (!currentChannelName) return;
-
+      if (!currentChannelName) {
+        console.warn("[useChannelSocket] promoteMemberRole: No current channel selected.");
+        return;
+      }
+      if (!channelConnected) {
+        console.warn("[useChannelSocket] promoteMemberRole: Channel socket not connected.");
+        return;
+      }
       send({
         type: MessageType.MemberUpdate,
         channelName: currentChannelName,
         content: { memberUpdate: { username: username, action: MemberUpdateAction.RoleChanged, isAdmin: true } },
       });
     },
-    [currentChannelName, send]
+    [currentChannelName, send, channelConnected]
   );
 
   const demoteMemberRole = useCallback(
     (username: string) => {
-      if (!currentChannelName) return;
-
+      if (!currentChannelName) {
+        console.warn("[useChannelSocket] demoteMemberRole: No current channel selected.");
+        return;
+      }
+      if (!channelConnected) {
+        console.warn("[useChannelSocket] demoteMemberRole: Channel socket not connected.");
+        return;
+      }
       send({
         type: MessageType.MemberUpdate,
         channelName: currentChannelName,
         content: { memberUpdate: { username: username, action: MemberUpdateAction.RoleChanged, isAdmin: false } },
       });
     },
-    [currentChannelName, send]
+    [currentChannelName, send, channelConnected]
   );
 
-  // No state here! Just actions
+  // Return connection state and actions
   return {
+    channelConnected,
     sendChatMessage,
     sendImageMessage,
     promoteMemberRole,

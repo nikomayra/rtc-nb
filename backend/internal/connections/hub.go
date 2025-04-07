@@ -142,18 +142,20 @@ func (h *Hub) RemoveClientFromChannel(channelName string, userConn *websocket.Co
 	log.Printf("Removed client from channel: %s\n", channelName)
 }
 
-func (h *Hub) AddConnection(username string, conn *websocket.Conn) {
+func (h *Hub) AddConnection(username string, conn *websocket.Conn) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// If there's an existing connection, close it
-	if existingConn, exists := h.connections[username]; exists {
-		log.Printf("Closing existing connection for user: %s", username)
-		existingConn.Close()
+	// If there's an existing connection, return an error instead of closing it.
+	if _, exists := h.connections[username]; exists {
+		// The existing connection will be handled by its own lifecycle (disconnect/cleanup).
+		log.Printf("Attempt to add connection for user %s failed: connection already exists.", username)
+		return fmt.Errorf("connection already exists for user: %s", username)
 	}
 
 	h.connections[username] = conn
 	log.Printf("Client Username: %s, connected. Total connections: %d", username, len(h.connections))
+	return nil
 }
 
 func (h *Hub) RemoveConnection(username string) {

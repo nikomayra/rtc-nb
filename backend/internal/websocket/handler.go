@@ -70,7 +70,12 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Register user connection
-	h.connMgr.AddConnection(claims.Username, conn)
+	err = h.connMgr.AddConnection(claims.Username, conn)
+	if err != nil {
+		log.Printf("Duplicate WebSocket connection attempt for user %s in channel %s. Closing new connection. Error: %v", claims.Username, channelName, err)
+		conn.Close()
+		return
+	}
 	h.connMgr.AddClientToChannel(channelName, conn)
 	log.Printf("Added user %s to channel %s", claims.Username, channelName)
 	h.broadcastUserStatus(channelName, claims.Username, "online")

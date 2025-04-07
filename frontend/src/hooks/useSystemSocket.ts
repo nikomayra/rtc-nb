@@ -12,8 +12,12 @@ export const useSystemSocket = () => {
     state: { isLoggedIn, token },
   } = useAuthContext();
 
+  // Destructure state and actions from WebSocket context
+  const { state: wsState, actions: wsActions } = websocketContext;
+  const { systemConnected } = wsState; // Get connection state
+  const { setSystemHandlers, connectSystem } = wsActions;
+
   const { actions: systemActions } = systemContext;
-  const { setSystemHandlers, connectSystem } = websocketContext.actions;
 
   const handleSystemUserStatus = useCallback(
     (count: number) => {
@@ -32,11 +36,21 @@ export const useSystemSocket = () => {
       }
       switch (action) {
         case ChannelUpdateAction.Created:
-          systemActions.setChannels((prev: Channel[]) => [...prev, channel]);
+          // Avoid duplicates if already present (though backend should ideally handle this)
+          systemActions.setChannels((prev: Channel[]) => {
+            if (!prev.some((c) => c.name === channel.name)) {
+              return [...prev, channel];
+            }
+            return prev;
+          });
           break;
         case ChannelUpdateAction.Deleted:
           systemActions.setChannels((prev: Channel[]) => prev.filter((c: Channel) => c.name !== channel.name));
+          // If the deleted channel is the current one, reset current channel
           if (systemContext.state.currentChannel?.name === channel.name) {
+            if (import.meta.env.DEV) {
+              console.log(`[useSystemSocket] Current channel ${channel.name} was deleted. Resetting current channel.`);
+            }
             systemActions.setCurrentChannel(null);
           }
           break;
@@ -55,28 +69,40 @@ export const useSystemSocket = () => {
     [handleSystemUserStatus, handleChannelUpdate]
   );
 
+  // Effect to set/clear handlers based on login status
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (isLoggedIn) {
+      if (import.meta.env.DEV) console.log("[useSystemSocket] Setting system handlers.");
+      setSystemHandlers(handlers);
+    } else {
+      // Clear handlers if not logged in
+      if (import.meta.env.DEV) console.log("[useSystemSocket] Clearing system handlers (not logged in).");
+      setSystemHandlers({});
+    }
 
-    setSystemHandlers(handlers);
-
+    // Cleanup function: clear handlers when the hook unmounts or dependencies change
     return () => {
+      if (import.meta.env.DEV) console.log("[useSystemSocket] Cleaning up system handlers.");
       setSystemHandlers({});
     };
   }, [isLoggedIn, handlers, setSystemHandlers]);
 
+  // Effect to initiate system connection
   useEffect(() => {
-    if (!isLoggedIn || !token) {
-      return;
+    // Only attempt connection if logged in, have a token, and handlers are set (implicitly via isLoggedIn check above)
+    if (isLoggedIn && token) {
+      // Note: connectSystem itself is idempotent and checks internally if already connected/connecting
+      if (import.meta.env.DEV) {
+        console.log("[useSystemSocket] Attempting system socket connection (if needed)...");
+      }
+      connectSystem(token);
     }
+    // We don't need a cleanup here to disconnect the *system* socket usually,
+    // as it should persist while logged in. disconnectAll in the provider handles final cleanup.
+  }, [isLoggedIn, token, connectSystem]); // Dependencies ensure this runs if login state or token changes
 
-    if (import.meta.env.DEV) {
-      console.log("[useSystemSocket] Attempting to connect system socket");
-    }
-    connectSystem(token);
-  }, [isLoggedIn, token, connectSystem]);
-
+  // Return the connection state for potential use in components
   return {
-    // handled by backend for now...no uses...
+    systemConnected,
   };
 };

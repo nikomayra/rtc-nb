@@ -30,7 +30,7 @@ export const ChannelList = () => {
             <div className="flex items-center whitespace-nowrap">
               <div className="flex-none w-2 h-2 rounded-full bg-warning mr-1" />
               Private |
-              <div className="flex-none w-2 h-2 rounded-full bg-success ml-1 mr-1" />
+              <div className="flex-none w-2 h-2 rounded-full bg-info ml-1 mr-1" />
               Public
             </div>
           </span>

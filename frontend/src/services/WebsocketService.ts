@@ -3,29 +3,35 @@ import { BASE_URL } from "../utils/constants";
 import { convertKeysToSnakeCase, convertKeysToCamelCase } from "../utils/dataFormatter";
 import { SystemMessageHandler, ChannelMessageHandler } from "../contexts/webSocketContext";
 
+// Type definition for the state setters passed from the React context
+type ConnectionStateSetters = {
+  setSystemConnected: (connected: boolean) => void;
+  setChannelConnected: (connected: boolean) => void;
+};
+
 export class WebSocketService {
   private static instance: WebSocketService;
 
   private systemSocket: WebSocket | null = null;
   private channelSocket: WebSocket | null = null;
-  private systemConnected = false;
-  private channelConnected = false;
-  private reconnectTimeoutId: number | null = null;
+  // Separate reconnect timeout IDs
+  private systemReconnectTimeoutId: number | null = null;
+  private channelReconnectTimeoutId: number | null = null;
   private currentChannelName: string | null = null;
   private currentToken: string | null = null;
+  // Separate connection attempts counters
   private connectionAttempts = { system: 0, channel: 0 };
   private maxReconnectAttempts = 5;
-  private static connectionLock = false;
   private lastChannelConnectionAttemptTimestamp: number | null = null;
 
   private protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   private baseUrl = `${this.protocol}//${window.location.host}${BASE_URL}/ws`;
 
-  // connection state change callbacks
-  private connectionStateCallbacks: {
-    onSystemConnectionChange?: (connected: boolean) => void;
-    onChannelConnectionChange?: (connected: boolean) => void;
-  } = {};
+  // Use WeakMap to track intentionally closed sockets without modifying the socket object itself
+  private closingIntentionallyMap = new WeakMap<WebSocket, boolean>();
+
+  // State setters provided by the context
+  private stateSetters: ConnectionStateSetters | null = null;
 
   private systemHandlers: SystemMessageHandler | null = null;
   private channelHandlers: ChannelMessageHandler | null = null;
@@ -39,12 +45,8 @@ export class WebSocketService {
     return WebSocketService.instance;
   }
 
-  public get isSystemConnected(): boolean {
-    return this.systemConnected;
-  }
-
-  public get isChannelConnected(): boolean {
-    return this.channelConnected;
+  public setStateSetters(setters: ConnectionStateSetters): void {
+    this.stateSetters = setters;
   }
 
   public setSystemHandlers(handlers: SystemMessageHandler): void {
@@ -55,279 +57,394 @@ export class WebSocketService {
     this.channelHandlers = handlers;
   }
 
-  // Register connection state change callbacks
-  public setConnectionStateCallbacks(callbacks: {
-    onSystemConnectionChange?: (connected: boolean) => void;
-    onChannelConnectionChange?: (connected: boolean) => void;
-  }): void {
-    this.connectionStateCallbacks = { ...callbacks };
-  }
-
-  // Helper method to update system connection state
-  private updateSystemConnected(connected: boolean): void {
-    // Only update if state actually changed
-    if (this.systemConnected !== connected) {
-      if (import.meta.env.DEV) {
-        console.log(`[WebSocketService] System connection state changing to ${connected}`);
-      }
-      this.systemConnected = connected;
-
-      // Call callback immediately outside of any potential React batching
-      if (this.connectionStateCallbacks.onSystemConnectionChange) {
-        setTimeout(() => {
-          this.connectionStateCallbacks.onSystemConnectionChange?.(connected);
-        }, 0);
-      }
-    }
-  }
-
-  // Helper method to update channel connection state
-  private updateChannelConnected(connected: boolean): void {
-    // Only update if state actually changed
-    if (this.channelConnected !== connected) {
-      if (import.meta.env.DEV) {
-        console.log(`[WebSocketService] Channel connection state changing to ${connected}`);
-      }
-      this.channelConnected = connected;
-
-      // Call callback immediately outside of any potential React batching
-      if (this.connectionStateCallbacks.onChannelConnectionChange) {
-        setTimeout(() => {
-          this.connectionStateCallbacks.onChannelConnectionChange?.(connected);
-        }, 0);
-      }
-    }
-  }
-
-  // Connect to the system socket - used for global updates
+  // Connect to the system socket
   public connectSystem(token: string): void {
-    // If already connected with same token, do nothing
     if (this.systemSocket?.readyState === WebSocket.OPEN && this.currentToken === token) {
+      if (import.meta.env.DEV) {
+        console.log("[WebSocketService] connectSystem called but system socket already open with same token.");
+      }
+      this.stateSetters?.setSystemConnected(true);
       return;
     }
 
-    // If locked, another connection attempt is in progress
-    if (WebSocketService.connectionLock) {
-      console.warn("[WebSocketService] System connection attempt skipped: lock active.");
-      return;
+    if (this.currentToken !== token || !this.systemSocket || this.systemSocket.readyState !== WebSocket.CONNECTING) {
+      if (import.meta.env.DEV && this.currentToken && this.currentToken !== token) {
+        console.log("[WebSocketService] connectSystem called with a new token. Re-establishing connection.");
+      }
+      this.currentToken = token;
+      this.establishSystemConnection();
+    } else if (this.systemSocket.readyState === WebSocket.CONNECTING) {
+      if (import.meta.env.DEV) {
+        console.log("[WebSocketService] connectSystem called while already connecting. Waiting for existing attempt.");
+      }
     }
-
-    WebSocketService.connectionLock = true;
-    this.currentToken = token;
-
-    this.establishSystemConnection();
   }
 
   private establishSystemConnection(): void {
-    if (!this.currentToken) {
-      WebSocketService.connectionLock = false;
+    if (!this.currentToken || !this.stateSetters) {
+      console.error("[WebSocketService] Cannot establish system connection: Token or state setters missing.");
       return;
     }
 
+    // Clear any pending reconnect timeout specifically for the system socket
+    this.clearReconnectTimeout("system");
+
     // Close existing connection if any
     if (this.systemSocket) {
-      this.systemSocket.close(1000);
+      if (import.meta.env.DEV) {
+        console.log("[WebSocketService] Closing existing system socket before establishing new one.");
+      }
+      // Mark the socket for intentional closure using WeakMap
+      this.closingIntentionallyMap.set(this.systemSocket, true);
+      this.systemSocket.close(1000, "Establishing new system connection");
       this.systemSocket = null;
+      // Immediately update state to false
+      this.stateSetters.setSystemConnected(false);
     }
 
     if (import.meta.env.DEV) {
       console.log("[WebSocketService] Establishing system WebSocket connection...");
     }
+    // Increment attempts for *this specific* connection attempt cycle
     this.connectionAttempts.system++;
 
-    this.systemSocket = new WebSocket(`${this.baseUrl}/system`, ["Authentication", this.currentToken]);
+    const socket = new WebSocket(`${this.baseUrl}/system`, ["Authentication", this.currentToken]);
+    this.systemSocket = socket;
 
-    this.systemSocket.onopen = () => {
-      if (import.meta.env.DEV) {
-        console.log("[WebSocketService] System WebSocket connected");
-      }
-      WebSocketService.connectionLock = false;
-      this.updateSystemConnected(true);
-      this.connectionAttempts.system = 0;
-    };
-
-    this.systemSocket.onclose = (event) => {
-      console.log(`[WebSocketService] System WebSocket disconnected: ${event.code} ${event.reason}`);
-      WebSocketService.connectionLock = false;
-      this.updateSystemConnected(false);
-
-      if (event.code !== 1000 && this.connectionAttempts.system < this.maxReconnectAttempts) {
-        this.attemptReconnect("system");
-      } else if (event.code !== 1000) {
-        console.warn(
-          `[WebSocketService] Max reconnect attempts (${this.maxReconnectAttempts}) reached for system socket. Giving up.`
-        );
-        this.connectionAttempts.system = 0;
+    socket.onopen = () => {
+      if (socket === this.systemSocket) {
+        if (import.meta.env.DEV) {
+          console.log("[WebSocketService] System WebSocket connected");
+        }
+        this.stateSetters?.setSystemConnected(true);
+        this.connectionAttempts.system = 0; // Reset attempts on success
+        this.closingIntentionallyMap.delete(socket);
       } else {
-        this.connectionAttempts.system = 0;
+        if (import.meta.env.DEV) {
+          console.warn("[WebSocketService] Ignoring onopen event from stale system socket.");
+        }
       }
     };
 
-    this.systemSocket.onerror = (error) => {
-      console.error("[WebSocketService] System WebSocket error:", error);
+    socket.onclose = (event) => {
+      const targetSocket = event.target as WebSocket;
+      const closingIntentionally = this.closingIntentionallyMap.get(targetSocket);
+      this.closingIntentionallyMap.delete(targetSocket); // Clean up map entry
+
+      // Process only if it's the current socket or the current socket is already nullified
+      if (socket === this.systemSocket || !this.systemSocket) {
+        console.log(`[WebSocketService] System WebSocket disconnected: ${event.code} ${event.reason}`);
+        this.stateSetters?.setSystemConnected(false);
+
+        if (socket === this.systemSocket) {
+          this.systemSocket = null; // Nullify the reference *after* processing
+        }
+
+        // Reconnect logic only if not intentionally closed and under max attempts
+        if (
+          event.code !== 1000 &&
+          !closingIntentionally &&
+          this.connectionAttempts.system < this.maxReconnectAttempts
+        ) {
+          this.scheduleReconnect("system"); // Use the scheduling function
+        } else {
+          if (event.code !== 1000 && !closingIntentionally) {
+            console.warn(
+              `[WebSocketService] Max reconnect attempts (${this.maxReconnectAttempts}) reached for system socket or non-recoverable closure. Giving up.`
+            );
+          }
+          // Reset attempts if giving up, closed normally, or closed intentionally
+          this.connectionAttempts.system = 0;
+        }
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn("[WebSocketService] Ignoring onclose event from stale system socket.");
+        }
+      }
     };
 
-    this.systemSocket.onmessage = ((event: MessageEvent) => {
-      this.handleIncomingMessage(event);
+    socket.onerror = (error) => {
+      const targetSocket = error.target as WebSocket;
+      // Process only if it's the current socket
+      if (socket === this.systemSocket) {
+        console.error("[WebSocketService] System WebSocket error:", error);
+        this.closingIntentionallyMap.delete(targetSocket);
+        // Note: 'onclose' will usually follow 'onerror' and handle state/reconnect logic.
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn("[WebSocketService] Ignoring onerror event from stale system socket.");
+        }
+      }
+    };
+
+    socket.onmessage = ((event: MessageEvent) => {
+      if (socket === this.systemSocket) {
+        this.handleIncomingMessage(event);
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn("[WebSocketService] Ignoring onmessage event from stale system socket.");
+        }
+      }
     }).bind(this);
   }
 
   // Connect to a specific channel
   public connectChannel(token: string, channelName: string): void {
-    // If already connected to the same channel with the same token, do nothing
     if (
       this.channelSocket?.readyState === WebSocket.OPEN &&
       this.currentToken === token &&
       this.currentChannelName === channelName
     ) {
+      if (import.meta.env.DEV) {
+        console.log(`[WebSocketService] connectChannel called for ${channelName} but already connected.`);
+      }
+      this.stateSetters?.setChannelConnected(true);
       return;
     }
 
-    // If locked, another connection attempt is in progress
-    if (WebSocketService.connectionLock) {
-      console.warn("[WebSocketService] Channel connection attempt skipped: lock active.");
-      return;
+    // Determine if switching channels or connecting anew
+    const isSwitching = this.currentChannelName && this.currentChannelName !== channelName;
+    const needsNewConnection =
+      isSwitching ||
+      this.currentToken !== token ||
+      !this.channelSocket ||
+      this.channelSocket.readyState === WebSocket.CLOSED ||
+      this.channelSocket.readyState === WebSocket.CLOSING;
+
+    if (needsNewConnection) {
+      if (import.meta.env.DEV && isSwitching) {
+        console.log(
+          `[WebSocketService] connectChannel: Switching from channel (${this.currentChannelName}) to (${channelName})`
+        );
+      }
+      this.currentToken = token;
+      this.currentChannelName = channelName; // Set the target channel name *before* establishing
+      this.establishChannelConnection();
+    } else if (this.channelSocket?.readyState === WebSocket.CONNECTING && this.currentChannelName === channelName) {
+      if (import.meta.env.DEV) {
+        console.log(`[WebSocketService] connectChannel called for ${channelName} while already connecting. Waiting.`);
+      }
     }
-
-    WebSocketService.connectionLock = true;
-    this.currentToken = token;
-    this.currentChannelName = channelName;
-
-    this.establishChannelConnection();
   }
 
   private establishChannelConnection(): void {
-    if (!this.currentToken || !this.currentChannelName) {
-      WebSocketService.connectionLock = false;
+    if (!this.currentToken || !this.currentChannelName || !this.stateSetters) {
+      console.error(
+        "[WebSocketService] Cannot establish channel connection: Token, channel name, or state setters missing."
+      );
       return;
     }
 
-    // Close existing connection if any
+    // Clear any pending reconnect timeout specifically for the channel socket
+    this.clearReconnectTimeout("channel");
+
+    // --- Pre-Connection Cleanup ---
     if (this.channelSocket) {
-      this.channelSocket.close(1000);
+      const oldChannelName = this.channelSocket.url.split("/").pop() || "[unknown]";
+      if (import.meta.env.DEV) {
+        console.log(
+          `[WebSocketService] establishChannelConnection: Closing existing channel socket (Channel: ${oldChannelName}, State: ${this.channelSocket.readyState}) before creating new one for ${this.currentChannelName}`
+        );
+      }
+      this.closingIntentionallyMap.set(this.channelSocket, true);
+      this.channelSocket.close(1000, `Switching to channel ${this.currentChannelName}`);
       this.channelSocket = null;
+      this.stateSetters.setChannelConnected(false);
     }
+    // --- End Pre-Connection Cleanup ---
 
     if (import.meta.env.DEV) {
       console.log(`[WebSocketService] Establishing channel WebSocket connection: ${this.currentChannelName}`);
     }
+    // Increment attempts for *this specific* connection attempt cycle
     this.connectionAttempts.channel++;
-    this.lastChannelConnectionAttemptTimestamp = Date.now();
+    this.lastChannelConnectionAttemptTimestamp = Date.now(); // Track time for quick close detection
 
-    this.channelSocket = new WebSocket(`${this.baseUrl}/${this.currentChannelName}`, [
-      "Authentication",
-      this.currentToken,
-    ]);
+    const socket = new WebSocket(`${this.baseUrl}/${this.currentChannelName}`, ["Authentication", this.currentToken]);
+    this.channelSocket = socket;
 
-    this.channelSocket.onopen = () => {
-      if (import.meta.env.DEV) {
-        console.log(`[WebSocketService] Channel WebSocket connected: ${this.currentChannelName}`);
-      }
-      WebSocketService.connectionLock = false;
-      this.updateChannelConnected(true);
-      this.connectionAttempts.channel = 0;
-    };
-
-    this.channelSocket.onclose = (event) => {
-      console.log(`[WebSocketService] Channel WebSocket disconnected: ${event.code} ${event.reason}`);
-      WebSocketService.connectionLock = false;
-      this.updateChannelConnected(false);
-
-      const timeSinceAttempt = this.lastChannelConnectionAttemptTimestamp
-        ? Date.now() - this.lastChannelConnectionAttemptTimestamp
-        : Infinity;
-
-      if (event.code !== 1000 && timeSinceAttempt < 2000) {
-        console.warn(
-          `[WebSocketService] Channel socket closed quickly (${timeSinceAttempt}ms) after connection attempt (code: ${event.code}). Aborting automatic reconnect. Check token or channel validity.`
-        );
-        this.connectionAttempts.channel = 0;
-      } else if (event.code !== 1000 && this.connectionAttempts.channel < this.maxReconnectAttempts) {
-        this.attemptReconnect("channel");
-      } else if (event.code !== 1000) {
-        console.warn(
-          `[WebSocketService] Max reconnect attempts (${this.maxReconnectAttempts}) reached for channel socket. Giving up.`
-        );
-        this.connectionAttempts.channel = 0;
+    socket.onopen = () => {
+      if (socket === this.channelSocket) {
+        if (import.meta.env.DEV) {
+          console.log(`[WebSocketService] Channel WebSocket connected: ${this.currentChannelName}`);
+        }
+        this.stateSetters?.setChannelConnected(true);
+        this.connectionAttempts.channel = 0; // Reset attempts on success
+        this.closingIntentionallyMap.delete(socket);
       } else {
-        this.connectionAttempts.channel = 0;
+        if (import.meta.env.DEV) {
+          // Use the intended channel name for logging clarity
+          console.warn(
+            `[WebSocketService] Ignoring onopen event from stale channel socket intended for ${this.currentChannelName}.`
+          );
+        }
       }
     };
 
-    this.channelSocket.onerror = (error) => {
-      console.error("[WebSocketService] Channel WebSocket error:", error);
+    socket.onclose = (event) => {
+      const targetSocket = event.target as WebSocket;
+      const closedChannelName = targetSocket.url.split("/").pop() || "[unknown channel]";
+      const closingIntentionally = this.closingIntentionallyMap.get(targetSocket);
+      this.closingIntentionallyMap.delete(targetSocket);
+
+      // Process only if it's the current socket or the current socket is already nullified
+      if (socket === this.channelSocket || !this.channelSocket) {
+        console.log(
+          `[WebSocketService] Channel WebSocket disconnected from ${closedChannelName}: ${event.code} ${event.reason}`
+        );
+        this.stateSetters?.setChannelConnected(false);
+
+        // Nullify the reference and potentially the current channel name *after* processing
+        if (socket === this.channelSocket) {
+          this.channelSocket = null;
+          // Only clear the *current* channel name if the disconnected socket was for that channel
+          // This prevents race conditions where disconnectAll clears it prematurely
+          if (this.currentChannelName === closedChannelName) {
+            this.currentChannelName = null;
+          }
+        }
+
+        const timeSinceAttempt = this.lastChannelConnectionAttemptTimestamp
+          ? Date.now() - this.lastChannelConnectionAttemptTimestamp
+          : Infinity;
+
+        // --- Reconnect Logic ---
+        // Conditions: Not intentional, not code 1000, under max attempts, and *still targeting a channel*
+        const shouldAttemptReconnect = event.code !== 1000 && !closingIntentionally && !!this.currentChannelName;
+
+        if (shouldAttemptReconnect) {
+          // Check for rapid close on the *first* reconnect attempt only
+          if (timeSinceAttempt < 2000 && this.connectionAttempts.channel === 1) {
+            console.warn(
+              `[WebSocketService] Channel socket for ${closedChannelName} closed quickly (${timeSinceAttempt}ms) after connection attempt (code: ${event.code}). Aborting automatic reconnect. Check token or channel validity.`
+            );
+            this.connectionAttempts.channel = 0; // Reset attempts
+          } else if (this.connectionAttempts.channel < this.maxReconnectAttempts) {
+            this.scheduleReconnect("channel"); // Use the scheduling function
+          } else {
+            console.warn(
+              `[WebSocketService] Max reconnect attempts (${this.maxReconnectAttempts}) reached for channel socket ${closedChannelName}. Giving up.`
+            );
+            this.connectionAttempts.channel = 0; // Reset attempts after giving up
+          }
+        } else {
+          if (!closingIntentionally && event.code !== 1000 && !this.currentChannelName && import.meta.env.DEV) {
+            console.log(
+              `[WebSocketService] Skipping reconnect for ${closedChannelName} as no channel is currently targeted.`
+            );
+          }
+          // Reset attempts if closed normally, intentionally, not attempting reconnect, or giving up
+          this.connectionAttempts.channel = 0;
+        }
+        // --- End Reconnect Logic ---
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn(
+            `[WebSocketService] Ignoring onclose event from stale channel socket for ${closedChannelName}. Current target channel is ${this.currentChannelName}.`
+          );
+        }
+      }
     };
 
-    this.channelSocket.onmessage = ((event: MessageEvent) => {
-      this.handleIncomingMessage(event);
+    socket.onerror = (error) => {
+      const targetSocket = error.target as WebSocket;
+      if (socket === this.channelSocket) {
+        const errorChannelName = this.currentChannelName || "[unknown channel]";
+        console.error(`[WebSocketService] Channel WebSocket error for ${errorChannelName}:`, error);
+        this.closingIntentionallyMap.delete(targetSocket);
+        // 'onclose' should follow and handle state/reconnect
+      } else {
+        if (import.meta.env.DEV) {
+          const eventChannelName = (targetSocket as WebSocket).url.split("/").pop() || "[unknown channel]";
+          console.warn(`[WebSocketService] Ignoring onerror event from stale channel socket for ${eventChannelName}.`);
+        }
+      }
+    };
+
+    socket.onmessage = ((event: MessageEvent) => {
+      if (socket === this.channelSocket) {
+        this.handleIncomingMessage(event);
+      } else {
+        if (import.meta.env.DEV) {
+          const eventChannelName = (event.target as WebSocket).url.split("/").pop() || "[unknown channel]";
+          console.warn(
+            `[WebSocketService] Ignoring onmessage event from stale channel socket for ${eventChannelName}.`
+          );
+        }
+      }
     }).bind(this);
   }
 
   // Disconnect from current channel
-  public disconnectChannel(): void {
+  public disconnectChannel(reason: string = "Explicit disconnect"): void {
+    this.clearReconnectTimeout("channel"); // Clear any pending reconnect for the channel
     if (this.channelSocket) {
+      const socketToClose = this.channelSocket;
+      const channelNameToDisconnect = this.currentChannelName;
       if (import.meta.env.DEV) {
-        console.log("[WebSocketService] Disconnecting channel WebSocket");
+        console.log(
+          `[WebSocketService] Disconnecting channel WebSocket (Channel: ${channelNameToDisconnect}, State: ${socketToClose.readyState}). Reason: ${reason}`
+        );
       }
-      // Use normal closure code (1000) to indicate intentional disconnect
-      this.channelSocket.close(1000);
-      this.channelSocket = null;
-      this.updateChannelConnected(false);
-      this.currentChannelName = null;
 
-      // Clear any pending explicit reconnect timeouts (though onclose handles implicit ones)
-      if (this.reconnectTimeoutId) {
-        window.clearTimeout(this.reconnectTimeoutId);
-        this.reconnectTimeoutId = null;
-      }
+      this.closingIntentionallyMap.set(socketToClose, true);
+      this.channelSocket = null; // Nullify first
+      this.currentChannelName = null; // Clear target channel name
+      this.stateSetters?.setChannelConnected(false); // Update state
+
+      socketToClose.close(1000, reason); // Close last
+      this.connectionAttempts.channel = 0; // Reset attempts
     }
   }
 
   // Disconnect system socket
-  public disconnectSystem(): void {
+  public disconnectSystem(reason: string = "Explicit disconnect"): void {
+    this.clearReconnectTimeout("system"); // Clear any pending reconnect for the system
     if (this.systemSocket) {
+      const socketToClose = this.systemSocket;
       if (import.meta.env.DEV) {
-        console.log("[WebSocketService] Disconnecting system WebSocket");
+        console.log(
+          `[WebSocketService] Disconnecting system WebSocket (State: ${socketToClose.readyState}). Reason: ${reason}`
+        );
       }
-      // Use normal closure code (1000) to indicate intentional disconnect
-      this.systemSocket.close(1000);
-      this.systemSocket = null;
-      this.updateSystemConnected(false);
+
+      this.closingIntentionallyMap.set(socketToClose, true);
+      this.systemSocket = null; // Nullify first
+      this.stateSetters?.setSystemConnected(false); // Update state
+
+      socketToClose.close(1000, reason); // Close last
+      this.connectionAttempts.system = 0; // Reset attempts
     }
   }
 
   // Disconnect all sockets and reset state
-  // This should only be used during logout or app cleanup
   public disconnectAll(): void {
     console.log("[WebSocketService] Disconnecting all WebSockets");
-    this.disconnectSystem();
-    this.disconnectChannel();
+    this.disconnectSystem("Disconnecting all"); // Will clear system timeout
+    this.disconnectChannel("Disconnecting all"); // Will clear channel timeout
     this.currentToken = null;
-    this.currentChannelName = null;
-    this.connectionAttempts = { system: 0, channel: 0 };
+    // No need to clear timeouts again, disconnect* methods handle it.
+    // Attempts are reset within disconnect* methods.
   }
 
   // Send a message to the current channel
   public send(message: OutgoingMessage): void {
-    // NOTE: ChannelUpdate messages are now exclusively sent by the backend
-    //       in response to API actions (create/delete channel). This frontend
-    //       service no longer needs to route them to the system socket.
-
     if (message.type === MessageType.ChannelUpdate) {
       console.error("[WebSocketService] Frontend should not send ChannelUpdate messages.");
       return;
     }
 
     if (!this.channelSocket || this.channelSocket.readyState !== WebSocket.OPEN) {
-      console.error("[WebSocketService] Cannot send message: channel socket not connected or not open.");
-      // Optional: Queue message or handle error appropriately
+      // Use currentChannelName if available for better logging
+      const targetChannel = message.channelName || this.currentChannelName || "[unknown]";
+      console.error(
+        `[WebSocketService] Cannot send message: channel socket for ${targetChannel} not connected or not open. State: ${this.channelSocket?.readyState}`
+      );
       return;
     }
 
     try {
-      // Convert to snake_case for backend
       const snakeCaseMessage = convertKeysToSnakeCase(message) as OutgoingMessage;
-
       if (import.meta.env.DEV) {
         console.log(`[WebSocketService] Sending message type: ${message.type} to channel: ${message.channelName}`);
       }
@@ -337,46 +454,108 @@ export class WebSocketService {
     }
   }
 
-  // Handle reconnection logic
-  private attemptReconnect(socketType: "system" | "channel"): void {
-    if (this.reconnectTimeoutId) {
-      window.clearTimeout(this.reconnectTimeoutId);
+  // --- Refactored Reconnect Logic ---
+
+  private clearReconnectTimeout(socketType: "system" | "channel"): void {
+    if (socketType === "system" && this.systemReconnectTimeoutId) {
+      if (import.meta.env.DEV)
+        console.log(
+          `[WebSocketService] Clearing pending system reconnect timeout (ID: ${this.systemReconnectTimeoutId}).`
+        );
+      window.clearTimeout(this.systemReconnectTimeoutId);
+      this.systemReconnectTimeoutId = null;
+    } else if (socketType === "channel" && this.channelReconnectTimeoutId) {
+      if (import.meta.env.DEV)
+        console.log(
+          `[WebSocketService] Clearing pending channel reconnect timeout (ID: ${this.channelReconnectTimeoutId}).`
+        );
+      window.clearTimeout(this.channelReconnectTimeoutId);
+      this.channelReconnectTimeoutId = null;
     }
+  }
+
+  private scheduleReconnect(socketType: "system" | "channel"): void {
+    // Ensure no timeout is already pending for this specific type
+    this.clearReconnectTimeout(socketType);
 
     const attempts = socketType === "system" ? this.connectionAttempts.system : this.connectionAttempts.channel;
-    const delay = Math.min(1000 * Math.pow(2, attempts), 30000);
+    const delay = Math.min(1000 * Math.pow(2, attempts), 30000); // Exponential backoff
 
     if (import.meta.env.DEV) {
       console.log(
-        `[WebSocketService] Attempting to reconnect ${socketType} socket in ${delay / 1000}s (Attempt ${
-          attempts + 1
-        })...`
+        `[WebSocketService] Scheduling reconnect for ${socketType} socket in ${
+          delay / 1000
+        }s (After failure attempt ${attempts})...`
       );
     }
 
-    this.reconnectTimeoutId = window.setTimeout(() => {
-      if (socketType === "system" && this.currentToken) {
-        this.establishSystemConnection();
-      } else if (socketType === "channel" && this.currentToken && this.currentChannelName) {
-        this.establishChannelConnection();
+    const timeoutId = window.setTimeout(() => {
+      if (import.meta.env.DEV) {
+        console.log(`[WebSocketService] Executing scheduled reconnect for ${socketType} socket.`);
       }
 
-      this.reconnectTimeoutId = null;
+      // Clear the stored ID for this type *before* attempting connection
+      if (socketType === "system") this.systemReconnectTimeoutId = null;
+      else if (socketType === "channel") this.channelReconnectTimeoutId = null;
+
+      // Check conditions *again* before actually connecting
+      if (socketType === "system" && this.currentToken) {
+        if (
+          !this.systemSocket ||
+          (this.systemSocket.readyState !== WebSocket.OPEN && this.systemSocket.readyState !== WebSocket.CONNECTING)
+        ) {
+          if (import.meta.env.DEV) console.log("[WebSocketService] Reconnect timeout: Establishing system connection.");
+          this.establishSystemConnection();
+        } else {
+          if (import.meta.env.DEV)
+            console.log(
+              "[WebSocketService] Reconnect timeout: System socket already open/connecting. Skipping reconnect attempt."
+            );
+          this.connectionAttempts.system = 0; // Reset attempts as it's connected now
+        }
+      } else if (socketType === "channel" && this.currentToken && this.currentChannelName) {
+        if (
+          !this.channelSocket ||
+          (this.channelSocket.readyState !== WebSocket.OPEN && this.channelSocket.readyState !== WebSocket.CONNECTING)
+        ) {
+          if (import.meta.env.DEV)
+            console.log(
+              `[WebSocketService] Reconnect timeout: Establishing channel connection for ${this.currentChannelName}.`
+            );
+          this.establishChannelConnection();
+        } else {
+          if (import.meta.env.DEV)
+            console.log(
+              `[WebSocketService] Reconnect timeout: Channel socket for ${this.currentChannelName} already open/connecting. Skipping reconnect attempt.`
+            );
+          this.connectionAttempts.channel = 0; // Reset attempts as it's connected now
+        }
+      } else {
+        if (import.meta.env.DEV)
+          console.warn(
+            `[WebSocketService] Reconnect timeout: Could not reconnect ${socketType}. Missing token, channel name, or state invalid.`
+          );
+        // Reset attempts if conditions aren't met
+        if (socketType === "system") this.connectionAttempts.system = 0;
+        if (socketType === "channel") this.connectionAttempts.channel = 0;
+      }
     }, delay);
+
+    // Store the timeout ID for this type
+    if (socketType === "system") this.systemReconnectTimeoutId = timeoutId;
+    else if (socketType === "channel") this.channelReconnectTimeoutId = timeoutId;
   }
 
-  // Process incoming messages
+  // Process incoming messages (no changes needed here for reconnect/state logic)
   private handleIncomingMessage(event: MessageEvent): void {
     try {
       const data = JSON.parse(event.data);
       const message = IncomingMessageSchema.parse(convertKeysToCamelCase(data));
 
-      // Add DEV flag for received message log
       if (import.meta.env.DEV) {
         console.log(`[WebSocketService] Received message type: ${message.type}`, message);
       }
 
-      // Route messages based on type
       switch (message.type) {
         // System messages
         case MessageType.ChannelUpdate:
@@ -384,21 +563,18 @@ export class WebSocketService {
             const { action, channel } = message.content.channelUpdate;
             this.systemHandlers.onChannelUpdate(action, channel);
           } else {
-            console.warn("[WebSocketService] Received ChannelUpdate but no system handler available");
+            console.warn(
+              "[WebSocketService] Received ChannelUpdate but no system handler available or content missing"
+            );
           }
           break;
 
         case MessageType.SystemUserStatus:
-          if (message.content.systemUserStatus) {
+          if (message.content.systemUserStatus && this.systemHandlers?.onSystemUserStatus) {
             const count = message.content.systemUserStatus.count;
-            console.log("📊 Received system user count:", count);
-
-            if (this.systemHandlers?.onSystemUserStatus) {
-              console.log("📊 Calling system user status handler");
-              this.systemHandlers.onSystemUserStatus(count);
-            } else {
-              console.warn("[WebSocketService] Received SystemUserStatus but no handler available");
-            }
+            this.systemHandlers.onSystemUserStatus(count);
+          } else {
+            console.warn("[WebSocketService] Received SystemUserStatus but no handler available or content missing");
           }
           break;
 
@@ -416,7 +592,9 @@ export class WebSocketService {
           if (message.content.memberUpdate && this.channelHandlers?.onMemberUpdate) {
             this.channelHandlers.onMemberUpdate(message);
           } else {
-            console.warn("[WebSocketService] Received MemberUpdate but no channel handler available");
+            console.warn(
+              "[WebSocketService] Received MemberUpdate but no channel handler available or content missing"
+            );
           }
           break;
 
@@ -424,7 +602,7 @@ export class WebSocketService {
           if (message.content.userStatus && this.channelHandlers?.onUserStatus) {
             this.channelHandlers.onUserStatus(message.username, message.content.userStatus.action);
           } else {
-            console.warn("[WebSocketService] Received UserStatus but no channel handler available");
+            console.warn("[WebSocketService] Received UserStatus but no channel handler available or content missing");
           }
           break;
 

@@ -4,7 +4,7 @@ import "github.com/gorilla/websocket"
 
 type Manager interface {
 	// Connection Management
-	AddConnection(username string, conn *websocket.Conn)
+	AddConnection(username string, conn *websocket.Conn) error
 	RemoveConnection(username string)
 	GetConnection(username string) (*websocket.Conn, bool)
 

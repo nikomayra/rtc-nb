@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { authApi } from "../api/authApi";
 import { useNotification } from "./useNotification";
 import { isAxiosError } from "axios";
@@ -89,64 +89,70 @@ export const useAuth = () => {
     };
   }, [showError]); // Only depends on showError, which is stable
 
-  const login = async (username: string, password: string): Promise<void> => {
-    try {
-      const response = await authApi.login(username, password);
-      if (response.success) {
-        const newToken = response.data.token;
-        setToken(newToken);
-        setUsername(username);
-        setIsLoggedIn(true);
-        sessionStorage.setItem("token", newToken);
-        sessionStorage.setItem("username", username);
-        sessionStorage.setItem("lastValidatedToken", newToken); // Track the validated token
-        validationAttempted.current = true; // Mark as validated on successful login
-      } else {
-        const errorMessage = response.error?.message || "Login failed";
+  const login = useCallback(
+    async (username: string, password: string): Promise<void> => {
+      try {
+        const response = await authApi.login(username, password);
+        if (response.success) {
+          const newToken = response.data.token;
+          setToken(newToken);
+          setUsername(username);
+          setIsLoggedIn(true);
+          sessionStorage.setItem("token", newToken);
+          sessionStorage.setItem("username", username);
+          sessionStorage.setItem("lastValidatedToken", newToken); // Track the validated token
+          validationAttempted.current = true; // Mark as validated on successful login
+        } else {
+          const errorMessage = response.error?.message || "Login failed";
+          showError("Login failed");
+          throw new Error(errorMessage);
+        }
+      } catch (error) {
+        // Ensure we handle both Error objects and plain objects
+        const errorMessage = error instanceof Error ? error.message : "Login failed";
+        console.error(errorMessage);
         showError("Login failed");
-        throw new Error(errorMessage);
+        setToken("");
+        setUsername("");
+        setIsLoggedIn(false);
+        sessionStorage.removeItem("lastValidatedToken");
+        throw error;
       }
-    } catch (error) {
-      // Ensure we handle both Error objects and plain objects
-      const errorMessage = error instanceof Error ? error.message : "Login failed";
-      console.error(errorMessage);
-      showError("Login failed");
-      setToken("");
-      setUsername("");
-      setIsLoggedIn(false);
-      sessionStorage.removeItem("lastValidatedToken");
-      throw error;
-    }
-  };
+    },
+    [showError]
+  );
 
-  const register = async (username: string, password: string): Promise<void> => {
-    try {
-      const response = await authApi.register(username, password);
-      if (response.success) {
-        setToken(response.data.token);
-        setUsername(username);
-        setIsLoggedIn(true);
-        sessionStorage.setItem("token", response.data.token);
-        sessionStorage.setItem("username", username);
-        validationAttempted.current = true; // Mark as validated on successful registration
-      } else {
-        const errorMessage = response.error?.message || "Registration failed";
+  const register = useCallback(
+    async (username: string, password: string): Promise<void> => {
+      try {
+        const response = await authApi.register(username, password);
+        if (response.success) {
+          setToken(response.data.token);
+          setUsername(username);
+          setIsLoggedIn(true);
+          sessionStorage.setItem("token", response.data.token);
+          sessionStorage.setItem("username", username);
+          validationAttempted.current = true; // Mark as validated on successful registration
+        } else {
+          const errorMessage = response.error?.message || "Registration failed";
+          showError("Registration failed");
+          throw new Error(errorMessage);
+        }
+      } catch (error) {
+        // Ensure we handle both Error objects and plain objects
+        const errorMessage = error instanceof Error ? error.message : "Registration failed";
+        console.error(errorMessage);
         showError("Registration failed");
-        throw new Error(errorMessage);
+        setToken("");
+        setUsername("");
+        setIsLoggedIn(false);
+        throw error;
       }
-    } catch (error) {
-      // Ensure we handle both Error objects and plain objects
-      const errorMessage = error instanceof Error ? error.message : "Registration failed";
-      console.error(errorMessage);
-      showError("Registration failed");
-      setToken("");
-      setUsername("");
-      setIsLoggedIn(false);
-      throw error;
-    }
-  };
+    },
+    [showError]
+  );
 
-  const logout = async (): Promise<void> => {
+  const logout = useCallback(async (): Promise<void> => {
     try {
       const response = await authApi.logout(token);
       if (response.success) {
@@ -170,9 +176,9 @@ export const useAuth = () => {
       sessionStorage.removeItem("lastValidatedToken");
       throw error;
     }
-  };
+  }, [token, showError]);
 
-  const deleteAccount = async (): Promise<void> => {
+  const deleteAccount = useCallback(async (): Promise<void> => {
     try {
       const response = await authApi.deleteAccount(token);
       if (response.success) {
@@ -187,19 +193,35 @@ export const useAuth = () => {
       showError("Delete account failed");
       throw error;
     }
-  };
+  }, [token, showError]);
 
-  return {
-    state: {
+  // Memoize the state object
+  const state = useMemo(
+    () => ({
       token,
       username,
       isLoggedIn,
-    },
-    actions: {
+    }),
+    [token, username, isLoggedIn]
+  );
+
+  // Memoize the actions object
+  const actions = useMemo(
+    () => ({
       login,
       register,
       logout,
       deleteAccount,
-    },
-  };
+    }),
+    [login, register, logout, deleteAccount]
+  );
+
+  // Memoize the final returned object
+  return useMemo(
+    () => ({
+      state,
+      actions,
+    }),
+    [state, actions]
+  );
 };

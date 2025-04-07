@@ -5,16 +5,20 @@ import { SketchService } from "../services/SketchService";
 import { useNotification } from "../hooks/useNotification";
 import { useAuthContext } from "../hooks/useAuthContext";
 import { useSystemContext } from "../hooks/useSystemContext";
+import { useWebSocketContext } from "../hooks/useWebSocketContext";
+
 const DEBUG = true;
 
 export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const authContext = useAuthContext();
   const systemContext = useSystemContext();
+  const webSocketContext = useWebSocketContext();
   const { showError, showSuccess } = useNotification();
 
   const [state, setState] = useState(initialState);
   const { state: systemState } = systemContext;
   const { state: authState } = authContext;
+  const { state: webSocketState } = webSocketContext;
 
   // Keep track of the last loaded channel to prevent unnecessary reloads
   const lastLoadedChannelRef = useRef<string | null>(null);
@@ -197,10 +201,10 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Load sketches when channel is ready
   useEffect(() => {
     const channel = systemState.currentChannel;
-    // const connected = systemState.channelConnected;
+    const channelConnected = webSocketState.channelConnected;
     const token = authState.token;
 
-    if (!channel || !token) {
+    if (!channel || !token || !channelConnected) {
       if (DEBUG) console.log("⏭ [SketchProvider] Channel not ready");
       return;
     }
@@ -209,7 +213,7 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     actions.loadSketches(channel.name).catch((err) => {
       if (DEBUG) console.error("[SketchProvider] Error loading sketches:", err);
     });
-  }, [systemState.currentChannel, authState.token, actions]);
+  }, [systemState.currentChannel, webSocketState.channelConnected, authState.token, actions]);
 
   // Clear last loaded channel when disconnecting
   // useEffect(() => {
