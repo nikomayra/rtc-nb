@@ -1,5 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { ChannelMessageHandler, SystemMessageHandler, WebSocketContext } from "../contexts/webSocketContext";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import {
+  ChannelMessageHandler,
+  SystemMessageHandler,
+  WebSocketContext,
+  WebSocketContextActions,
+} from "../contexts/webSocketContext";
 import { WebSocketService } from "../services/WebsocketService";
 import { OutgoingMessage } from "../types/interfaces";
 
@@ -12,46 +17,45 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [isSystemConnected, setIsSystemConnected] = useState(false);
   const [isChannelConnected, setIsChannelConnected] = useState(false);
 
+  // Store handlers in refs to avoid re-rendering provider when handlers change
+  const systemHandlersRef = useRef<Map<string, SystemMessageHandler>>(new Map());
+  const channelHandlersRef = useRef<Map<string, ChannelMessageHandler>>(new Map());
+
   // Memoize the singleton instance of the service
   const wsService = useMemo(() => WebSocketService.getInstance(), []);
 
-  // Inject state setters into the WebSocketService instance once on mount
+  // Inject state setters and handler accessors into the WebSocketService instance
   useEffect(() => {
     if (import.meta.env.DEV) {
-      console.log("[WebSocketProvider] Setting state setters in WebSocketService.");
+      console.log("[WebSocketProvider] Setting state setters and handler accessors in WebSocketService.");
     }
-    // Pass the state setter functions to the service
     wsService.setStateSetters({
       setSystemConnected: setIsSystemConnected,
       setChannelConnected: setIsChannelConnected,
     });
-
-    // Optional: Clear setters on unmount? Not strictly necessary for singleton, but good practice.
-    // return () => {
-    //   wsService.setStateSetters({
-    //      setSystemConnected: () => {}, // No-op functions
-    //      setChannelConnected: () => {},
-    //    });
-    // };
-  }, [wsService]); // Dependency array ensures this runs only once
+    // Provide functions to access the current handlers stored in refs
+    wsService.setHandlerAccessors({
+      getSystemHandlers: () => systemHandlersRef.current,
+      getChannelHandlers: () => channelHandlersRef.current,
+    });
+  }, [wsService]); // Runs once
 
   // Mount/Unmount logging and cleanup
   useEffect(() => {
     if (import.meta.env.DEV) {
       console.log("[WebSocketProvider] Mounted.");
     }
-    // Cleanup function: Disconnect all sockets when the provider unmounts
     return () => {
       if (import.meta.env.DEV) {
         console.log("[WebSocketProvider] Unmounting WebSocketProvider, disconnecting all.");
       }
       wsService.disconnectAll();
     };
-  }, [wsService]); // Run only on mount and unmount
+  }, [wsService]);
 
-  // Memoize the actions object
+  // Define actions using useCallback for stability
   const actions = useMemo(
-    () => ({
+    (): WebSocketContextActions => ({
       connectSystem: (token: string) => {
         if (import.meta.env.DEV) console.log("[WebSocketProvider] Action: connectSystem");
         wsService.connectSystem(token);
@@ -62,40 +66,44 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       },
       disconnectChannel: () => {
         if (import.meta.env.DEV) console.log("[WebSocketProvider] Action: disconnectChannel");
-        wsService.disconnectChannel(); // Pass explicit reason if desired, e.g., "User action"
+        wsService.disconnectChannel();
       },
-      disconnectAll: () => {
-        if (import.meta.env.DEV) console.log("[WebSocketProvider] Action: disconnectAll");
-        wsService.disconnectAll();
+      disconnectSystem: () => {
+        if (import.meta.env.DEV) console.log("[WebSocketProvider] Action: disconnectSystem");
+        wsService.disconnectSystem();
       },
       send: (message: OutgoingMessage) => {
-        // No need to log every send action here, service does it
         wsService.send(message);
       },
-      // Pass handler setters directly
-      setSystemHandlers: (handlers: SystemMessageHandler) => {
-        if (import.meta.env.DEV) console.log("[WebSocketProvider] Action: setSystemHandlers");
-        wsService.setSystemHandlers(handlers);
+      addSystemHandlers: (key: string, handlers: SystemMessageHandler) => {
+        if (import.meta.env.DEV) console.log(`[WebSocketProvider] Action: addSystemHandlers for key: ${key}`);
+        systemHandlersRef.current.set(key, handlers);
       },
-      setChannelHandlers: (handlers: ChannelMessageHandler) => {
-        if (import.meta.env.DEV) console.log("[WebSocketProvider] Action: setChannelHandlers");
-        wsService.setChannelHandlers(handlers);
+      removeSystemHandlers: (key: string) => {
+        if (import.meta.env.DEV) console.log(`[WebSocketProvider] Action: removeSystemHandlers for key: ${key}`);
+        systemHandlersRef.current.delete(key);
+      },
+      addChannelHandlers: (key: string, handlers: ChannelMessageHandler) => {
+        if (import.meta.env.DEV) console.log(`[WebSocketProvider] Action: addChannelHandlers for key: ${key}`);
+        channelHandlersRef.current.set(key, handlers);
+      },
+      removeChannelHandlers: (key: string) => {
+        if (import.meta.env.DEV) console.log(`[WebSocketProvider] Action: removeChannelHandlers for key: ${key}`);
+        channelHandlersRef.current.delete(key);
       },
     }),
-    [wsService] // wsService is stable due to useMemo(() => getInstance(), [])
+    [wsService]
   );
 
-  // Create the context value, memoized based on connection state and actions
+  // Create the context value
   const contextValue = useMemo(
     () => ({
       state: {
-        // Match the expected context type shape
         systemConnected: isSystemConnected,
         channelConnected: isChannelConnected,
       },
       actions,
     }),
-    // Dependency array includes the state variables that determine the context value
     [isSystemConnected, isChannelConnected, actions]
   );
 

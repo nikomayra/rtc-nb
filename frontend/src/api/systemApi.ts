@@ -1,6 +1,6 @@
 import { axiosInstance } from "./axiosInstance";
 import { BASE_URL } from "../utils/constants";
-import { Channel, APIResponse } from "../types/interfaces";
+import { Channel, APIResponse, APIErrorResponse } from "../types/interfaces";
 
 export const systemApi = {
   // Fetch all online users
@@ -8,12 +8,10 @@ export const systemApi = {
     const res = await axiosInstance.get(`${BASE_URL}/onlineUsersCount`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
-    if (res.data.success) {
-      return res.data;
-    } else {
-      throw new Error(`Failed to get count of all online users: ${res.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message || "Failed to get count of all online users");
     }
+    return res.data;
   },
 
   // Fetch available channels
@@ -21,12 +19,10 @@ export const systemApi = {
     const res = await axiosInstance.get(`${BASE_URL}/channels`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
-    if (res.data.success) {
-      return res.data;
-    } else {
-      throw new Error(`Failed to get channels: ${res.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message || "Failed to get channels");
     }
+    return res.data;
   },
 
   // Create a new channel
@@ -46,12 +42,10 @@ export const systemApi = {
         headers: { Authorization: `Bearer ${token}` },
       }
     );
-
-    if (res.data.success) {
-      return res.data;
-    } else {
-      throw new Error(`Failed to create channel: ${res.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message || "Failed to create channel");
     }
+    return res.data;
   },
 
   // Delete a channel
@@ -59,12 +53,10 @@ export const systemApi = {
     const res = await axiosInstance.delete(`${BASE_URL}/deleteChannel/${encodeURIComponent(channelName)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
-    if (res.data.success) {
-      return res.data;
-    } else {
-      throw new Error(`Failed to delete channel: ${res.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message || "Failed to delete channel");
     }
+    return res.data;
   },
 
   // Join a channel (including private channels that require a password)
@@ -78,12 +70,10 @@ export const systemApi = {
         headers: { Authorization: `Bearer ${token}` },
       }
     );
-
-    if (res.data.success) {
-      return res.data;
-    } else {
-      throw new Error(`Failed to join channel: ${res.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message || "Failed to join channel");
     }
+    return res.data;
   },
 
   // Leave a channel
@@ -91,11 +81,9 @@ export const systemApi = {
     const res = await axiosInstance.patch(`${BASE_URL}/leaveChannel/${encodeURIComponent(channelName)}`, null, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
-    if (res.data.success) {
-      return res.data;
-    } else {
-      throw new Error(`Failed to leave channel: ${res.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message || "Failed to leave channel");
     }
+    return res.data;
   },
 };

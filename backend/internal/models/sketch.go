@@ -86,13 +86,14 @@ func rasterizeStroke(pixels [][]bool, stroke DrawPath, offset Point) {
 		p1 := stroke.Points[i-1]
 		p2 := stroke.Points[i]
 
-		// For wide strokes, draw filled circle at each point
+		// Draw circle at the end of the previous segment (acts as join/intermediate cap)
 		if stroke.StrokeWidth > 1 {
+			// Re-drawing p1's circle ensures joins are covered, though slightly redundant
 			drawCircle(pixels, p1, stroke.StrokeWidth/2, stroke.IsDrawing, offset)
 			drawCircle(pixels, p2, stroke.StrokeWidth/2, stroke.IsDrawing, offset)
 		}
 
-		// Connect points with line(s)
+		// Connect points with line algorithm
 		drawLine(pixels, p1, p2, stroke.StrokeWidth, stroke.IsDrawing, offset)
 	}
 }

@@ -9,6 +9,12 @@ type ConnectionStateSetters = {
   setChannelConnected: (connected: boolean) => void;
 };
 
+// Type definition for handler accessor functions passed from React context
+type HandlerAccessors = {
+  getSystemHandlers: () => Map<string, SystemMessageHandler>;
+  getChannelHandlers: () => Map<string, ChannelMessageHandler>;
+};
+
 export class WebSocketService {
   private static instance: WebSocketService;
 
@@ -32,9 +38,8 @@ export class WebSocketService {
 
   // State setters provided by the context
   private stateSetters: ConnectionStateSetters | null = null;
-
-  private systemHandlers: SystemMessageHandler | null = null;
-  private channelHandlers: ChannelMessageHandler | null = null;
+  // Accessor functions for handlers provided by context
+  private handlerAccessors: HandlerAccessors | null = null;
 
   private constructor() {}
 
@@ -49,12 +54,9 @@ export class WebSocketService {
     this.stateSetters = setters;
   }
 
-  public setSystemHandlers(handlers: SystemMessageHandler): void {
-    this.systemHandlers = handlers;
-  }
-
-  public setChannelHandlers(handlers: ChannelMessageHandler): void {
-    this.channelHandlers = handlers;
+  // Method for Provider to set handler accessor functions
+  public setHandlerAccessors(accessors: HandlerAccessors): void {
+    this.handlerAccessors = accessors;
   }
 
   // Connect to the system socket
@@ -549,68 +551,79 @@ export class WebSocketService {
   // Process incoming messages (no changes needed here for reconnect/state logic)
   private handleIncomingMessage(event: MessageEvent): void {
     try {
-      const data = JSON.parse(event.data);
-      const message = IncomingMessageSchema.parse(convertKeysToCamelCase(data));
+      const rawData = event.data;
+      // log raw incoming data
+      // if (import.meta.env.DEV) console.log("[WebSocketService] Raw message received:", rawData);
+
+      const data = JSON.parse(rawData);
+      // Convert keys BEFORE validation
+      const camelCaseData = convertKeysToCamelCase(data);
+
+      // Validate the overall structure first
+      const parseResult = IncomingMessageSchema.safeParse(camelCaseData);
+
+      if (!parseResult.success) {
+        console.error("[WebSocketService] Invalid message structure:", parseResult.error.flatten());
+        return;
+      }
+
+      const message = parseResult.data;
 
       if (import.meta.env.DEV) {
-        console.log(`[WebSocketService] Received message type: ${message.type}`, message);
+        console.log(`[WebSocketService] Message Received (${message.type}):`, message);
       }
 
-      switch (message.type) {
-        // System messages
-        case MessageType.ChannelUpdate:
-          if (message.content.channelUpdate && this.systemHandlers?.onChannelUpdate) {
-            const { action, channel } = message.content.channelUpdate;
-            this.systemHandlers.onChannelUpdate(action, channel);
-          } else {
-            console.warn(
-              "[WebSocketService] Received ChannelUpdate but no system handler available or content missing"
-            );
-          }
-          break;
+      // Determine if it's a system or channel message and get handlers
+      const isSystemMessageType = [MessageType.ChannelUpdate, MessageType.SystemUserStatus].includes(message.type);
 
-        case MessageType.SystemUserStatus:
-          if (message.content.systemUserStatus && this.systemHandlers?.onSystemUserStatus) {
-            const count = message.content.systemUserStatus.count;
-            this.systemHandlers.onSystemUserStatus(count);
-          } else {
-            console.warn("[WebSocketService] Received SystemUserStatus but no handler available or content missing");
-          }
-          break;
-
-        // Channel messages
-        case MessageType.Text:
-        case MessageType.Image:
-          if (this.channelHandlers?.onChatMessage) {
-            this.channelHandlers.onChatMessage(message);
-          } else {
-            console.warn("[WebSocketService] Received chat message but no channel handler available");
-          }
-          break;
-
-        case MessageType.MemberUpdate:
-          if (message.content.memberUpdate && this.channelHandlers?.onMemberUpdate) {
-            this.channelHandlers.onMemberUpdate(message);
-          } else {
-            console.warn(
-              "[WebSocketService] Received MemberUpdate but no channel handler available or content missing"
-            );
-          }
-          break;
-
-        case MessageType.UserStatus:
-          if (message.content.userStatus && this.channelHandlers?.onUserStatus) {
-            this.channelHandlers.onUserStatus(message.username, message.content.userStatus.action);
-          } else {
-            console.warn("[WebSocketService] Received UserStatus but no channel handler available or content missing");
-          }
-          break;
-
-        default:
-          console.warn(`[WebSocketService] Unhandled message type: ${message.type}`);
+      if (isSystemMessageType) {
+        const systemHandlersMap = this.handlerAccessors?.getSystemHandlers();
+        if (systemHandlersMap) {
+          systemHandlersMap.forEach((handlers, key) => {
+            if (import.meta.env.DEV) console.log(`[WebSocketService] Invoking system handler: ${key}`);
+            switch (message.type) {
+              case MessageType.ChannelUpdate:
+                handlers.onChannelUpdate?.(message);
+                break;
+              case MessageType.SystemUserStatus:
+                handlers.onSystemUserStatus?.(message);
+                break;
+            }
+          });
+        }
+      } else {
+        const channelHandlersMap = this.handlerAccessors?.getChannelHandlers();
+        if (channelHandlersMap) {
+          channelHandlersMap.forEach((handlers, key) => {
+            if (import.meta.env.DEV) console.log(`[WebSocketService] Invoking channel handler: ${key}`);
+            // Ensure message is for the current channel (though server should handle this)
+            if (message.channelName === this.currentChannelName) {
+              switch (message.type) {
+                case MessageType.Text:
+                case MessageType.Image:
+                  handlers.onChatMessage?.(message);
+                  break;
+                case MessageType.MemberUpdate:
+                  handlers.onMemberUpdate?.(message);
+                  break;
+                case MessageType.UserStatus:
+                  if (message.content.userStatus) {
+                    handlers.onUserStatus?.(
+                      message.content.userStatus.username,
+                      message.content.userStatus.action as "online" | "offline"
+                    );
+                  }
+                  break;
+                case MessageType.Sketch:
+                  handlers.onSketchMessage?.(message);
+                  break;
+              }
+            }
+          });
+        }
       }
     } catch (error) {
-      console.error("[WebSocketService] Error handling message:", error);
+      console.error("[WebSocketService] Error processing message:", error);
     }
   }
 }

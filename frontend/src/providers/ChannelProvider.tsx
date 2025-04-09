@@ -1,26 +1,28 @@
-import { useState, useEffect, useCallback, useMemo, useContext } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { ChannelContext, EnhancedChannelMember } from "../contexts/channelContext";
-import { IncomingMessage } from "../types/interfaces";
+import { IncomingMessage, ChannelMemberSchema, IncomingMessageSchema, APIErrorResponse } from "../types/interfaces";
+import { z } from "zod";
 import { useAuthContext } from "../hooks/useAuthContext";
-import { SystemContext } from "../contexts/systemContext";
 import { channelApi } from "../api/channelApi";
 import { useNotification } from "../hooks/useNotification";
+import { useSystemContext } from "../hooks/useSystemContext";
 
 interface ChannelProviderProps {
   children: React.ReactNode;
 }
 
+// Define schema for online users (simple array of strings)
+const OnlineUserSchema = z.string();
+
 export const ChannelProvider = ({ children }: ChannelProviderProps) => {
   const [messages, setMessages] = useState<IncomingMessage[]>([]);
   const [members, setMembers] = useState<EnhancedChannelMember[]>([]);
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
 
-  const {
-    state: { token },
-  } = useAuthContext();
-  const systemContext = useContext(SystemContext);
-
-  const currentChannel = systemContext?.state.currentChannel;
+  const { state: authState } = useAuthContext();
+  const token = authState.token;
+  const systemContext = useSystemContext();
+  const currentChannel = systemContext.state.currentChannel;
 
   // Clear messages/members when changing channels
   useEffect(() => {
@@ -34,57 +36,67 @@ export const ChannelProvider = ({ children }: ChannelProviderProps) => {
     );
   }, []);
 
-  const fetchOnlineMembers = useCallback(async () => {
-    if (!currentChannel) return;
-    const response = await channelApi.fetchOnlineUsersInChannel(currentChannel.name, token);
-    if (response.success) {
-      response.data.forEach((username) => {
-        updateMemberOnlineStatus(username, true);
-      });
-    } else {
-      showError("Failed to fetch online members");
+  // Renamed for clarity
+  const fetchOnlineUsernames = useCallback(async () => {
+    if (!currentChannel || !token) return [];
+    try {
+      const response = await channelApi.fetchOnlineUsersInChannel(currentChannel.name, token);
+      if (!response.success) {
+        throw new Error((response as APIErrorResponse).error.message || "Failed to fetch online members");
+      }
+      const onlineUsernames = z.array(OnlineUserSchema).parse(response.data);
+      return onlineUsernames;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to fetch online members";
+      console.error("Failed to fetch online members:", error);
+      showError(message);
+      return [];
     }
-  }, [currentChannel, showError, token, updateMemberOnlineStatus]);
+  }, [currentChannel, token, showError]);
 
   const fetchMembers = useCallback(async () => {
+    if (!currentChannel || !token) return;
     try {
-      if (!currentChannel) return;
       const response = await channelApi.fetchMembers(currentChannel.name, token);
-      if (response.success) {
-        const enhancedMembers = response.data.map((member) => ({
-          ...member,
-          isOnline: false,
-        }));
-        setMembers(enhancedMembers);
-        fetchOnlineMembers();
-      } else {
-        showError("Failed to fetch members");
+      if (!response.success) {
+        throw new Error((response as APIErrorResponse).error.message || "Failed to load members");
       }
-    } catch (err) {
-      console.error("Error fetching members:", err);
-      showError("Failed to load members");
+      const parsedMembers = z.array(ChannelMemberSchema).parse(response.data);
+      const onlineUsernames = await fetchOnlineUsernames();
+      const enhancedMembers = parsedMembers.map((member) => ({
+        ...member,
+        isOnline: onlineUsernames.includes(member.username),
+      }));
+      setMembers(enhancedMembers);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load members";
+      console.error("Error fetching members:", error);
+      showError(message);
+      setMembers([]);
     }
-  }, [currentChannel, token, fetchOnlineMembers, showError]);
+  }, [currentChannel, token, showError, fetchOnlineUsernames]);
 
   const fetchMessages = useCallback(async () => {
+    if (!currentChannel || !token) return;
     try {
-      if (!currentChannel) return;
       const response = await channelApi.fetchMessages(currentChannel.name, token);
-      if (response.success) {
-        setMessages(response.data);
-      } else {
-        showError("Failed to fetch messages");
+      if (!response.success) {
+        throw new Error((response as APIErrorResponse).error.message || "Failed to load messages");
       }
-    } catch (err) {
-      console.error("Error fetching messages:", err);
-      showError("Failed to load messages");
+      const parsedMessages = z.array(IncomingMessageSchema).parse(response.data);
+      setMessages(parsedMessages);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load messages";
+      console.error("Error fetching messages:", error);
+      showError(message);
+      setMessages([]);
     }
   }, [currentChannel, token, showError]);
 
   const uploadFile = useCallback(
-    async (file: File) => {
-      if (!currentChannel) {
-        const errorMsg = "No channel selected for file upload";
+    async (file: File): Promise<{ imagePath: string; thumbnailPath: string } | null> => {
+      if (!currentChannel || !token) {
+        const errorMsg = "No channel or auth token for file upload";
         showError(errorMsg);
         throw new Error(errorMsg);
       }
@@ -92,34 +104,34 @@ export const ChannelProvider = ({ children }: ChannelProviderProps) => {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("channelName", currentChannel.name);
+
         const response = await channelApi.uploadFile(formData, token);
-        if (response.success) {
-          return response.data;
-        } else {
-          const errorMsg = response.error?.message || "Failed to upload file";
-          showError(errorMsg);
-          throw new Error(errorMsg);
+        if (!response.success) {
+          throw new Error((response as APIErrorResponse).error.message || "Failed to upload file");
         }
-      } catch (err) {
-        console.error("Error uploading file:", err);
-        const errorMsg = err instanceof Error ? err.message : "An unexpected error occurred during file upload";
-        showError(errorMsg);
-        throw err;
+        showSuccess("File uploaded successfully");
+        return response.data;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "An unexpected error occurred during file upload";
+        console.error("Error uploading file:", error);
+        showError(message);
+        return null;
       }
     },
-    [currentChannel, showError, token]
+    [currentChannel, token, showError, showSuccess]
   );
 
-  // Fetch channel messages/members when channel changes
+  // Fetch channel data when channel or token changes
   useEffect(() => {
     if (!currentChannel || !token) {
       setMessages([]);
       setMembers([]);
       return;
     }
-
-    fetchMessages();
-    fetchMembers();
+    const loadChannelData = async () => {
+      await Promise.all([fetchMessages(), fetchMembers()]);
+    };
+    loadChannelData();
   }, [token, fetchMessages, fetchMembers, currentChannel]);
 
   // Create context value
@@ -134,9 +146,11 @@ export const ChannelProvider = ({ children }: ChannelProviderProps) => {
         setMembers,
         updateMemberOnlineStatus,
         uploadFile,
+        fetchMembers,
+        fetchMessages,
       },
     }),
-    [messages, members, updateMemberOnlineStatus, uploadFile]
+    [messages, members, updateMemberOnlineStatus, uploadFile, fetchMembers, fetchMessages]
   );
 
   return <ChannelContext.Provider value={contextValue}>{children}</ChannelContext.Provider>;

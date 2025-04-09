@@ -1,134 +1,141 @@
-import { useState, useCallback, useContext, useEffect } from "react";
-import { DrawPath, Point } from "../types/interfaces";
-import useCanvasDrawing from "./useCanvasDrawing";
-import { useSketchSync } from "./useSketchSync";
-import { SketchContext } from "../contexts/sketchContext";
+/**
+ * @deprecated This hook is being phased out in favor of useSketchManager.
+ * The original code is kept below for reference during refactoring.
+ */
 
-const DEBUG = true;
+/*
+// import { useState, useCallback, useContext, useEffect } from "react";
+// import { DrawPath, Point } from "../types/interfaces";
+// import useCanvasDrawing from "./useCanvasDrawing";
+// import { useSketchSync } from "./useSketchSync";
+// import { SketchContext } from "../contexts/sketchContext";
 
-interface UseSketchProps {
-  channelName: string;
-}
+// const DEBUG = true;
 
-export const useSketch = ({ channelName }: UseSketchProps) => {
-  const { state, actions } = useContext(SketchContext)!;
-  const [currentPath, setCurrentPath] = useState<DrawPath | null>(null);
+// interface UseSketchProps {
+//   channelName: string;
+// }
 
-  const canvasDrawing = useCanvasDrawing();
+// export const useSketch = ({ channelName }: UseSketchProps) => {
+//   const { state, actions } = useContext(SketchContext)!;
+//   const [currentPath, setCurrentPath] = useState<DrawPath | null>(null);
 
-  // Load or refresh canvas whenever the *ID* of the current sketch changes
-  useEffect(() => {
-    if (!state.currentSketch) return;
+//   const canvasDrawing = useCanvasDrawing();
 
-    const { width, height } = state.currentSketch;
-    if (DEBUG) console.log(`🎨 [useSketch] Checking if canvas dimensions changed.`);
+//   // Load or refresh canvas whenever the *ID* of the current sketch changes
+//   useEffect(() => {
+//     if (!state.currentSketch) return;
 
-    // Only initialize if the dimensions differ
-    if (canvasDrawing.canvasState.width !== width || canvasDrawing.canvasState.height !== height) {
-      if (DEBUG) console.log(`🎨 [useSketch] Initializing canvas with dimensions ${width}x${height}`);
-      canvasDrawing.initializeCanvas(width, height);
-    }
+//     const { width, height } = state.currentSketch;
+//     if (DEBUG) console.log(`🎨 [useSketch] Checking if canvas dimensions changed.`);
 
-    // Redraw if there are existing paths
-    if (state.paths.length > 0) {
-      if (DEBUG) console.log(`🔄 [useSketch] Redrawing ${state.paths.length} existing paths`);
-      canvasDrawing.redrawCanvas(state.paths);
-    }
-  }, [canvasDrawing, state.paths, state.currentSketch]);
+//     // Only initialize if the dimensions differ
+//     if (canvasDrawing.canvasState.width !== width || canvasDrawing.canvasState.height !== height) {
+//       if (DEBUG) console.log(`🎨 [useSketch] Initializing canvas with dimensions ${width}x${height}`);
+//       canvasDrawing.initializeCanvas(width, height);
+//     }
 
-  // Initialize sketch sync
-  const sketchSync = useSketchSync({
-    channelName,
-    sketchId: state.currentSketch?.id,
-    onUpdateFromServer: (update) => {
-      if (DEBUG) console.log(`📥 [useSketch] Received update with ${update.paths?.length || 0} paths`);
-      // Add received paths to context and canvas
-      if (update.paths) {
-        update.paths.forEach((path: DrawPath) => {
-          actions.addPath(path);
-          canvasDrawing.drawPath(path);
-        });
-      }
-    },
-    onClearFromServer: () => {
-      if (DEBUG) console.log(`🧹 [useSketch] Received clear command`);
-      actions.clearPaths();
-      canvasDrawing.clear();
-    },
-  });
+//     // Redraw if there are existing paths
+//     if (state.paths.length > 0) {
+//       if (DEBUG) console.log(`🔄 [useSketch] Redrawing ${state.paths.length} existing paths`);
+//       canvasDrawing.redrawCanvas(state.paths);
+//     }
+//   }, [canvasDrawing, state.paths, state.currentSketch]);
 
-  // Handle drawing operations
-  const handleDraw = useCallback(
-    (point: Point, isDrawing: boolean, strokeWidth: number, isComplete: boolean) => {
-      if (!point || !state.currentSketch) return;
+//   // Initialize sketch sync
+//   const sketchSync = useSketchSync({
+//     channelName,
+//     sketchId: state.currentSketch?.id,
+//     onUpdateFromServer: (update) => {
+//       if (DEBUG) console.log(`📥 [useSketch] Received update with ${update.paths?.length || 0} paths`);
+//       // Add received paths to context and canvas
+//       if (update.paths) {
+//         update.paths.forEach((path: DrawPath) => {
+//           actions.addPath(path);
+//           canvasDrawing.drawPath(path);
+//         });
+//       }
+//     },
+//     onClearFromServer: () => {
+//       if (DEBUG) console.log(`🧹 [useSketch] Received clear command`);
+//       actions.clearPaths();
+//       canvasDrawing.clear();
+//     },
+//   });
 
-      if (!currentPath) {
-        // Start new path
-        if (DEBUG) console.log(`👇 [useSketch] Starting new path at (${point.x},${point.y})`);
-        const newPath: DrawPath = {
-          points: [point],
-          isDrawing,
-          strokeWidth,
-        };
-        setCurrentPath(newPath);
-        canvasDrawing.drawPath(newPath);
-      } else {
-        // Continue path
-        const updatedPath: DrawPath = {
-          ...currentPath,
-          points: [...currentPath.points, point],
-        };
-        setCurrentPath(updatedPath);
-        canvasDrawing.drawPath(updatedPath);
+//   // Handle drawing operations
+//   const handleDraw = useCallback(
+//     (point: Point, isDrawing: boolean, strokeWidth: number, isComplete: boolean) => {
+//       if (!point || !state.currentSketch) return;
 
-        if (isComplete) {
-          // Path is complete, add to context and sync
-          if (DEBUG) console.log(`👆 [useSketch] Completing path with ${updatedPath.points.length} points`);
-          actions.addPath(updatedPath);
-          sketchSync.sendUpdate(updatedPath);
-          setCurrentPath(null);
-        }
-      }
-    },
-    [currentPath, canvasDrawing, actions, sketchSync, state.currentSketch]
-  );
+//       if (!currentPath) {
+//         // Start new path
+//         if (DEBUG) console.log(`👇 [useSketch] Starting new path at (${point.x},${point.y})`);
+//         const newPath: DrawPath = {
+//           points: [point],
+//           isDrawing,
+//           strokeWidth,
+//         };
+//         setCurrentPath(newPath);
+//         canvasDrawing.drawPath(newPath);
+//       } else {
+//         // Continue path
+//         const updatedPath: DrawPath = {
+//           ...currentPath,
+//           points: [...currentPath.points, point],
+//         };
+//         setCurrentPath(updatedPath);
+//         canvasDrawing.drawPath(updatedPath);
 
-  // Clear the canvas
-  const clearCanvas = useCallback(() => {
-    if (DEBUG) console.log(`🧹 [useSketch] Clearing canvas`);
-    canvasDrawing.clear();
-    actions.clearPaths();
-    sketchSync.sendClear();
-  }, [canvasDrawing, actions, sketchSync]);
+//         if (isComplete) {
+//           // Path is complete, add to context and sync
+//           if (DEBUG) console.log(`👆 [useSketch] Completing path with ${updatedPath.points.length} points`);
+//           actions.addPath(updatedPath);
+//           sketchSync.sendUpdate(updatedPath);
+//           setCurrentPath(null);
+//         }
+//       }
+//     },
+//     [currentPath, canvasDrawing, actions, sketchSync, state.currentSketch]
+//   );
 
-  // Redraw all paths
-  const redrawAllPaths = useCallback(() => {
-    if (!state.currentSketch) return;
+//   // Clear the canvas
+//   const clearCanvas = useCallback(() => {
+//     if (DEBUG) console.log(`🧹 [useSketch] Clearing canvas`);
+//     canvasDrawing.clear();
+//     actions.clearPaths();
+//     sketchSync.sendClear();
+//   }, [canvasDrawing, actions, sketchSync]);
 
-    if (DEBUG) console.log(`🔄 [useSketch] Redrawing ${state.paths.length} paths`);
-    canvasDrawing.redrawCanvas(state.paths);
-  }, [canvasDrawing, state.paths, state.currentSketch]);
+//   // Redraw all paths
+//   const redrawAllPaths = useCallback(() => {
+//     if (!state.currentSketch) return;
 
-  return {
-    // Canvas ref and dimensions
-    canvasRef: canvasDrawing.canvasRef,
-    canvasState: canvasDrawing.canvasState,
+//     if (DEBUG) console.log(`🔄 [useSketch] Redrawing ${state.paths.length} paths`);
+//     canvasDrawing.redrawCanvas(state.paths);
+//   }, [canvasDrawing, state.paths, state.currentSketch]);
 
-    // Drawing operations
-    handleDraw,
-    clearCanvas,
-    redrawAllPaths,
+//   return {
+//     // Canvas ref and dimensions
+//     canvasRef: canvasDrawing.canvasRef,
+//     canvasState: canvasDrawing.canvasState,
 
-    // Utilities from canvas drawing
-    getCanvasPoint: canvasDrawing.getCanvasPoint,
-    isValidPoint: canvasDrawing.isValidPoint,
+//     // Drawing operations
+//     handleDraw,
+//     clearCanvas,
+//     redrawAllPaths,
 
-    // Current sketch from context
-    currentSketch: state.currentSketch,
+//     // Utilities from canvas drawing
+//     getCanvasPoint: canvasDrawing.getCanvasPoint,
+//     isValidPoint: canvasDrawing.isValidPoint,
 
-    // Service operations from context
-    createSketch: actions.createSketch,
-    deleteSketch: actions.deleteSketch,
-    loadSketch: actions.loadSketch,
-  };
-};
+//     // Current sketch from context
+//     currentSketch: state.currentSketch,
+
+//     // Service operations from context
+//     createSketch: actions.createSketch,
+//     deleteSketch: actions.deleteSketch,
+//     loadSketch: actions.loadSketch,
+//   };
+// };
+*/

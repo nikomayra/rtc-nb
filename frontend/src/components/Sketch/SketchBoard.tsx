@@ -1,6 +1,6 @@
 import { useState, useCallback, memo, useRef } from "react";
 import { Point } from "../../types/interfaces";
-import { useSketch } from "../../hooks/useSketch";
+import { useSketchManager } from "../../hooks/useSketchManager";
 import { SketchToolbar } from "./SketchToolbar";
 
 // Define tools for the board
@@ -10,30 +10,34 @@ interface SketchBoardProps {
   channelName: string;
 }
 
-// Shared state across renders
-const sharedState = {
-  toolState: {
-    tool: "draw" as Tool,
-    strokeWidth: 3,
-  },
-};
-
 export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
-  // Use shared state to maintain tool selection across remounts
-  const [currentTool, setCurrentTool] = useState<Tool>(sharedState.toolState.tool);
-  const [strokeWidth, setStrokeWidth] = useState(sharedState.toolState.strokeWidth);
+  // Local state for UI interactions (tool, stroke, pan)
+  const [currentTool, setCurrentTool] = useState<Tool>("draw");
+  const [strokeWidth, setStrokeWidth] = useState(3);
   const [isInteracting, setIsInteracting] = useState(false);
   const [panStart, setPanStart] = useState<Point | null>(null);
 
   // Reference to the scroll container for panning
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const sketch = useSketch({ channelName });
-  const { canvasState, currentSketch } = sketch;
+  // Use the new sketch manager hook
+  const sketchManager = useSketchManager({ channelName });
+  // Destructure necessary values and methods
+  const {
+    canvasRef,
+    canvasState,
+    currentSketch,
+    getCanvasPoint,
+    isValidPoint,
+    handleMouseDown: managerMouseDown,
+    handleMouseMove: managerMouseMove,
+    handleMouseUp: managerMouseUp,
+    clearLocalAndRemote,
+  } = sketchManager;
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!sketch.canvasRef.current || !currentSketch || !canvasState.ctx) return;
+      if (!canvasRef.current || !currentSketch) return;
 
       setIsInteracting(true);
 
@@ -43,94 +47,109 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
         return;
       }
 
-      const point = sketch.getCanvasPoint(e);
-      if (!point || !sketch.isValidPoint(point)) {
-        console.warn("Invalid point detected");
+      // Handle drawing/erasing start
+      const point = getCanvasPoint(e);
+      if (!point || !isValidPoint(point)) {
+        console.warn("[SketchBoard] Invalid start point detected");
+        setIsInteracting(false);
         return;
       }
 
-      sketch.handleDraw(point, currentTool === "draw", strokeWidth, false);
+      managerMouseDown(point, currentTool === "draw", strokeWidth);
     },
-    [sketch, currentTool, strokeWidth, currentSketch, canvasState.ctx]
+    [canvasRef, currentSketch, currentTool, getCanvasPoint, isValidPoint, managerMouseDown, strokeWidth]
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!isInteracting || !currentSketch || !canvasState.ctx) return;
+      if (!isInteracting || !currentSketch) return;
 
+      // Handle panning movement
       if (currentTool === "pan" && panStart) {
         const container = scrollContainerRef.current;
         if (!container) return;
-
-        // Calculate the distance moved since last position
         const dx = e.clientX - panStart.x;
         const dy = e.clientY - panStart.y;
-
-        // Update scroll position
         container.scrollLeft -= dx;
         container.scrollTop -= dy;
-
-        // Update the pan start position
         setPanStart({ x: e.clientX, y: e.clientY });
         return;
       }
 
-      const point = sketch.getCanvasPoint(e);
-      if (!point || !sketch.isValidPoint(point)) return;
+      // Handle drawing/erasing movement
+      if (currentTool === "draw" || currentTool === "erase") {
+        const point = getCanvasPoint(e);
+        if (!point) return;
 
-      sketch.handleDraw(point, currentTool === "draw", strokeWidth, false);
+        managerMouseMove(point);
+      }
     },
-    [isInteracting, currentTool, panStart, sketch, strokeWidth, currentSketch, canvasState.ctx]
+    [isInteracting, currentSketch, currentTool, panStart, getCanvasPoint, managerMouseMove]
   );
 
-  const handleMouseUp = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!isInteracting || !currentSketch || !canvasState.ctx) return;
+  const handleMouseUp = useCallback(() => {
+    if (!isInteracting) return;
 
-      if (currentTool === "pan") {
-        if (sketch.canvasRef.current) {
-          sketch.canvasRef.current.style.cursor = "grab";
-        }
-      } else {
-        const point = sketch.getCanvasPoint(e);
-        if (point && sketch.isValidPoint(point)) {
-          sketch.handleDraw(point, currentTool === "draw", strokeWidth, true);
-        }
+    // Finish panning
+    if (currentTool === "pan") {
+      if (canvasRef.current) {
+        canvasRef.current.style.cursor = "grab";
       }
+    } else if (currentTool === "draw" || currentTool === "erase") {
+      managerMouseUp();
+    }
 
+    // Reset interaction state
+    setIsInteracting(false);
+    setPanStart(null);
+  }, [isInteracting, currentTool, canvasRef, managerMouseUp]);
+
+  const handleMouseLeave = useCallback(() => {
+    // If the user was actively drawing/panning and leaves the canvas, treat it as mouse up
+    if (isInteracting) {
+      console.log("[SketchBoard] Mouse left canvas during interaction, treating as mouse up.");
+      managerMouseUp();
+      // Also reset local interaction state
       setIsInteracting(false);
       setPanStart(null);
-    },
-    [isInteracting, currentTool, sketch, strokeWidth, currentSketch, canvasState.ctx]
-  );
+      if (currentTool === "pan" && canvasRef.current) {
+        canvasRef.current.style.cursor = "grab";
+      }
+    }
+  }, [isInteracting, managerMouseUp, currentTool, canvasRef]);
 
   if (!currentSketch) {
     return (
       <div className="flex w-full flex-col h-full items-center justify-center text-text-light/50">
-        Please select a sketch to start drawing
+        Please select or create a sketch to start drawing.
       </div>
     );
   }
 
   return (
     <div className="flex w-full flex-col h-full">
+      {/* Header with Sketch Name */}
       <div className="text-center py-3 border-b border-primary/20">
         <h2 className="font-medium text-text-light">{currentSketch.displayName}</h2>
       </div>
+
+      {/* Scrollable Canvas Container */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto bg-surface-dark/30 min-h-[300px] scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-surface-dark 
+        className="flex-1 overflow-auto bg-surface-dark/30 min-h-[300px] scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-surface-dark
           scrollbar-hover:scrollbar-thumb-primary/30"
       >
         <div className="min-w-min">
+          {" "}
+          {/* Ensures container respects canvas size */}
           <canvas
-            ref={sketch.canvasRef}
+            ref={canvasRef as React.RefObject<HTMLCanvasElement>}
             width={canvasState.width}
             height={canvasState.height}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
             style={{
               touchAction: "none",
               cursor: currentTool === "pan" ? "grab" : "crosshair",
@@ -141,14 +160,13 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
         </div>
       </div>
 
+      {/* Toolbar */}
       <SketchToolbar
         currentTool={currentTool}
-        setCurrentTool={(tool: Tool) => setCurrentTool(tool)}
+        setCurrentTool={setCurrentTool}
         strokeWidth={strokeWidth}
         setStrokeWidth={setStrokeWidth}
-        onClear={sketch.clearCanvas}
-        currentSketchId={currentSketch.id}
-        channelName={channelName}
+        onClear={clearLocalAndRemote}
       />
     </div>
   );

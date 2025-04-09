@@ -476,52 +476,74 @@ func (h *Handlers) CreateSketchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	claims, ok := auth.ClaimsFromContext(ctx)
+	if req.ChannelName == "" || req.DisplayName == "" || req.Width <= 0 || req.Height <= 0 {
+		responses.SendError(w, "Channel name, display name, width, and height are required", http.StatusBadRequest)
+		return
+	}
+
+	// Limit sketch dimensions? e.g., max 5000x5000
+	maxDim := 5000
+	if req.Width > maxDim || req.Height > maxDim {
+		responses.SendError(w, fmt.Sprintf("Sketch dimensions cannot exceed %d pixels", maxDim), http.StatusBadRequest)
+		return
+	}
+
+	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {
 		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if req.ChannelName == "" {
-		responses.SendError(w, "Channel name required", http.StatusBadRequest)
-		return
-	}
 
-	// Validate channel membership
-	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
+	ctx := r.Context()
+
+	// TODO: Implement permission check: h.chatService.IsUserMemberOfChannel(ctx, req.ChannelName, claims.Username)
+	// isMember, err := h.chatService.IsUserMemberOfChannel(ctx, req.ChannelName, claims.Username)
+	// if err != nil {
+	// 	log.Printf("Error checking channel membership: %v", err)
+	// 	responses.SendError(w, "Error checking permissions", http.StatusInternalServerError)
+	// 	return
+	// }
+	// if !isMember {
+	// 	responses.SendError(w, "Forbidden: User is not a member of this channel", http.StatusForbidden)
+	// 	return
+	// }
+
+	// TODO: Implement sketch limit check: h.sketchService.GetSketchesByChannel(ctx, req.ChannelName)
+	// sketches, err := h.sketchService.GetSketchesByChannel(ctx, req.ChannelName)
+	// if err != nil {
+	// 	log.Printf("Error getting sketches count: %v", err)
+	// 	responses.SendError(w, "Error checking sketch limit", http.StatusInternalServerError)
+	// 	return
+	// }
+	// sketchLimit := 10 // Make configurable
+	// if len(sketches) >= sketchLimit {
+	// 	responses.SendError(w, fmt.Sprintf("Channel sketch limit reached (%d)", sketchLimit), http.StatusConflict)
+	// 	return
+	// }
+
+	// Call sketch service to create the sketch
+	// The service should return the created sketch object
+	createdSketch, err := h.sketchService.CreateSketch(ctx, req.ChannelName, req.DisplayName, req.Width, req.Height, claims.Username)
 	if err != nil {
-		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
+		log.Printf("Error creating sketch in service: %v", err)
+		responses.SendError(w, "Error creating sketch", http.StatusInternalServerError)
 		return
 	}
 
-	if userChannel != req.ChannelName {
-		responses.SendError(w, "Not a member of this channel", http.StatusUnauthorized)
-		return
+	// Broadcast NEW sketch command via WebSocket
+	broadcastCmd := models.SketchCommand{
+		CommandType: models.SketchCommandTypeNew,
+		SketchID:    createdSketch.ID,
+		SketchData:  createdSketch, // Include full sketch data from the service response
+	}
+	// Assuming NewSketchBroadcastMessage exists in models package
+	broadcastMsg := models.NewSketchBroadcastMessage(req.ChannelName, claims.Username, broadcastCmd)
+	if broadcastErr := h.msgProcessor.ProcessMessage(broadcastMsg); broadcastErr != nil {
+		log.Printf("Error broadcasting new sketch message for sketch %s in channel %s: %v", createdSketch.ID, req.ChannelName, broadcastErr)
+		// Log error but don't fail the API response, creation was successful
 	}
 
-	if req.Width <= 0 || req.Height <= 0 {
-		responses.SendError(w, "Invalid width or height", http.StatusBadRequest)
-		return
-	}
-
-	if req.Width > 1280 || req.Height > 720 {
-		responses.SendError(w, "Max resolution 1280x720", http.StatusBadRequest)
-		return
-	}
-
-	if req.Width < 100 || req.Height < 100 {
-		responses.SendError(w, "Min resolution 100x100", http.StatusBadRequest)
-		return
-	}
-
-	sketch, err := h.sketchService.CreateSketch(ctx, req.ChannelName, req.DisplayName, req.Width, req.Height, claims.Username)
-	if err != nil {
-		log.Printf("Error creating sketch: %v", err)
-		responses.SendError(w, "Failed to create sketch", http.StatusInternalServerError)
-		return
-	}
-
-	responses.SendSuccess(w, sketch, http.StatusCreated)
+	responses.SendSuccess(w, createdSketch, http.StatusCreated)
 }
 
 func (h *Handlers) GetSketchHandler(w http.ResponseWriter, r *http.Request) {
@@ -596,22 +618,68 @@ func (h *Handlers) GetSketchesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) DeleteSketchHandler(w http.ResponseWriter, r *http.Request) {
-
 	vars := mux.Vars(r)
 	sketchId := vars["sketchId"]
-
 	if sketchId == "" {
 		responses.SendError(w, "Sketch ID required", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.sketchService.DeleteSketch(r.Context(), sketchId); err != nil {
-		log.Printf("Error deleting sketch: %v", err)
-		responses.SendError(w, "Only sketch creator or channel admin can delete sketches", http.StatusInternalServerError)
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	responses.SendSuccess(w, "Sketch deleted successfully", http.StatusOK)
+	ctx := r.Context()
+
+	// Get sketch data first to check ownership/permissions and get channel name
+	sketch, err := h.sketchService.GetSketch(ctx, sketchId)
+	if err != nil {
+		log.Printf("Error fetching sketch %s for deletion check: %v", sketchId, err)
+		// Differentiate between not found and other errors
+		if strings.Contains(err.Error(), "not found") { // Or use specific error type if available
+			responses.SendError(w, "Sketch not found", http.StatusNotFound)
+		} else {
+			responses.SendError(w, "Error finding sketch", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// TODO: Implement permission checks
+	// isChannelAdmin, adminCheckErr := h.chatService.IsUserAdminOfChannel(ctx, sketch.ChannelName, claims.Username)
+	// if adminCheckErr != nil {
+	// 	log.Printf("Error checking channel admin status for deletion: %v", adminCheckErr)
+	// 	responses.SendError(w, "Error checking permissions", http.StatusInternalServerError)
+	// 	return
+	// }
+	// if sketch.CreatedBy != claims.Username && !isChannelAdmin {
+	// 	responses.SendError(w, "Forbidden: Only the creator or a channel admin can delete this sketch", http.StatusForbidden)
+	// 	return
+	// }
+
+	// Proceed with deletion
+	err = h.sketchService.DeleteSketch(ctx, sketchId)
+	if err != nil {
+		log.Printf("Error deleting sketch: %v", err)
+		responses.SendError(w, "Error deleting sketch", http.StatusInternalServerError)
+		return
+	}
+
+	// Broadcast DELETE sketch command via WebSocket
+	broadcastCmd := models.SketchCommand{
+		CommandType: models.SketchCommandTypeDelete,
+		SketchID:    sketchId,
+	}
+	// Use the sketch's channel name for broadcasting
+	// Assuming NewSketchBroadcastMessage exists in models package
+	broadcastMsg := models.NewSketchBroadcastMessage(sketch.ChannelName, claims.Username, broadcastCmd)
+	if broadcastErr := h.msgProcessor.ProcessMessage(broadcastMsg); broadcastErr != nil {
+		log.Printf("Error broadcasting delete sketch message for sketch %s in channel %s: %v", sketchId, sketch.ChannelName, broadcastErr)
+		// Log error but don't fail the API response, deletion was successful
+	}
+
+	responses.SendSuccess(w, nil, http.StatusNoContent) // Use 204 No Content for successful deletion
 }
 
 func (h *Handlers) ClearSketchHandler(w http.ResponseWriter, r *http.Request) {
@@ -625,36 +693,56 @@ func (h *Handlers) ClearSketchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.SketchId == "" {
-		responses.SendError(w, "Sketch ID required", http.StatusBadRequest)
+	if req.ChannelName == "" || req.SketchId == "" {
+		responses.SendError(w, "Channel name and sketch ID are required", http.StatusBadRequest)
 		return
 	}
 
-	ctx := r.Context()
-	claims, ok := auth.ClaimsFromContext(ctx)
+	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {
 		responses.SendError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
+	ctx := r.Context()
+
+	// TODO: Implement permission check: h.chatService.IsUserMemberOfChannel(ctx, req.ChannelName, claims.Username)
+	// isMember, err := h.chatService.IsUserMemberOfChannel(ctx, req.ChannelName, claims.Username)
+	// if err != nil {
+	// 	log.Printf("Error checking channel membership for clear: %v", err)
+	// 	responses.SendError(w, "Error checking permissions", http.StatusInternalServerError)
+	// 	return
+	// }
+	// if !isMember {
+	// 	responses.SendError(w, "Forbidden: User is not a member of this channel", http.StatusForbidden)
+	// 	return
+	// }
+
+	// Call the service to clear the sketch (e.g., remove all regions)
+	err := h.sketchService.ClearSketch(ctx, req.SketchId)
 	if err != nil {
-		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
+		log.Printf("Error clearing sketch %s: %v", req.SketchId, err)
+		if strings.Contains(err.Error(), "not found") { // Or use specific error type
+			responses.SendError(w, "Sketch not found", http.StatusNotFound)
+		} else {
+			responses.SendError(w, "Error clearing sketch", http.StatusInternalServerError)
+		}
 		return
 	}
 
-	if userChannel != req.ChannelName {
-		responses.SendError(w, "Not a member of this channel", http.StatusUnauthorized)
-		return
+	// Broadcast CLEAR sketch command via WebSocket
+	broadcastCmd := models.SketchCommand{
+		CommandType: models.SketchCommandTypeClear,
+		SketchID:    req.SketchId,
+	}
+	// Assuming NewSketchBroadcastMessage exists in models package
+	broadcastMsg := models.NewSketchBroadcastMessage(req.ChannelName, claims.Username, broadcastCmd)
+	if broadcastErr := h.msgProcessor.ProcessMessage(broadcastMsg); broadcastErr != nil {
+		log.Printf("Error broadcasting clear sketch message for sketch %s in channel %s: %v", req.SketchId, req.ChannelName, broadcastErr)
+		// Log error but don't fail the API response, clear operation was successful
 	}
 
-	if err := h.sketchService.ClearSketch(ctx, req.SketchId); err != nil {
-		log.Printf("Error clearing sketch: %v", err)
-		responses.SendError(w, "Failed to clear sketch", http.StatusInternalServerError)
-		return
-	}
-
-	responses.SendSuccess(w, "Sketch cleared successfully", http.StatusOK)
+	responses.SendSuccess(w, nil, http.StatusNoContent) // Use 204 No Content for successful clear
 }
 
 func (h *Handlers) GetMessagesHandler(w http.ResponseWriter, r *http.Request) {

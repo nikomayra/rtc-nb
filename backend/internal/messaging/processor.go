@@ -11,20 +11,18 @@ import (
 )
 
 type Processor struct {
-	connManager   connections.Manager
-	chatService   *chat.Service
-	sketchService *sketch.Service
-	sketchBuffer  *SketchBuffer
-	chatBuffer    *ChatBuffer
+	connManager  connections.Manager
+	chatService  *chat.Service
+	sketchBuffer *SketchBuffer
+	chatBuffer   *ChatBuffer
 }
 
 func NewProcessor(connManager connections.Manager, chatService *chat.Service, sketchService *sketch.Service) *Processor {
 	return &Processor{
-		connManager:   connManager,
-		chatService:   chatService,
-		sketchService: sketchService,
-		sketchBuffer:  NewSketchBuffer(sketchService),
-		chatBuffer:    NewChatBuffer(chatService),
+		connManager:  connManager,
+		chatService:  chatService,
+		sketchBuffer: NewSketchBuffer(sketchService),
+		chatBuffer:   NewChatBuffer(chatService),
 	}
 }
 
@@ -34,9 +32,15 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 		return nil
 	}
 
-	// Log detailed message info for debugging
-	log.Printf("Processing message: ID=%s, Type=%d, Username=%s, Channel=%s",
-		msg.ID, msg.Type, msg.Username, msg.ChannelName)
+	// Log basic message info for routing
+	log.Printf("Processing message: Type=%d, Channel=%s, SketchCmdType=%v",
+		msg.Type, msg.ChannelName,
+		func() models.SketchCommandType { // Avoid nil pointer if SketchCmd is nil
+			if msg.Content.SketchCmd != nil {
+				return msg.Content.SketchCmd.CommandType
+			}
+			return ""
+		}()) // Execute the function
 
 	outgoingMsgBytes, err := json.Marshal(msg)
 	if err != nil {
@@ -44,47 +48,39 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 		return err
 	}
 
-	// Step 1: Route message to appropriate connections
-	// -----------------------------------------------
+	// --- Route message to appropriate connections ---
 	switch msg.Type {
-	case models.MessageTypeChannelUpdate:
-		// Only channel updates are system-wide messages
+	case models.MessageTypeChannelUpdate, models.MessageTypeSystemUserStatus:
+		// System-wide messages
 		log.Printf("Broadcasting system message type %d to all system connections", msg.Type)
 		p.connManager.NotifyAll(outgoingMsgBytes)
-	case models.MessageTypeSystemUserStatus:
-		log.Printf("Broadcasting system user status message type %d to all system connections", msg.Type)
-		p.connManager.NotifyAll(outgoingMsgBytes)
-
 	default:
-		// All other messages are channel-specific
+		// Channel-specific messages
 		if msg.ChannelName == "" {
-			log.Printf("Skipping message with empty channel name")
+			log.Printf("Skipping channel message with empty channel name (Type: %d)", msg.Type)
 			return nil
 		}
-
 		log.Printf("Broadcasting message type %d to channel %s", msg.Type, msg.ChannelName)
 		p.connManager.NotifyChannel(msg.ChannelName, outgoingMsgBytes)
 	}
 
-	// Step 2: Buffer messages that need persistence
-	// --------------------------------------------
-	// Only certain message types should be buffered for persistence
+	// --- Buffer messages that need persistence ---
 	switch msg.Type {
 	case models.MessageTypeText, models.MessageTypeImage:
-		// Regular chat messages should be persisted
-		log.Printf("Adding message to chat buffer for channel %s", msg.ChannelName)
+		// Persist regular chat messages
 		p.chatBuffer.Add(msg)
 
 	case models.MessageTypeSketch:
-		// Only buffer sketch update commands
-		if msg.Content.SketchCmd != nil && msg.Content.SketchCmd.CommandType == models.SketchCommandTypeUpdate {
-			log.Printf("Adding sketch update to buffer for channel %s", msg.ChannelName)
-			p.sketchBuffer.Add(msg)
+		cmd := msg.Content.SketchCmd
+		if cmd == nil {
+			break
 		}
 
-	case models.MessageTypeChannelUpdate, models.MessageTypeMemberUpdate, models.MessageTypeUserStatus:
-		// System messages should not be persisted - they only update UI state
-		log.Printf("Skipping persistence for system message type %d", msg.Type)
+		if cmd.CommandType == models.SketchCommandTypeUpdate && cmd.IsPartial != nil && !*cmd.IsPartial {
+			// Persist only COMPLETE sketch updates
+			log.Printf("Adding COMPLETE sketch update to buffer for sketch %s", cmd.SketchID)
+			p.sketchBuffer.Add(msg)
+		}
 	}
 
 	return nil

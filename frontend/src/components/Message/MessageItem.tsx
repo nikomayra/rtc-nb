@@ -47,7 +47,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
   const renderContent = () => {
     // Get the member update if available
     const memberUpdate = message.content.memberUpdate;
-    const userStatus = message.content.userStatus;
 
     switch (message.type) {
       case MessageType.Text:
@@ -128,17 +127,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
                 {message.content.text}
               </p>
             )}
-          </div>
-        );
-      case MessageType.UserStatus:
-        if (!userStatus) return null;
-        return userStatus.action === "online" ? (
-          <div className="px-3 py-1.5 text-success/60 italic text-xs text-center">
-            <p>{message.username} is now online.</p>
-          </div>
-        ) : (
-          <div className="px-3 py-1.5 text-error/60 italic text-xs text-center">
-            <p>{message.username} is now offline.</p>
           </div>
         );
     }

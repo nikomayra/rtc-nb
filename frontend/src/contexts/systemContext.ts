@@ -10,7 +10,7 @@ export interface SystemContext {
   actions: {
     // State setters - proper React pattern using SetStateAction
     setChannels: Dispatch<SetStateAction<Channel[]>>;
-    setCurrentChannel: Dispatch<SetStateAction<Channel | null>>;
+    setCurrentChannel: (channel: Channel | null) => void;
     setOnlineUsersCount: Dispatch<SetStateAction<number>>;
 
     // Channel actions

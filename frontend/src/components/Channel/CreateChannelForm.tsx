@@ -2,7 +2,7 @@ import { FormEvent } from "react";
 import { useSystemContext } from "../../hooks/useSystemContext";
 import { useNotification } from "../../hooks/useNotification";
 
-export const CreateChannelForm = () => {
+export const CreateChannelForm = ({ setIsCreateFormOpen }: { setIsCreateFormOpen: (isOpen: boolean) => void }) => {
   const systemContext = useSystemContext();
   const { showError } = useNotification();
   const { actions: systemActions } = systemContext;
@@ -18,6 +18,7 @@ export const CreateChannelForm = () => {
     try {
       await systemActions.createChannel(name, description, password);
       (e.target as HTMLFormElement).reset();
+      setIsCreateFormOpen(false);
     } catch (error) {
       console.error("Failed to create channel:", error);
       showError("Failed to create channel");

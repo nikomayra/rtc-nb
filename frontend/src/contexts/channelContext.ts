@@ -14,7 +14,7 @@ export interface ChannelContext {
     setMessages: Dispatch<SetStateAction<IncomingMessage[]>>;
     setMembers: Dispatch<SetStateAction<EnhancedChannelMember[]>>;
     updateMemberOnlineStatus: (username: string, isOnline: boolean) => void;
-    uploadFile: (file: File) => Promise<{ imagePath: string; thumbnailPath: string }>;
+    uploadFile: (file: File) => Promise<{ imagePath: string; thumbnailPath: string } | null>;
   };
 }
 

@@ -1,6 +1,6 @@
 import { axiosInstance } from "./axiosInstance";
 import { BASE_URL } from "../utils/constants";
-import { IncomingMessage, ChannelMember, APIResponse } from "../types/interfaces";
+import { IncomingMessage, ChannelMember, APIResponse, APIErrorResponse } from "../types/interfaces";
 import axios from "axios";
 
 export const channelApi = {
@@ -9,12 +9,10 @@ export const channelApi = {
     const res = await axiosInstance.get(`${BASE_URL}/channels/${encodeURIComponent(channelName)}/members`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
-    if (res.data.success) {
-      return res.data;
-    } else {
-      throw new Error(`Failed to get members: ${res.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message || "Failed to get members");
     }
+    return res.data;
   },
 
   // Fetch online users in a channel
@@ -22,12 +20,10 @@ export const channelApi = {
     const res = await axiosInstance.get(`${BASE_URL}/onlineUsers/${encodeURIComponent(channelName)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
-    if (res.data.success) {
-      return res.data;
-    } else {
-      throw new Error(`Failed to get online users in channel: ${res.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message || "Failed to get online users in channel");
     }
+    return res.data;
   },
 
   // Fetch messages for a channel
@@ -35,12 +31,10 @@ export const channelApi = {
     const res = await axiosInstance.get(`${BASE_URL}/getMessages/${encodeURIComponent(channelName)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
-    if (res.data.success) {
-      return res.data;
-    } else {
-      throw new Error(`Failed to get messages: ${res.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message || "Failed to get messages");
     }
+    return res.data;
   },
 
   // Update a member's role in a channel
@@ -50,23 +44,15 @@ export const channelApi = {
     token: string,
     isAdmin: boolean
   ): Promise<APIResponse<void>> => {
-    const response = await axiosInstance.patch(
+    const res = await axiosInstance.patch(
       `${BASE_URL}/channels/${encodeURIComponent(channelName)}/members/${encodeURIComponent(username)}/role`,
-      {
-        is_admin: isAdmin,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      { is_admin: isAdmin },
+      { headers: { Authorization: `Bearer ${token}` } }
     );
-
-    if (response.data.success) {
-      return response.data;
-    } else {
-      throw new Error(`Failed to update role: ${response.data.error}`);
+    if (!res.data.success) {
+      throw new Error((res.data as APIErrorResponse).error.message || "Failed to update role");
     }
+    return res.data;
   },
 
   // Upload a file to a channel - uses axios.post instead of axiosInstance.post to avoid interceptor issues
@@ -74,17 +60,25 @@ export const channelApi = {
     formData: FormData,
     token: string
   ): Promise<APIResponse<{ imagePath: string; thumbnailPath: string }>> => {
-    const response = await axios.post(`${BASE_URL}/upload`, formData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "multipart/form-data",
-      },
-    });
-
-    if (response.data.success) {
-      return response.data;
-    } else {
-      throw new Error(`Failed to upload file: ${response.data.error}`);
+    try {
+      const response = await axios.post<{ imagePath: string; thumbnailPath: string } & APIResponse<unknown>>(
+        `${BASE_URL}/upload`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      if (!response.data.success) {
+        throw new Error((response.data as APIErrorResponse).error.message || "Failed to upload file");
+      }
+      return response.data as APIResponse<{ imagePath: string; thumbnailPath: string }>;
+    } catch (error) {
+      console.error("Raw axios upload error:", error);
+      const message = error instanceof Error ? error.message : "Upload failed due to network issue";
+      throw new Error(message);
     }
   },
 };

@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { type MutableRefObject } from "react";
 import { Point, DrawPath } from "../types/interfaces";
 
@@ -32,84 +32,105 @@ interface UseCanvasDrawingReturn {
  */
 const useCanvasDrawing = (): UseCanvasDrawingReturn => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const stateRef = useRef<CanvasState>({
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const [dimensions, setDimensions] = useState<{ width: number; height: number }>({
     width: 0,
     height: 0,
-    ctx: null,
   });
 
   // Initialize or reinitialize canvas with new dimensions
-  const initializeCanvas = useCallback((width: number, height: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const initializeCanvas = useCallback(
+    (width: number, height: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-    // Skip if dimensions haven't changed
-    if (stateRef.current.width === width && stateRef.current.height === height) {
-      return;
-    }
+      // Skip if dimensions haven't changed
+      if (dimensions.width === width && dimensions.height === height) {
+        return;
+      }
 
-    // Set dimensions
-    canvas.width = width;
-    canvas.height = height;
+      // Set dimensions on the canvas element
+      canvas.width = width;
+      canvas.height = height;
 
-    // Get and configure context
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.clearRect(0, 0, width, height);
+      // Get and configure context, store in ref
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.clearRect(0, 0, width, height);
+        ctxRef.current = ctx;
+      }
 
-      // Update state atomically
-      stateRef.current = {
-        width,
-        height,
-        ctx,
-      };
-    }
-  }, []);
+      // Update state to trigger re-render in consumers
+      setDimensions({ width, height });
+    },
+    [dimensions.width, dimensions.height]
+  );
 
   // Clear the canvas
   const clear = useCallback(() => {
-    const { ctx, width, height } = stateRef.current;
+    const ctx = ctxRef.current;
     if (!ctx) return;
-    ctx.clearRect(0, 0, width, height);
-  }, []);
+    // Read dimensions from state
+    ctx.clearRect(0, 0, dimensions.width, dimensions.height);
+  }, [dimensions.width, dimensions.height]);
 
   // Draw a single line segment
   const drawLine = useCallback((start: Point, end: Point, isDrawing: boolean, strokeWidth: number) => {
-    const { ctx } = stateRef.current;
+    const ctx = ctxRef.current;
     if (!ctx) return;
 
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
-    ctx.strokeStyle = isDrawing ? "#ffffff" : "#000000";
+    ctx.strokeStyle = isDrawing ? "#ffffff" : "#000000"; // Assuming black for erase for now
     ctx.lineWidth = strokeWidth;
     ctx.stroke();
   }, []);
 
   // Draw a complete path with multiple points
-  const drawPath = useCallback(
-    (path: DrawPath) => {
-      const { ctx } = stateRef.current;
-      if (!ctx || !path.points || path.points.length < 2) return;
+  const drawPath = useCallback((path: DrawPath) => {
+    const ctx = ctxRef.current;
+    if (!ctx || !path.points || path.points.length === 0) return;
 
-      // Draw all line segments in a single path for better performance
-      const points = path.points;
-      for (let i = 1; i < points.length; i++) {
-        drawLine(points[i - 1], points[i], path.isDrawing, path.strokeWidth);
-      }
-    },
-    [drawLine]
-  );
+    // Set style and width for the entire path
+    ctx.strokeStyle = path.isDrawing ? "#ffffff" : "#000000"; // Assuming black for erase
+    ctx.lineWidth = path.strokeWidth;
+    // Ensure line cap and join styles are applied for this path
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    ctx.beginPath();
+
+    // Move to the first point
+    ctx.moveTo(path.points[0].x, path.points[0].y);
+
+    // Draw lines to subsequent points
+    for (let i = 1; i < path.points.length; i++) {
+      ctx.lineTo(path.points[i].x, path.points[i].y);
+    }
+
+    // Stroke the complete path
+    // Use non-zero winding rule for fill if needed later
+    // Check if it's just a single point (dot)
+    if (path.points.length === 1) {
+      // Draw a small circle or square for a single point
+      // Using arc for a circle
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.arc(path.points[0].x, path.points[0].y, path.strokeWidth / 2, 0, 2 * Math.PI);
+      ctx.fill();
+    } else {
+      // Stroke the path for lines with 2+ points
+      ctx.stroke();
+    }
+  }, []);
 
   // Redraw all paths on the canvas
   const redrawCanvas = useCallback(
     (paths: DrawPath[]) => {
-      if (!paths.length) {
-        clear();
-        return;
-      }
+      const ctx = ctxRef.current;
+      if (!ctx) return;
 
       clear();
 
@@ -137,10 +158,13 @@ const useCanvasDrawing = (): UseCanvasDrawingReturn => {
   }, []);
 
   // Check if a point is within canvas bounds
-  const isValidPoint = useCallback((point: Point) => {
-    const { width, height } = stateRef.current;
-    return point.x >= 0 && point.y >= 0 && point.x < width && point.y < height;
-  }, []);
+  const isValidPoint = useCallback(
+    (point: Point) => {
+      // Read dimensions from state
+      return point.x >= 0 && point.y >= 0 && point.x < dimensions.width && point.y < dimensions.height;
+    },
+    [dimensions.width, dimensions.height]
+  );
 
   // Convert mouse event coordinates to canvas coordinates
   const getCanvasPoint = useCallback((e: React.MouseEvent<HTMLCanvasElement>): Point | undefined => {
@@ -156,7 +180,7 @@ const useCanvasDrawing = (): UseCanvasDrawingReturn => {
 
   return {
     canvasRef,
-    canvasState: stateRef.current,
+    canvasState: { ...dimensions, ctx: ctxRef.current },
     initializeCanvas,
     drawLine,
     drawPath,

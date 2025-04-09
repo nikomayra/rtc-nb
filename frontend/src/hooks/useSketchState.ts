@@ -1,12 +1,13 @@
+/**
+ * @deprecated This hook is being phased out in favor of useSketchManager.
+ * The original code is kept below for reference during refactoring.
+ */
+
+/*
 // import { useCallback, useRef, useState, useEffect } from "react";
 // import { DrawPath, Sketch } from "../types/interfaces";
 
 // // Handles local drawing state and path management
-
-/**
- * @deprecated This hook is being phased out in favor of the new sketch state management system.
- * Please use useSketchContext() instead for new code.
- */
 
 // const DEBUG = true;
 
@@ -245,3 +246,4 @@
 //     getAllPaths,
 //   };
 // };
+*/

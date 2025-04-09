@@ -1,17 +1,30 @@
-import React from "react";
-import { OutgoingMessage, ChannelUpdateAction, Channel, IncomingMessage } from "../types/interfaces";
+import { createContext } from "react";
+import { OutgoingMessage, IncomingMessage } from "../types/interfaces";
 
-export interface SystemMessageHandler {
-  onChannelUpdate?: (action: ChannelUpdateAction, channel: Channel) => void;
-  onSystemUserStatus?: (count: number) => void;
-  // ... other system message types
-}
+export type SystemMessageHandler = {
+  onChannelUpdate?: (message: IncomingMessage) => void;
+  onSystemUserStatus?: (message: IncomingMessage) => void;
+  // Add other system message handlers
+};
 
-export interface ChannelMessageHandler {
+export type ChannelMessageHandler = {
+  onUserStatus?: (username: string, status: "online" | "offline") => void;
   onChatMessage?: (message: IncomingMessage) => void;
   onMemberUpdate?: (message: IncomingMessage) => void;
-  onUserStatus?: (username: string, status: "online" | "offline") => void;
-  // ... other channel message types
+  onSketchMessage?: (message: IncomingMessage) => void;
+  // Add other message type handlers here as needed
+};
+
+export interface WebSocketContextActions {
+  connectSystem: (token: string) => void;
+  disconnectSystem: () => void;
+  connectChannel: (token: string, channelName: string) => void;
+  disconnectChannel: () => void;
+  send: (message: OutgoingMessage) => void;
+  addChannelHandlers: (key: string, handlers: ChannelMessageHandler) => void;
+  removeChannelHandlers: (key: string) => void;
+  addSystemHandlers: (key: string, handlers: SystemMessageHandler) => void;
+  removeSystemHandlers: (key: string) => void;
 }
 
 export interface WebSocketContextType {
@@ -19,15 +32,7 @@ export interface WebSocketContextType {
     systemConnected: boolean;
     channelConnected: boolean;
   };
-  actions: {
-    connectSystem: (token: string) => void;
-    connectChannel: (token: string, channelName: string) => void;
-    disconnectChannel: () => void;
-    disconnectAll: () => void;
-    send: (message: OutgoingMessage) => void;
-    setSystemHandlers: (handlers: SystemMessageHandler) => void;
-    setChannelHandlers: (handlers: ChannelMessageHandler) => void;
-  };
+  actions: WebSocketContextActions;
 }
 
-export const WebSocketContext = React.createContext<WebSocketContextType | null>(null);
+export const WebSocketContext = createContext<WebSocketContextType | null>(null);

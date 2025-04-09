@@ -51,9 +51,9 @@ const (
 type SketchCommand struct {
 	CommandType SketchCommandType `json:"command_type"`
 	SketchID    string            `json:"sketch_id"`
-	Region      *Region           `json:"region,omitempty"`
+	IsPartial   *bool             `json:"is_partial,omitempty"`
 	SketchData  *Sketch           `json:"sketch_data,omitempty"`
-	PathID      *string           `json:"path_id,omitempty"`
+	Region      *Region           `json:"region,omitempty"`
 }
 
 type MessageContent struct {
@@ -100,18 +100,20 @@ func (m *IncomingMessage) Validate() error {
 		if m.Content.SketchCmd == nil {
 			return errors.New("sketch command required for sketch message")
 		}
-		switch m.Content.SketchCmd.CommandType {
+		cmd := m.Content.SketchCmd
+		if cmd.SketchID == "" {
+			return errors.New("sketch ID required for all sketch commands")
+		}
+		switch cmd.CommandType {
 		case SketchCommandTypeUpdate:
-			if m.Content.SketchCmd.SketchID == "" || m.Content.SketchCmd.Region == nil {
-				return errors.New("sketch ID and region required for sketch update")
+			if cmd.Region == nil || cmd.Region.Paths == nil || len(cmd.Region.Paths) == 0 || cmd.IsPartial == nil {
+				return errors.New("region with at least one path, and isPartial flag required for sketch update")
 			}
 		case SketchCommandTypeClear, SketchCommandTypeDelete:
-			if m.Content.SketchCmd.SketchID == "" {
-				return errors.New("sketch ID required for sketch command")
-			}
+			break
 		case SketchCommandTypeNew:
-			if m.Content.SketchCmd.SketchID == "" || m.Content.SketchCmd.SketchData == nil {
-				return errors.New("sketch ID and sketch data required for new sketch")
+			if cmd.SketchData == nil {
+				return errors.New("sketch data required for new sketch command")
 			}
 		default:
 			return errors.New("invalid sketch command type")
@@ -219,11 +221,36 @@ func NewMemberUpdateMessage(channelName, actorUsername, targetUsername, action s
 	}
 }
 
+// Helper function to create a Sketch command message for broadcasting
+// Used by API handlers after successful operations (Create, Delete, Clear)
+func NewSketchBroadcastMessage(channelName, username string, command SketchCommand) *Message {
+	return &Message{
+		ID:          uuid.NewString(),
+		ChannelName: channelName,
+		Username:    username, // User who initiated the API action
+		Type:        MessageTypeSketch,
+		Timestamp:   time.Now().UTC(),
+		Content: MessageContent{
+			SketchCmd: &command,
+		},
+	}
+}
+
 // func (m *Message) RequiresPersistence() bool {
 // 	switch m.Type {
 // 	case MessageTypeSketch:
+// 		// Only persist COMPLETE sketch updates
+// 		if m.Content.SketchCmd != nil &&
+// 			m.Content.SketchCmd.CommandType == SketchCommandTypeUpdate &&
+// 			m.Content.SketchCmd.IsPartial != nil &&
+// 			!*m.Content.SketchCmd.IsPartial {
+// 			return true
+// 		}
 // 		return false
-// 	default:
+// 	case MessageTypeChannelUpdate, MessageTypeMemberUpdate, MessageTypeUserStatus, MessageTypeSystemUserStatus:
+// 		// System/Status messages generally not persisted this way
+// 		return false
+// 	default: // Text, Image
 // 		return true
 // 	}
 // }

@@ -383,18 +383,10 @@ func (s *Store) CreateSketch(ctx context.Context, sketch *models.Sketch) error {
 }
 
 func (s *Store) UpdateSketchWithTx(ctx context.Context, tx *sql.Tx, sketch *models.Sketch) error {
-	currentSketch, err := s.GetSketch(ctx, sketch.ID)
-	if err != nil {
-		return fmt.Errorf("select sketch: %w", err)
-	}
+	// The 'sketch' object passed in has already been modified in memory by the sketch buffer.
+	// Do NOT re-fetch the sketch here. Directly marshal the regions from the passed-in sketch.
 
-	// Merge regions
-	for k, v := range sketch.Regions {
-		currentSketch.Regions[k] = v
-	}
-
-	var updatedRegionsJSON []byte
-	updatedRegionsJSON, err = json.Marshal(currentSketch.Regions)
+	updatedRegionsJSON, err := json.Marshal(sketch.Regions)
 	if err != nil {
 		return fmt.Errorf("failed to marshal updated regions: %w", err)
 	}

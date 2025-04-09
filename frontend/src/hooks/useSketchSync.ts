@@ -1,231 +1,198 @@
-import { useCallback, useContext, useEffect, useRef } from "react";
-import { WebSocketContext } from "../contexts/webSocketContext";
-import { SketchContext } from "../contexts/sketchContext";
-import { AuthContext } from "../contexts/authContext";
-import { DrawPath, IncomingMessage, MessageType, Region, SketchCommandType } from "../types/interfaces";
-import { BASE_URL } from "../utils/constants";
-import { axiosInstance } from "../api/axiosInstance";
+import { useCallback, useEffect, useRef } from "react";
+import { useWebSocketContext } from "./useWebSocketContext";
+import { useAuthContext } from "./useAuthContext";
+import { IncomingMessage, MessageType, SketchCommandType, SketchCommand, Region } from "../types/interfaces";
+import { ChannelMessageHandler } from "../contexts/webSocketContext";
 
-// Debug flag for logging control
-const DEBUG = true;
+// Define the structure for sketch update data passed to callbacks
+export interface SketchUpdateData {
+  region: Region;
+  isPartial: boolean;
+  sketchId: string;
+  username: string;
+}
 
+// Callbacks provided by the consuming hook (useSketchManager)
+// Only needs to handle incoming drawing updates.
+interface SketchSyncCallbacks {
+  onUpdateFromServer: (data: SketchUpdateData) => void;
+}
+
+// Props for the useSketchSync hook
 interface UseSketchSyncProps {
-  channelName: string;
-  sketchId: string | undefined;
-  onUpdateFromServer: (update: Region) => void;
-  onClearFromServer: () => void;
+  channelName: string | undefined;
+  sketchId: string | undefined; // The specific sketch ID this hook synchronizes
+  callbacks: SketchSyncCallbacks;
 }
 
+// Return value: Only provides the ability to send drawing updates.
 interface UseSketchSyncReturn {
-  // Send methods
-  sendUpdate: (path: DrawPath) => void;
-  sendClear: () => void;
+  sendUpdate: (region: Region, isPartial: boolean) => void;
 }
 
-export const useSketchSync = ({
-  channelName,
-  sketchId,
-  onUpdateFromServer,
-  onClearFromServer,
-}: UseSketchSyncProps): UseSketchSyncReturn => {
-  const wsService = useContext(WebSocketContext);
-  const sketchContext = useContext(SketchContext);
-  const authContext = useContext(AuthContext);
+/**
+ * Hook responsible ONLY for real-time synchronization of SKETCH DRAWING updates (partial/complete)
+ * via WebSockets for a specific, active sketch.
+ * Handles sending local drawing updates and processing incoming drawing updates from others.
+ * Other sketch lifecycle events (create, delete, clear) are handled by SketchProvider.
+ */
+export const useSketchSync = ({ channelName, sketchId, callbacks }: UseSketchSyncProps): UseSketchSyncReturn => {
+  const wsService = useWebSocketContext();
+  const { state: authState } = useAuthContext();
 
-  if (!sketchContext || !wsService || !authContext) {
-    throw new Error("Required contexts not found");
-  }
-
-  // Refs to track current state
+  // Use refs to store current values to avoid stale closures in callbacks
   const currentSketchIdRef = useRef(sketchId);
-  const isProcessingMessage = useRef(false);
-  const messageQueue = useRef<IncomingMessage[]>([]);
+  const channelNameRef = useRef(channelName);
+  const callbacksRef = useRef(callbacks);
 
-  // Update ref when sketch ID changes
+  // Update refs when props change
   useEffect(() => {
     currentSketchIdRef.current = sketchId;
   }, [sketchId]);
 
-  // Send a sketch update to the server
-  const sendUpdate = useCallback(
-    (path: DrawPath) => {
-      if (!channelName || !sketchId || !path.points.length) {
-        if (DEBUG) console.warn("[useSketchSync] Cannot send update: missing data");
-        return;
-      }
-
-      try {
-        // Calculate bounds for the region
-        const points = path.points;
-        const minX = Math.min(...points.map((p) => p.x));
-        const minY = Math.min(...points.map((p) => p.y));
-        const maxX = Math.max(...points.map((p) => p.x));
-        const maxY = Math.max(...points.map((p) => p.y));
-
-        if (DEBUG) console.log(`📤 [useSketchSync] Sending path with ${path.points.length} points`);
-
-        // Create the region object
-        const updatedRegion = {
-          start: { x: minX, y: minY },
-          end: { x: maxX, y: maxY },
-          paths: [
-            {
-              points: path.points,
-              isDrawing: path.isDrawing,
-              strokeWidth: path.strokeWidth,
-            },
-          ],
-        };
-
-        // Send the update via WebSocket
-        wsService.actions.send({
-          channelName,
-          type: MessageType.Sketch,
-          content: {
-            sketchCmd: {
-              commandType: SketchCommandType.Update,
-              sketchId,
-              region: updatedRegion,
-            },
-          },
-        });
-      } catch (error) {
-        console.error("[useSketchSync] Failed to send update:", error);
-      }
-    },
-    [wsService, channelName, sketchId]
-  );
-
-  // Send a clear command to the server
-  const sendClear = useCallback(() => {
-    if (!channelName || !sketchId) {
-      if (DEBUG) console.warn("[useSketchSync] Cannot send clear: missing data");
-      return;
-    }
-
-    if (DEBUG) console.log(`🧹 [useSketchSync] Sending clear command`);
-
-    // Send WebSocket message for real-time update
-    wsService.actions.send({
-      channelName,
-      type: MessageType.Sketch,
-      content: {
-        sketchCmd: {
-          commandType: SketchCommandType.Clear,
-          sketchId,
-        },
-      },
-    });
-
-    // Also make HTTP request to persist the clear operation
-    axiosInstance
-      .post(
-        `${BASE_URL}/clearSketch`,
-        {
-          channel_name: channelName,
-          sketch_id: sketchId,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${authContext.state.token}`,
-          },
-        }
-      )
-      .catch((error) => {
-        console.error(`❌ [useSketchSync] Failed to clear sketch in database:`, error);
-      });
-  }, [wsService, channelName, sketchId, authContext.state.token]);
-
-  // Handle incoming messages
-  const handleMessage = useCallback(
-    async (message: IncomingMessage) => {
-      if (message.type !== MessageType.Sketch || !message.content.sketchCmd) return;
-
-      // Skip if we're already processing a message - will be handled by the queue
-      if (isProcessingMessage.current) {
-        if (DEBUG) console.log(`⏳ [useSketchSync] Queue message (${messageQueue.current.length + 1} pending)`);
-        messageQueue.current.push(message);
-        return;
-      }
-
-      try {
-        isProcessingMessage.current = true;
-        const cmd = message.content.sketchCmd;
-
-        // Skip our own messages - handled locally already
-        if (message.username === authContext.state.username) {
-          if (DEBUG) console.log(`🔄 [useSketchSync] Ignoring own message`);
-          return;
-        }
-
-        // Process based on command type
-        switch (cmd.commandType) {
-          case SketchCommandType.Update:
-            if (cmd.region && currentSketchIdRef.current === cmd.sketchId) {
-              if (DEBUG) console.log(`🔄 [useSketchSync] Update: ${cmd.region.paths?.length || 0} paths`);
-              onUpdateFromServer(cmd.region);
-            }
-            break;
-
-          case SketchCommandType.Clear:
-            if (currentSketchIdRef.current === cmd.sketchId) {
-              if (DEBUG) console.log(`🧹 [useSketchSync] Clear from ${message.username}`);
-              onClearFromServer();
-            }
-            break;
-
-          case SketchCommandType.Delete:
-            if (DEBUG) console.log(`🗑️ [useSketchSync] Delete sketch: ${cmd.sketchId}`);
-            sketchContext.actions.deleteSketch(cmd.sketchId, authContext.state.token);
-            if (currentSketchIdRef.current === cmd.sketchId) {
-              sketchContext.actions.setCurrentSketch(null);
-            }
-            break;
-
-          case SketchCommandType.New:
-            if (cmd.sketchData) {
-              if (DEBUG) console.log(`📝 [useSketchSync] New sketch: ${cmd.sketchData.id}`);
-              sketchContext.actions.createSketch(
-                channelName,
-                cmd.sketchData.displayName,
-                cmd.sketchData.width,
-                cmd.sketchData.height,
-                authContext.state.token
-              );
-            }
-            break;
-        }
-      } catch (error) {
-        console.error("❌ [useSketchSync] Error:", error);
-      } finally {
-        isProcessingMessage.current = false;
-
-        // Process the next message if any are queued
-        if (messageQueue.current.length > 0 && !isProcessingMessage.current) {
-          const nextMessage = messageQueue.current.shift();
-          if (nextMessage) {
-            handleMessage(nextMessage); // Process the next message
-          }
-        }
-      }
-    },
-    [authContext, sketchContext.actions, onUpdateFromServer, onClearFromServer, channelName]
-  );
-
-  // Set up WebSocket handler
   useEffect(() => {
-    wsService.actions.setMessageHandlers({
-      onSketchMessage: handleMessage,
-    });
+    channelNameRef.current = channelName;
+  }, [channelName]);
 
-    // Clean up on unmount
-    return () => {
-      wsService.actions.setMessageHandlers({});
+  useEffect(() => {
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
+
+  // --- Send Operations ---
+
+  // Helper to send any sketch command
+  const sendSketchCommand = useCallback(
+    (commandPayload: SketchCommand) => {
+      const currentChannel = channelNameRef.current;
+      const currentWsSketchId = currentSketchIdRef.current; // Use the sketchId managed by this hook instance
+
+      // Ensure we have a channel, a sketch ID for this hook, and are connected
+      if (!currentChannel || !currentWsSketchId) {
+        if (import.meta.env.DEV)
+          console.warn("[useSketchSync] Cannot send command: Missing channel or sketchId for this sync instance.");
+        return;
+      }
+      if (!wsService.state.channelConnected) {
+        if (import.meta.env.DEV)
+          console.warn("[useSketchSync] Cannot send command: WebSocket not connected/channel not joined.");
+        return;
+      }
+
+      // Ensure the command payload targets the correct sketch ID for this hook
+      if (commandPayload.sketchId !== currentWsSketchId) {
+        console.error(
+          `[useSketchSync] Mismatch: Command targets sketch ${commandPayload.sketchId}, but hook is for ${currentWsSketchId}. Aborting send.`
+        );
+        return;
+      }
+
+      wsService.actions.send({
+        channelName: currentChannel,
+        type: MessageType.Sketch,
+        content: {
+          sketchCmd: commandPayload,
+        },
+      });
+    },
+    [wsService] // wsService actions are stable
+  );
+
+  // Send a drawing update (partial or complete) containing a region
+  const sendUpdate = useCallback(
+    (region: Region, isPartial: boolean) => {
+      const currentWsSketchId = currentSketchIdRef.current;
+      if (!currentWsSketchId || !region) {
+        if (import.meta.env.DEV)
+          console.warn("[useSketchSync] Cannot send update: Missing sketchId or region data for this sync instance.");
+        return;
+      }
+
+      if (import.meta.env.DEV)
+        console.log(
+          `📤 [useSketchSync] Sending ${isPartial ? "PARTIAL" : "COMPLETE"} update for sketch ${currentWsSketchId}`
+        );
+
+      sendSketchCommand({
+        commandType: SketchCommandType.Update,
+        sketchId: currentWsSketchId, // Use the hook's sketchId
+        region: region,
+        isPartial: isPartial,
+      });
+    },
+    [sendSketchCommand]
+  );
+
+  // --- Incoming Message Handler --- // Focuses ONLY on UPDATE commands
+
+  const handleIncomingSketchMessage = useCallback(
+    (message: IncomingMessage) => {
+      // Basic validation
+      if (message.type !== MessageType.Sketch || !message.content.sketchCmd) {
+        return;
+      }
+
+      const cmd = message.content.sketchCmd;
+      const senderUsername = message.username;
+      const currentWsSketchId = currentSketchIdRef.current;
+
+      // Ignore own messages
+      if (senderUsername === authState.username) {
+        return;
+      }
+
+      // Ignore messages for sketches other than the one this hook instance is managing
+      if (cmd.sketchId !== currentWsSketchId) {
+        return;
+      }
+
+      // Process only UPDATE commands relevant to this hook
+      if (cmd.commandType === SketchCommandType.Update) {
+        if (import.meta.env.DEV)
+          console.log(
+            `📥 [useSketchSync] Received ${
+              cmd.isPartial ? "PARTIAL" : "COMPLETE"
+            } update from ${senderUsername} for sketch ${cmd.sketchId}`
+          );
+
+        // Validate required fields for an update
+        if (cmd.region && typeof cmd.isPartial === "boolean") {
+          // Call the callback provided by useSketchManager
+          callbacksRef.current.onUpdateFromServer?.({
+            region: cmd.region,
+            isPartial: cmd.isPartial,
+            sketchId: cmd.sketchId,
+            username: senderUsername,
+          });
+        } else {
+          console.warn("[useSketchSync] Received invalid sketch update message (missing region/isPartial):", cmd);
+        }
+      } else {
+        // Ignore NEW, DELETE, CLEAR commands in this hook
+        if (import.meta.env.DEV) console.log(`[useSketchSync] Ignoring non-UPDATE command: ${cmd.commandType}`);
+      }
+    },
+    [authState.username] // Dependency: authState to check against sender
+  );
+
+  // --- Effect to Register WebSocket Handlers --- // Specific to this hook's concerns
+  useEffect(() => {
+    const handlerKey = `sketchSync_${sketchId}`;
+
+    const handlerConfig: ChannelMessageHandler = {
+      onSketchMessage: handleIncomingSketchMessage,
     };
-  }, [wsService, handleMessage]);
+    // Add handler with unique key
+    wsService.actions.addChannelHandlers(handlerKey, handlerConfig);
+    if (import.meta.env.DEV) console.log(`[useSketchSync] Added sketch message handler (Key: ${handlerKey})`);
+
+    return () => {
+      // Remove handler with the same unique key
+      wsService.actions.removeChannelHandlers(handlerKey);
+      if (import.meta.env.DEV) console.log(`[useSketchSync] Removed sketch message handler (Key: ${handlerKey})`);
+    };
+  }, [wsService, handleIncomingSketchMessage, sketchId]);
 
   return {
     sendUpdate,
-    sendClear,
   };
 };

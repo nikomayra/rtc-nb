@@ -4,7 +4,6 @@ import SketchList from "./SketchList";
 import { Modal } from "../Generic/Modal";
 import { useNotification } from "../../hooks/useNotification";
 import { useSketchContext } from "../../hooks/useSketchContext";
-import { useAuthContext } from "../../hooks/useAuthContext";
 
 interface SketchConfigProps {
   channelName: string;
@@ -21,12 +20,9 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const sketchContext = useSketchContext();
-  const authContext = useAuthContext();
   const { showError } = useNotification();
 
-  if (!sketchContext || !authContext) throw new Error("SketchContext or AuthContext not found");
   const { state: sketchState, actions: sketchActions } = sketchContext;
-  const { state: authState } = authContext;
 
   const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -68,7 +64,7 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
 
     setIsOpen(false);
     try {
-      await sketchActions.createSketch(channelName, displayName, parseInt(width), parseInt(height), authState.token);
+      await sketchActions.createSketch(channelName, displayName, parseInt(width), parseInt(height));
 
       // Reset form fields
       setDisplayName("");
@@ -82,7 +78,7 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
 
   const handleSelectSketch = async (sketch: Sketch) => {
     try {
-      await sketchActions.loadSketch(channelName, sketch.id, authState.token);
+      await sketchActions.loadSketch(channelName, sketch.id);
     } catch (error) {
       // Error handling is done in the context
       console.error("Failed to load sketch:", error);
@@ -91,8 +87,7 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
 
   const handleDeleteSketch = async (id: string) => {
     try {
-      await sketchActions.deleteSketch(id, authState.token);
-      await sketchActions.loadSketches(channelName, authState.token);
+      await sketchActions.deleteSketch(id);
     } catch (error) {
       // Error handling is done in the context
       console.error("Failed to delete sketch:", error);

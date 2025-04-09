@@ -13,7 +13,7 @@ export interface SketchState {
   currentSketch: Sketch | null;
   paths: DrawPath[]; // All completed paths for current sketch
   isLoading: boolean;
-  error: string | null;
+  // error: string | null;
 }
 
 // Pure state operations (synchronous)
@@ -22,21 +22,16 @@ export interface SketchStateActions {
   addPath: (path: DrawPath) => void;
   clearPaths: () => void;
   setLoading: (isLoading: boolean) => void;
-  setError: (error: string | null) => void;
+  // setError: (error: string | null) => void;
 }
 
 // Service operations (asynchronous)
 export interface SketchServiceActions {
-  createSketch: (
-    channelName: string,
-    displayName: string,
-    width: number,
-    height: number,
-    token: string
-  ) => Promise<Sketch>;
-  deleteSketch: (sketchId: string, token: string) => Promise<void>;
-  loadSketch: (channelName: string, sketchId: string, token: string) => Promise<Sketch>;
-  loadSketches: (channelName: string, token: string) => Promise<Sketch[]>;
+  createSketch: (channelName: string, displayName: string, width: number, height: number) => Promise<Sketch>;
+  deleteSketch: (sketchId: string) => Promise<void>;
+  loadSketch: (channelName: string, sketchId: string) => Promise<Sketch | null>;
+  loadSketches: (channelName: string) => Promise<Sketch[]>;
+  clearSketch: (channelName: string, sketchId: string) => Promise<void>;
 }
 
 // Combined actions interface
@@ -52,7 +47,7 @@ export const initialState: SketchState = {
   currentSketch: null,
   paths: [],
   isLoading: false,
-  error: null,
+  // error: null,
 };
 
 export const SketchContext = createContext<SketchContextType | null>(null);

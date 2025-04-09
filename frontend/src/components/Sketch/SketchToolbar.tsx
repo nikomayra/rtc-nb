@@ -1,12 +1,10 @@
 import { useCallback } from "react";
-import { useSketchSync } from "../../hooks/useSketchSync";
+// import { useSketchSync } from "../../hooks/useSketchSync";
 
 type Tool = "draw" | "erase" | "pan";
 
 interface SketchToolbarProps {
   onClear: () => void;
-  currentSketchId: string;
-  channelName: string;
   currentTool: Tool;
   setCurrentTool: (tool: Tool) => void;
   strokeWidth: number;
@@ -15,29 +13,15 @@ interface SketchToolbarProps {
 
 export const SketchToolbar = ({
   onClear,
-  currentSketchId,
-  channelName,
   currentTool,
   setCurrentTool,
   strokeWidth,
   setStrokeWidth,
 }: SketchToolbarProps) => {
-  // Initialize sync hook for real-time updates
-  const sketchSync = useSketchSync({
-    channelName,
-    sketchId: currentSketchId,
-    onUpdateFromServer: () => {}, // Handled by useSketch
-    onClearFromServer: () => {}, // Handled by useSketch
-  });
-
-  const handleClear = useCallback(async () => {
-    try {
-      onClear();
-      sketchSync.sendClear();
-    } catch (error) {
-      console.error("Failed to clear sketch:", error);
-    }
-  }, [onClear, sketchSync]);
+  // handleClear simply calls the provided onClear prop
+  const handleClear = useCallback(() => {
+    onClear(); // Trigger the clear logic managed by useSketchManager
+  }, [onClear]);
 
   return (
     <div className="flex gap-2 p-3 justify-center border-t border-primary/20 bg-surface-dark/10">

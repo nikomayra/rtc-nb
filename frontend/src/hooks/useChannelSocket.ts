@@ -6,6 +6,8 @@ import { useSystemContext } from "./useSystemContext";
 import { useWebSocketContext } from "./useWebSocketContext";
 import { useChannelContext } from "../hooks/useChannelContext";
 
+const HANDLER_KEY = "channelSocket"; // Unique key for these handlers
+
 export const useChannelSocket = () => {
   const websocketContext = useWebSocketContext();
   const systemContext = useSystemContext();
@@ -18,7 +20,7 @@ export const useChannelSocket = () => {
   // Destructure state and actions from WebSocket context
   const { state: wsState, actions: wsActions } = websocketContext;
   const { channelConnected } = wsState; // Get connection state
-  const { send, setChannelHandlers, connectChannel, disconnectChannel } = wsActions;
+  const { send, addChannelHandlers, removeChannelHandlers, connectChannel, disconnectChannel } = wsActions;
 
   const { state: systemState } = systemContext;
   const currentChannelName = systemState.currentChannel?.name;
@@ -157,27 +159,28 @@ export const useChannelSocket = () => {
     // If a channel is selected, register the handlers.
     if (currentChannelName) {
       if (import.meta.env.DEV) {
-        console.log(`[useChannelSocket] Effect: Setting channel handlers for: ${currentChannelName}`);
+        console.log(`[useChannelSocket] Effect: Adding channel handlers for key: ${HANDLER_KEY}`);
       }
-      setChannelHandlers(handlers);
+      addChannelHandlers(HANDLER_KEY, handlers);
     } else {
       // If no channel is selected, ensure handlers are cleared.
       if (import.meta.env.DEV) {
-        console.log("[useChannelSocket] Effect: Clearing channel handlers (no channel selected).");
+        console.log(
+          `[useChannelSocket] Effect: Removing channel handlers for key: ${HANDLER_KEY} (no channel selected).`
+        );
       }
-      setChannelHandlers({});
+      removeChannelHandlers(HANDLER_KEY);
     }
 
     // Cleanup: Clear handlers when the channel changes or the hook unmounts.
     return () => {
       if (import.meta.env.DEV) {
-        console.log("[useChannelSocket] Effect Cleanup: Clearing channel handlers.");
+        console.log(`[useChannelSocket] Effect Cleanup: Removing channel handlers for key: ${HANDLER_KEY}`);
       }
-      // Pass empty object to clear handlers in the service
-      setChannelHandlers({});
+      removeChannelHandlers(HANDLER_KEY);
     };
     // This effect depends on the selected channel name and the memoized handlers object.
-  }, [currentChannelName, handlers, setChannelHandlers]);
+  }, [currentChannelName, handlers, addChannelHandlers, removeChannelHandlers]);
 
   // --- Send Actions ---
   const sendChatMessage = useCallback(

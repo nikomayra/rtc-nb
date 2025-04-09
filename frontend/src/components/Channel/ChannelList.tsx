@@ -69,7 +69,7 @@ export const ChannelList = () => {
         </button>
         {isCreateFormOpen && (
           <div className="mt-3 px-2">
-            <CreateChannelForm />
+            <CreateChannelForm setIsCreateFormOpen={setIsCreateFormOpen} />
           </div>
         )}
       </div>

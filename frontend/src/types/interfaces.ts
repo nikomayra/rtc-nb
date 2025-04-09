@@ -64,18 +64,26 @@ export const SketchCommandSchema = z
     commandType: z.nativeEnum(SketchCommandType),
     sketchId: z.string().uuid(),
     region: RegionSchema.optional(),
+    isPartial: z.boolean().optional(),
     sketchData: SketchSchema.optional(),
-    pathId: z.string().uuid().optional(),
   })
   .refine(
     (data) => {
-      if (data.commandType === SketchCommandType.Update) {
-        return data.region !== undefined;
+      switch (data.commandType) {
+        case SketchCommandType.Update:
+          return data.region !== undefined && data.isPartial !== undefined;
+        case SketchCommandType.New:
+          return data.sketchData !== undefined;
+        case SketchCommandType.Clear:
+        case SketchCommandType.Delete:
+        case SketchCommandType.Select:
+          return true;
+        default:
+          return false;
       }
-      return true;
     },
     {
-      message: "Invalid sketch command structure",
+      message: "Invalid sketch command structure for the given command type",
     }
   );
 
