@@ -15,7 +15,7 @@ interface UseCanvasDrawingReturn {
   initializeCanvas: (width: number, height: number) => void;
 
   // Drawing methods
-  drawLine: (start: Point, end: Point, isDrawing: boolean, strokeWidth: number) => void;
+  drawLine: (start: Point, end: Point, isDrawing: boolean, strokeWidth: number, color: string) => void;
   drawPath: (path: DrawPath) => void;
   clear: () => void;
   redrawCanvas: (paths: DrawPath[]) => void;
@@ -77,14 +77,15 @@ const useCanvasDrawing = (): UseCanvasDrawingReturn => {
   }, [dimensions.width, dimensions.height]);
 
   // Draw a single line segment
-  const drawLine = useCallback((start: Point, end: Point, isDrawing: boolean, strokeWidth: number) => {
+  const drawLine = useCallback((start: Point, end: Point, isDrawing: boolean, strokeWidth: number, color: string) => {
     const ctx = ctxRef.current;
     if (!ctx) return;
 
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
-    ctx.strokeStyle = isDrawing ? "#ffffff" : "#000000"; // Assuming black for erase for now
+    // Use path.color if drawing, default/ignored if erasing
+    ctx.strokeStyle = isDrawing ? color : "#000000"; // Color parameter added
     ctx.lineWidth = strokeWidth;
     ctx.stroke();
   }, []);
@@ -95,7 +96,8 @@ const useCanvasDrawing = (): UseCanvasDrawingReturn => {
     if (!ctx || !path.points || path.points.length === 0) return;
 
     // Set style and width for the entire path
-    ctx.strokeStyle = path.isDrawing ? "#ffffff" : "#000000"; // Assuming black for erase
+    // Use the path's color if drawing. Erase color is irrelevant due to destination-out.
+    ctx.strokeStyle = path.isDrawing ? path.color : "#000000";
     ctx.lineWidth = path.strokeWidth;
     // Ensure line cap and join styles are applied for this path
     ctx.lineCap = "round";
@@ -132,14 +134,12 @@ const useCanvasDrawing = (): UseCanvasDrawingReturn => {
       const ctx = ctxRef.current;
       if (!ctx) return;
 
-      clear();
-
       paths.forEach((path) => {
         if (path.points.length < 2) return;
         drawPath(path);
       });
     },
-    [clear, drawPath]
+    [drawPath]
   );
 
   // Calculate the bounding box of a set of points

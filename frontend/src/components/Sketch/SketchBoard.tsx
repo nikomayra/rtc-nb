@@ -14,6 +14,7 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
   // Local state for UI interactions (tool, stroke, pan)
   const [currentTool, setCurrentTool] = useState<Tool>("draw");
   const [strokeWidth, setStrokeWidth] = useState(3);
+  const [currentColor, setCurrentColor] = useState<string>("#000000");
   const [isInteracting, setIsInteracting] = useState(false);
   const [panStart, setPanStart] = useState<Point | null>(null);
 
@@ -55,9 +56,9 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
         return;
       }
 
-      managerMouseDown(point, currentTool === "draw", strokeWidth);
+      managerMouseDown(point, currentTool === "draw", strokeWidth, currentColor);
     },
-    [canvasRef, currentSketch, currentTool, getCanvasPoint, isValidPoint, managerMouseDown, strokeWidth]
+    [canvasRef, currentSketch, currentTool, getCanvasPoint, isValidPoint, managerMouseDown, strokeWidth, currentColor]
   );
 
   const handleMouseMove = useCallback(
@@ -155,17 +156,19 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
               cursor: currentTool === "pan" ? "grab" : "crosshair",
               display: "block",
             }}
-            className="bg-neutral-500 border-2 border-dashed border-primary/30"
+            className="bg-gray-400 border-2 border-dashed border-primary/30"
           />
         </div>
       </div>
 
-      {/* Toolbar */}
+      {/* Toolbar - Pass color state down */}
       <SketchToolbar
         currentTool={currentTool}
         setCurrentTool={setCurrentTool}
         strokeWidth={strokeWidth}
         setStrokeWidth={setStrokeWidth}
+        currentColor={currentColor}
+        setCurrentColor={setCurrentColor}
         onClear={clearLocalAndRemote}
       />
     </div>

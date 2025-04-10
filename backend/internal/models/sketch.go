@@ -15,6 +15,7 @@ type DrawPath struct {
 	Points      []Point `json:"points"`
 	IsDrawing   bool    `json:"is_drawing"`
 	StrokeWidth int     `json:"stroke_width"`
+	Color       string  `json:"color"`
 }
 
 type Region struct {

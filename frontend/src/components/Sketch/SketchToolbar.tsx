@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 // import { useSketchSync } from "../../hooks/useSketchSync";
+import ColorPickerButton from "./ColorPickerButton";
 
 type Tool = "draw" | "erase" | "pan";
 
@@ -9,6 +10,8 @@ interface SketchToolbarProps {
   setCurrentTool: (tool: Tool) => void;
   strokeWidth: number;
   setStrokeWidth: (width: number) => void;
+  currentColor: string;
+  setCurrentColor: (color: string) => void;
 }
 
 export const SketchToolbar = ({
@@ -17,24 +20,41 @@ export const SketchToolbar = ({
   setCurrentTool,
   strokeWidth,
   setStrokeWidth,
+  currentColor,
+  setCurrentColor,
 }: SketchToolbarProps) => {
-  // handleClear simply calls the provided onClear prop
   const handleClear = useCallback(() => {
-    onClear(); // Trigger the clear logic managed by useSketchManager
+    onClear();
   }, [onClear]);
 
+  const handleColorChange = useCallback(
+    (newColor: string) => {
+      setCurrentColor(newColor);
+      if (currentTool === "erase") {
+        setCurrentTool("draw");
+      }
+    },
+    [currentTool, setCurrentColor, setCurrentTool]
+  );
+
   return (
-    <div className="flex gap-2 p-3 justify-center border-t border-primary/20 bg-surface-dark/10">
+    <div className="flex gap-2 p-3 justify-center items-center border-t border-primary/20 bg-surface-dark/10">
+      {/* Draw Button */}
       <button
         onClick={() => setCurrentTool("draw")}
         className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
           currentTool === "draw"
             ? "bg-primary/20 text-primary hover:bg-primary/30"
-            : "bg-surface-dark/50 text-text-light/70 hover:bg-red-500/10"
+            : "bg-surface-dark/50 text-text-light/70 hover:bg-surface-dark/70"
         }`}
       >
         ✏️ Draw
       </button>
+
+      {/* Color Picker Button */}
+      <ColorPickerButton currentColor={currentColor} onChangeColor={handleColorChange} />
+
+      {/* Erase Button */}
       <button
         onClick={() => setCurrentTool("erase")}
         className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
@@ -45,6 +65,8 @@ export const SketchToolbar = ({
       >
         🧽 Erase
       </button>
+
+      {/* Pan Button */}
       <button
         onClick={() => setCurrentTool("pan")}
         className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
@@ -55,6 +77,8 @@ export const SketchToolbar = ({
       >
         👋 Pan
       </button>
+
+      {/* Stroke Width Selector */}
       <select
         value={strokeWidth}
         onChange={(e) => setStrokeWidth(Number(e.target.value))}
@@ -66,6 +90,8 @@ export const SketchToolbar = ({
           </option>
         ))}
       </select>
+
+      {/* Clear Button */}
       <button
         onClick={handleClear}
         className="px-3 py-1.5 rounded-md text-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"

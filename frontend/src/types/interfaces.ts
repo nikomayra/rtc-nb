@@ -40,6 +40,7 @@ export const DrawPathSchema = z.object({
   points: z.array(PointSchema),
   isDrawing: z.boolean(),
   strokeWidth: z.number().min(1).default(1),
+  color: z.string(),
 });
 
 export const RegionSchema = z.object({

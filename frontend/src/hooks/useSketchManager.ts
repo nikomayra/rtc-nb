@@ -3,25 +3,12 @@ import { throttle } from "lodash";
 import useCanvasDrawing from "./useCanvasDrawing";
 import { useSketchSync, SketchUpdateData } from "./useSketchSync";
 import { useSketchContext } from "./useSketchContext";
-import { DrawPath, Point, Sketch, Region } from "../types/interfaces";
+import { DrawPath, Point, Region } from "../types/interfaces";
 
 const PARTIAL_UPDATE_THROTTLE_MS = 50;
 
 interface UseSketchManagerProps {
   channelName: string | undefined;
-}
-
-// Define the return value of the hook
-interface UseSketchManagerReturn {
-  canvasRef: React.RefObject<HTMLCanvasElement | null>;
-  canvasState: ReturnType<typeof useCanvasDrawing>["canvasState"];
-  getCanvasPoint: ReturnType<typeof useCanvasDrawing>["getCanvasPoint"];
-  isValidPoint: ReturnType<typeof useCanvasDrawing>["isValidPoint"];
-  currentSketch: Sketch | null;
-  handleMouseDown: (point: Point, isDrawingTool: boolean, strokeWidth: number) => void;
-  handleMouseMove: (point: Point) => void;
-  handleMouseUp: () => void;
-  clearLocalAndRemote: () => void;
 }
 
 const calculateRegionForPath = (path: DrawPath): Region => {
@@ -53,7 +40,7 @@ const calculateRegionForPath = (path: DrawPath): Region => {
 /**
  * Manages the state and interactions for an active sketch instance.
  */
-export const useSketchManager = ({ channelName }: UseSketchManagerProps): UseSketchManagerReturn => {
+export const useSketchManager = ({ channelName }: UseSketchManagerProps) => {
   const { state: sketchContextState, actions: sketchActions } = useSketchContext();
   // Destructure all needed functions/state from useCanvasDrawing
   const { canvasRef, initializeCanvas, clear, redrawCanvas, drawPath, getCanvasPoint, isValidPoint, canvasState } =
@@ -79,12 +66,24 @@ export const useSketchManager = ({ channelName }: UseSketchManagerProps): UseSke
         console.log(`📥 [Manager] Received ${data.isPartial ? "PARTIAL" : "COMPLETE"} update from ${data.username}`);
 
       if (data.region.paths && data.region.paths.length > 0) {
-        drawPath(data.region.paths[0]); // Draw the path received
+        // When receiving remote updates, use the two-pass approach IF the update isn't partial
+        // Partial updates should just draw directly for responsiveness
+        // Apply path with correct composite operation directly
+        const path = data.region.paths[0];
+        const ctx = canvasRef.current?.getContext("2d");
+        if (ctx) {
+          const originalGCO = ctx.globalCompositeOperation; // Store original GCO
+          ctx.globalCompositeOperation = path.isDrawing ? "source-over" : "destination-out";
+          drawPath(path);
+          ctx.globalCompositeOperation = originalGCO; // Restore original GCO
+        } else {
+          console.warn("[Manager] Context not available for remote update redraw.");
+        }
       } else {
         console.warn("[Manager] Received update region with no paths:", data.region);
       }
     },
-    [drawPath, sketchContextState.currentSketch?.id] // Depend on stable drawPath and context sketch ID
+    [drawPath, canvasRef, sketchContextState.currentSketch]
   );
 
   // Instantiate the sync hook, passing sketch ID directly from context
@@ -124,7 +123,7 @@ export const useSketchManager = ({ channelName }: UseSketchManagerProps): UseSke
         if (canvas.width !== width || canvas.height !== height) {
           if (import.meta.env.DEV)
             console.log(`[Manager] Initializing canvas ${width}x${height} (Current: ${canvas.width}x${canvas.height})`);
-          initializeCanvas(width, height); // This should clear internally
+          initializeCanvas(width, height);
         } else {
           // Dimensions match, just clear before redrawing paths
           if (import.meta.env.DEV) console.log(`[Manager] Canvas dimensions match. Clearing before redraw.`);
@@ -166,9 +165,6 @@ export const useSketchManager = ({ channelName }: UseSketchManagerProps): UseSke
         clear();
       }
     }
-    // Note: If canvas is null when this runs (initial mount timing), it will do nothing.
-    // When the ref is attached and component re-renders, if the sketch context has also updated,
-    // this effect will run again, and 'canvas' should then be available.
   }, [
     sketchContextState.currentSketch, // Primary dependency: The sketch data
     canvasRef, // The ref object itself (stable)
@@ -203,7 +199,7 @@ export const useSketchManager = ({ channelName }: UseSketchManagerProps): UseSke
   // --- Interaction Handlers ---
 
   const handleMouseDown = useCallback(
-    (point: Point, isDrawingTool: boolean, strokeWidth: number) => {
+    (point: Point, isDrawingTool: boolean, strokeWidth: number, currentColor: string) => {
       // Use current sketch directly from context
       if (!sketchContextState.currentSketch) return;
 
@@ -211,6 +207,7 @@ export const useSketchManager = ({ channelName }: UseSketchManagerProps): UseSke
         points: [point],
         isDrawing: isDrawingTool,
         strokeWidth: strokeWidth,
+        color: currentColor,
       };
 
       if (import.meta.env.DEV) console.log(`👇 [Manager] Start path - setting state only`);
@@ -240,7 +237,16 @@ export const useSketchManager = ({ channelName }: UseSketchManagerProps): UseSke
         };
 
         // Draw the path (now guaranteed to have >= 2 points if mouse has moved)
-        drawPath(updatedPath);
+        // Set context GCO before drawing locally
+        const ctx = canvasRef.current?.getContext("2d");
+        if (ctx) {
+          const originalGCO = ctx.globalCompositeOperation;
+          ctx.globalCompositeOperation = updatedPath.isDrawing ? "source-over" : "destination-out";
+          drawPath(updatedPath);
+          ctx.globalCompositeOperation = originalGCO; // Restore after drawing
+        } else {
+          console.warn("[Manager] Context not available for local draw path.");
+        }
 
         // Calculate region and send throttled update
         const region = calculateRegionForPath(updatedPath);
@@ -250,7 +256,7 @@ export const useSketchManager = ({ channelName }: UseSketchManagerProps): UseSke
         return { ...prev, currentPath: updatedPath };
       });
     },
-    [drawPath]
+    [canvasRef, drawPath]
   );
 
   const handleMouseUp = useCallback(() => {
