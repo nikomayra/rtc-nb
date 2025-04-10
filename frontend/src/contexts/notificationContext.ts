@@ -1,6 +1,6 @@
 import { ReactNode, createContext } from "react";
 
-export type NotificationType = "info" | "success" | "warning" | "error";
+export type NotificationType = "success" | "error";
 
 export interface Notification {
   id: string;

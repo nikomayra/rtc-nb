@@ -16,12 +16,13 @@ import { useAuthContext } from "../hooks/useAuthContext";
 import { useSystemContext } from "../hooks/useSystemContext";
 import { useWebSocketContext } from "../hooks/useWebSocketContext";
 import { ChannelMessageHandler } from "../contexts/webSocketContext";
+import { isAxiosError } from "axios";
 
 export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { showError } = useNotification();
   const authContext = useAuthContext();
   const systemContext = useSystemContext();
   const webSocketContext = useWebSocketContext();
-  const { showError, showSuccess } = useNotification();
 
   const [state, setState] = useState(initialState);
   const { state: systemState } = systemContext;
@@ -58,11 +59,12 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     []
   );
 
-  // Service actions defined first
+  // Service actions with error handling refactored
   const serviceActions = useMemo(() => {
     return {
+      // --- Load Sketches ---
       loadSketches: async (channelName: string): Promise<Sketch[]> => {
-        if (!authState.token) throw new Error("Not authenticated");
+        if (!authState.token) throw new Error("Not authenticated for loading sketches");
         stateActions.setLoading(true);
         try {
           const response = await sketchApi.getSketches(channelName, authState.token);
@@ -73,23 +75,30 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           stateActions.setSketches(sketches);
           return sketches;
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Failed to load sketches";
-          console.error("[SketchProvider] Load Sketches Error:", error);
-          showError(message);
-          stateActions.setSketches([]); // Clear sketches on error
-          throw error;
+          // Clean up state on any error
+          stateActions.setSketches([]);
+          console.error("Load sketches error:", error);
+          // Re-throw a user-friendly error
+          if (isAxiosError(error)) {
+            throw new Error(error.response?.data?.error?.message || "Failed to load sketches.");
+          } else if (error instanceof Error) {
+            throw new Error(error.message);
+          } else {
+            throw new Error("Failed to load sketches due to an unexpected error.");
+          }
         } finally {
           stateActions.setLoading(false);
         }
       },
 
+      // --- Create Sketch ---
       createSketch: async (
         channelName: string,
         displayName: string,
         width: number,
         height: number
       ): Promise<Sketch> => {
-        if (!authState.token) throw new Error("Not authenticated");
+        if (!authState.token) throw new Error("Not authenticated for creating sketch");
         stateActions.setLoading(true);
         try {
           const response = await sketchApi.createSketch(channelName, displayName, width, height, authState.token);
@@ -98,34 +107,38 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
           const newSketch = SketchSchema.parse(response.data);
           setState((prev) => ({ ...prev, sketches: [...prev.sketches, newSketch] }));
-          showSuccess("Sketch created successfully");
           return newSketch;
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Failed to create sketch";
-          console.error("[SketchProvider] Create Sketch Error:", error);
-          const finalMessage = message.includes("limit reached") ? "Channel sketch limit reached" : message;
-          showError(finalMessage);
-          throw error;
+          // Don't update state on error
+          console.error("Create sketch error:", error);
+          // Re-throw a user-friendly error
+          if (isAxiosError(error)) {
+            throw new Error(error.response?.data?.error?.message || "Failed to create sketch.");
+          } else if (error instanceof Error) {
+            throw new Error(error.message);
+          } else {
+            throw new Error("Failed to create sketch due to an unexpected error.");
+          }
         } finally {
           stateActions.setLoading(false);
         }
       },
 
+      // --- Load Sketch ---
       loadSketch: async (channelName: string, sketchId: string): Promise<Sketch | null> => {
-        if (!authState.token) throw new Error("Not authenticated");
+        if (!authState.token) throw new Error("Not authenticated for loading sketch");
         stateActions.setLoading(true);
         try {
           const response = await sketchApi.getSketch(channelName, sketchId, authState.token);
 
-          if (!response.success && (response as APIErrorResponse).error.message?.includes("not found")) {
-            // If sketch not found, ensure it's removed from local state if present
+          if (!response.success && (response as APIErrorResponse).error.code === 404) {
             setState((prev) => {
               const sketchExists = prev.sketches.some((s) => s.id === sketchId);
-              const newSketches = sketchExists ? prev.sketches.filter((s) => s.id !== sketchId) : prev.sketches;
+              if (!sketchExists) return prev;
+              const newSketches = prev.sketches.filter((s) => s.id !== sketchId);
               const newCurrentSketch = prev.currentSketch?.id === sketchId ? null : prev.currentSketch;
               return { ...prev, sketches: newSketches, currentSketch: newCurrentSketch };
             });
-            showError("Sketch not found.");
             return null;
           }
 
@@ -137,62 +150,103 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           stateActions.setCurrentSketch(sketch);
           return sketch;
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Failed to load sketch";
-          console.error("[SketchProvider] Load Sketch Error:", error);
+          // Clean up state on any error
           stateActions.setCurrentSketch(null);
-          showError(message);
-          throw error;
+          console.error("Load sketch error:", error);
+          // Re-throw a user-friendly error
+          if (isAxiosError(error)) {
+            // Handle 404 specifically if needed based on axios error structure
+            if (error.response?.status === 404) {
+              // If the 404 comes from axios, handle it similar to the API 404 response
+              setState((prev) => {
+                const sketchExists = prev.sketches.some((s) => s.id === sketchId);
+                if (!sketchExists) return prev; // No local sketch to remove
+                const newSketches = prev.sketches.filter((s) => s.id !== sketchId);
+                const newCurrentSketch = prev.currentSketch?.id === sketchId ? null : prev.currentSketch;
+                console.warn(
+                  `[SketchProvider] Sketch ${sketchId} not found on server (via network error), removing locally.`
+                );
+                return { ...prev, sketches: newSketches, currentSketch: newCurrentSketch };
+              });
+              return null; // Indicate sketch not found
+            }
+            throw new Error(error.response?.data?.error?.message || "Failed to load sketch.");
+          } else if (error instanceof Error) {
+            throw new Error(error.message);
+          } else {
+            throw new Error("Failed to load sketch due to an unexpected error.");
+          }
         } finally {
           stateActions.setLoading(false);
         }
       },
 
+      // --- Delete Sketch ---
       deleteSketch: async (sketchId: string): Promise<void> => {
-        if (!authState.token) throw new Error("Not authenticated");
+        if (!authState.token) throw new Error("Not authenticated for deleting sketch");
         stateActions.setLoading(true);
         try {
-          await sketchApi.deleteSketch(sketchId, authState.token);
+          const response = await sketchApi.deleteSketch(sketchId, authState.token);
+          if (!response.success) {
+            throw new Error((response as APIErrorResponse).error.message || "Failed to delete sketch");
+          }
           // Update local state AFTER successful API call
           setState((prev) => {
+            const sketchExists = prev.sketches.some((s) => s.id === sketchId);
+            if (!sketchExists) return prev;
+
             const newSketches = prev.sketches.filter((s) => s.id !== sketchId);
             const newCurrentSketch = prev.currentSketch?.id === sketchId ? null : prev.currentSketch;
             if (import.meta.env.DEV) console.log(`[SketchProvider] Local delete: Removing sketch ${sketchId}`);
             return { ...prev, sketches: newSketches, currentSketch: newCurrentSketch };
           });
-          showSuccess("Sketch deleted successfully");
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Failed to delete sketch";
-          console.error("[SketchProvider] Delete Sketch Error:", error);
-          showError(message);
-          throw error;
+          // Don't update state on error
+          console.error("Delete sketch error:", error);
+          // Re-throw a user-friendly error
+          if (isAxiosError(error)) {
+            throw new Error(error.response?.data?.error?.message || "Failed to delete sketch.");
+          } else if (error instanceof Error) {
+            throw new Error(error.message);
+          } else {
+            throw new Error("Failed to delete sketch due to an unexpected error.");
+          }
         } finally {
           stateActions.setLoading(false);
         }
       },
 
+      // --- Clear Sketch ---
       clearSketch: async (channelName: string, sketchId: string): Promise<void> => {
-        if (!authState.token) throw new Error("Not authenticated");
-        // Ensure channelName matches current context channel if required by API (or remove if sketchId is globally unique)
+        if (!authState.token) throw new Error("Not authenticated for clearing sketch");
         const currentChannel = systemContext.state.currentChannel?.name;
         if (!currentChannel || channelName !== currentChannel) {
-          throw new Error("Cannot clear sketch for a different channel.");
+          throw new Error("Client-side check: Cannot clear sketch for a different channel.");
         }
 
         stateActions.setLoading(true);
         try {
-          await sketchApi.clearSketch(channelName, sketchId, authState.token);
-          showSuccess("Sketch cleared successfully");
+          const response = await sketchApi.clearSketch(channelName, sketchId, authState.token);
+          if (!response.success) {
+            throw new Error((response as APIErrorResponse).error.message || "Failed to clear sketch");
+          }
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Failed to clear sketch";
-          console.error("[SketchProvider] Clear Sketch Error:", error);
-          showError(message);
-          throw error;
+          // No local state change needed here on error either
+          console.error("Clear sketch error:", error);
+          // Re-throw a user-friendly error
+          if (isAxiosError(error)) {
+            throw new Error(error.response?.data?.error?.message || "Failed to clear sketch.");
+          } else if (error instanceof Error) {
+            throw new Error(error.message);
+          } else {
+            throw new Error("Failed to clear sketch due to an unexpected error.");
+          }
         } finally {
           stateActions.setLoading(false);
         }
       },
     };
-  }, [authState.token, stateActions, showError, showSuccess, systemContext.state.currentChannel?.name]);
+  }, [authState.token, stateActions, systemContext.state.currentChannel?.name]);
 
   // Combine state and service actions into the final actions object
   const actions: SketchActions = useMemo(
@@ -228,6 +282,10 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           if (currentChannelName) {
             actions.loadSketches(currentChannelName).catch((err) => {
               console.error("[SketchProvider] WS: Failed to reload sketches on NEW command:", err);
+              // We might want to show an error here specifically for WS failures
+              showError(
+                `Error reloading sketches after WS update: ${err instanceof Error ? err.message : "Unknown error"}`
+              );
             });
           }
           break;
@@ -249,6 +307,10 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (import.meta.env.DEV) console.log(`[SketchProvider] WS: Reloading cleared sketch ${cmd.sketchId}`);
             actions.loadSketch(currentChannelName, cmd.sketchId).catch((err) => {
               console.error("[SketchProvider] WS: Failed to reload sketch on CLEAR command:", err);
+              // Similarly, handle potential error from WS-triggered load
+              showError(
+                `Error reloading sketch after WS update: ${err instanceof Error ? err.message : "Unknown error"}`
+              );
             });
           }
           break;
@@ -261,41 +323,40 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           console.warn(`[SketchProvider] Unhandled sketch command type via WS: ${cmd.commandType}`);
       }
     },
-    [actions, systemContext.state.currentChannel?.name, authState.username, state.currentSketch?.id]
+    // Add showError back as a dependency ONLY for the WS handler part
+    [actions, systemContext.state.currentChannel?.name, authState.username, state.currentSketch?.id, showError]
   );
 
   // --- Effects ---
-
-  // Effect to load sketches when channel changes and user is authenticated/connected
   useEffect(() => {
     const channel = systemState.currentChannel;
     const token = authState.token;
-    const connected = webSocketState.channelConnected; // Use channel connection status now
+    const connected = webSocketState.channelConnected;
 
     if (channel && token && connected) {
       if (import.meta.env.DEV)
         console.log(`🔄 [SketchProvider] Channel/Auth ready (${channel.name}). Loading sketches.`);
       actions.loadSketches(channel.name).catch((err: unknown) => {
-        // Error is handled and shown within loadSketches
-        if (import.meta.env.DEV) console.error("[SketchProvider] Initial loadSketches failed in effect.", err);
+        // Error is thrown by loadSketches, but notification is NOT shown there.
+        // Show the error here for the initial load failure.
+        const message = err instanceof Error ? err.message : "Initial sketch load failed";
+        console.error("[SketchProvider] Initial loadSketches failed in effect:", err);
+        showError(message);
       });
     } else {
-      // Conditions not met, clear sketch state
       if (import.meta.env.DEV) console.log("⏭ [SketchProvider] Conditions not met, clearing sketch state.");
       stateActions.setSketches([]);
       stateActions.setCurrentSketch(null);
       stateActions.clearPaths();
     }
 
-    // Cleanup function
     return () => {
       if (import.meta.env.DEV) console.log("🧹 [SketchProvider] Cleaning up sketch state on effect change/unmount.");
-      // Clear state when effect dependencies change (e.g., channel switch, logout)
       stateActions.setSketches([]);
       stateActions.setCurrentSketch(null);
       stateActions.clearPaths();
     };
-  }, [systemState.currentChannel, authState.token, webSocketState.channelConnected, actions, stateActions]); // Use channelConnected
+  }, [systemState.currentChannel, authState.token, webSocketState.channelConnected, actions, stateActions, showError]);
 
   // Memoize the handlers object based on the callback functions
   const handlerConfig = useMemo<ChannelMessageHandler>(

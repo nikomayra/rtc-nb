@@ -1,8 +1,8 @@
 import { AuthContext } from "../contexts/authContext";
 import { useAuth } from "../hooks/useAuth";
-import { useEffect } from "react";
+import { useEffect, memo } from "react";
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+const AuthProviderComponent = ({ children }: { children: React.ReactNode }) => {
   const auth = useAuth();
 
   useEffect(() => {
@@ -22,3 +22,5 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
 };
+
+export const AuthProvider = memo(AuthProviderComponent);

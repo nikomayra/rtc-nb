@@ -8,6 +8,9 @@ import { ChannelInfo } from "./Channel/ChannelInfo";
 import { useSystemContext } from "../hooks/useSystemContext";
 import { useSystemSocket } from "../hooks/useSystemSocket";
 import { useChannelSocket } from "../hooks/useChannelSocket";
+// import { Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+// import { useAuth } from "../hooks/useAuth";
 
 export const AppContent = () => {
   const {
@@ -19,6 +22,16 @@ export const AppContent = () => {
   // Initialize WebSocket connections and handlers
   useSystemSocket();
   useChannelSocket();
+
+  // Mount/Unmount logging
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[AppContent] Mounted");
+      return () => {
+        console.log("[AppContent] Unmounted");
+      };
+    }
+  }, []);
 
   if (!isLoggedIn) {
     return <AuthContainer />;

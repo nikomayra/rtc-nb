@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo } from "react";
+import { useEffect, useCallback, useMemo, useRef } from "react";
 import { ChannelMemberSchema, IncomingMessage, MemberUpdateAction, MessageType } from "../types/interfaces";
 import { ChannelMessageHandler } from "../contexts/webSocketContext";
 import { useAuthContext } from "./useAuthContext";
@@ -17,44 +17,28 @@ export const useChannelSocket = () => {
   } = useAuthContext();
 
   const { actions: channelActions } = channelContext;
-  // Destructure state and actions from WebSocket context
   const { state: wsState, actions: wsActions } = websocketContext;
-  const { channelConnected } = wsState; // Get connection state
-  const { send, addChannelHandlers, removeChannelHandlers, connectChannel, disconnectChannel } = wsActions;
+  const { channelConnected } = wsState;
+  const { connectChannel, disconnectChannel, addChannelHandlers, removeChannelHandlers, send } = wsActions;
 
   const { state: systemState } = systemContext;
   const currentChannelName = systemState.currentChannel?.name;
 
   // --- Connection Effect ---
   useEffect(() => {
-    // Guard: Only proceed if logged in and a channel is selected
-    if (token && currentChannelName) {
-      if (import.meta.env.DEV) {
-        console.log(`[useChannelSocket] Effect: Attempting connect to channel: ${currentChannelName}`);
-      }
-      // connectChannel is idempotent and handles internal state checking
+    if (currentChannelName && token) {
       connectChannel(token, currentChannelName);
 
-      // Cleanup function: Disconnect when channel changes or component unmounts
+      // Return cleanup function to disconnect on channel change or unmount
       return () => {
-        if (import.meta.env.DEV) {
-          console.log(`[useChannelSocket] Effect Cleanup: Disconnecting from channel: ${currentChannelName}`);
-        }
-        // disconnectChannel handles clearing timeouts and internal state
         disconnectChannel();
       };
     } else {
-      // If no channel is selected, ensure disconnect is called (e.g., switching from a channel to null)
-      // Note: disconnectChannel handles the case where there's nothing to disconnect.
-      if (import.meta.env.DEV) {
-        console.log("[useChannelSocket] Effect Cleanup: No channel selected, ensuring disconnect.");
-      }
+      // Ensure disconnection if no channel is selected
       disconnectChannel();
-      return undefined; // Explicitly return undefined for clarity
+      return () => {};
     }
-    // Dependencies: Effect should re-run if token or channel name changes.
-    // connectChannel/disconnectChannel functions are stable references from context.
-  }, [token, currentChannelName, connectChannel, disconnectChannel]);
+  }, [currentChannelName, token, connectChannel, disconnectChannel]);
 
   // --- Message Handlers ---
   const handleUserStatus = useCallback(
@@ -78,12 +62,14 @@ export const useChannelSocket = () => {
       } else {
         if (import.meta.env.DEV) {
           console.warn(
-            `[useChannelSocket] Handler: Received chat message for ${message.channelName} while in ${currentChannelName}. Ignoring.`
+            `[useChannelSocket] Handler: Received chat message for ${message.channelName} while in ${
+              currentChannelName || "null"
+            }. Ignoring.`
           );
         }
       }
     },
-    [channelActions, currentChannelName] // Add currentChannelName dependency
+    [channelActions, currentChannelName]
   );
 
   const handleMemberUpdate = useCallback(
@@ -91,17 +77,19 @@ export const useChannelSocket = () => {
       if (!message.content.memberUpdate || message.channelName !== currentChannelName) {
         if (import.meta.env.DEV && message.channelName !== currentChannelName) {
           console.warn(
-            `[useChannelSocket] Handler: Received member update for ${message.channelName} while in ${currentChannelName}. Ignoring.`
+            `[useChannelSocket] Handler: Received member update for ${message.channelName} while in ${
+              currentChannelName || "null"
+            }. Ignoring.`
           );
         }
-        return; // Ignore if no data or wrong channel
+        return;
       }
 
       if (import.meta.env.DEV) {
         console.log("[useChannelSocket] Handler: Member update received:", message);
       }
 
-      const { username, action, isAdmin } = message.content.memberUpdate!; // Use non-null assertion after guard
+      const { username, action, isAdmin } = message.content.memberUpdate!;
 
       switch (action) {
         case MemberUpdateAction.Added:
@@ -155,32 +143,27 @@ export const useChannelSocket = () => {
   );
 
   // --- Handler Registration Effect ---
+  const handlersRegisteredRef = useRef(false);
   useEffect(() => {
-    // If a channel is selected, register the handlers.
-    if (currentChannelName) {
-      if (import.meta.env.DEV) {
-        console.log(`[useChannelSocket] Effect: Adding channel handlers for key: ${HANDLER_KEY}`);
-      }
+    // Determine if handlers should be registered based on channel selection
+    const shouldRegisterHandlers = !!currentChannelName;
+
+    if (shouldRegisterHandlers && !handlersRegisteredRef.current) {
       addChannelHandlers(HANDLER_KEY, handlers);
-    } else {
-      // If no channel is selected, ensure handlers are cleared.
-      if (import.meta.env.DEV) {
-        console.log(
-          `[useChannelSocket] Effect: Removing channel handlers for key: ${HANDLER_KEY} (no channel selected).`
-        );
-      }
+      handlersRegisteredRef.current = true;
+    } else if (!shouldRegisterHandlers && handlersRegisteredRef.current) {
       removeChannelHandlers(HANDLER_KEY);
+      handlersRegisteredRef.current = false;
     }
 
-    // Cleanup: Clear handlers when the channel changes or the hook unmounts.
+    // Cleanup handlers on unmount or if channel changes
     return () => {
-      if (import.meta.env.DEV) {
-        console.log(`[useChannelSocket] Effect Cleanup: Removing channel handlers for key: ${HANDLER_KEY}`);
+      if (handlersRegisteredRef.current) {
+        removeChannelHandlers(HANDLER_KEY);
+        handlersRegisteredRef.current = false;
       }
-      removeChannelHandlers(HANDLER_KEY);
     };
-    // This effect depends on the selected channel name and the memoized handlers object.
-  }, [currentChannelName, handlers, addChannelHandlers, removeChannelHandlers]);
+  }, [currentChannelName, addChannelHandlers, removeChannelHandlers, handlers]);
 
   // --- Send Actions ---
   const sendChatMessage = useCallback(
@@ -259,7 +242,6 @@ export const useChannelSocket = () => {
     [currentChannelName, send, channelConnected]
   );
 
-  // Return connection state and actions
   return {
     channelConnected,
     sendChatMessage,

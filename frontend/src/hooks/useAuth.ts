@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { authApi } from "../api/authApi";
 import { useNotification } from "./useNotification";
 import { isAxiosError } from "axios";
+import { APIErrorResponse } from "../types/interfaces";
 
 export const useAuth = () => {
   const [token, setToken] = useState<string>("");
@@ -36,18 +37,16 @@ export const useAuth = () => {
       try {
         const response = await authApi.validateToken(storedToken);
 
-        // Skip state updates if component unmounted
         if (!isMounted) return;
 
         if (response.success) {
           setIsLoggedIn(true);
           setToken(storedToken);
           setUsername(storedUsername);
-          // Track which token was validated
           sessionStorage.setItem("lastValidatedToken", storedToken);
           validationAttempted.current = true;
         } else {
-          showError("Login failed, invalid token");
+          showError("Login validation failed: Invalid token");
           setIsLoggedIn(false);
           sessionStorage.removeItem("token");
           sessionStorage.removeItem("username");
@@ -56,20 +55,19 @@ export const useAuth = () => {
           setUsername("");
         }
       } catch (error) {
-        // Skip state updates if component unmounted
         if (!isMounted) return;
 
         if (isAxiosError(error) && error.response?.status === 429) {
           console.warn("Rate limited on token validation. Using stored token without validation.");
-          // Use the token anyway since we can't validate due to rate limiting
           setToken(storedToken);
           setUsername(storedUsername);
           setIsLoggedIn(true);
-          // Even though we couldn't validate, we should track this to prevent retries
           sessionStorage.setItem("lastValidatedToken", storedToken);
           validationAttempted.current = true;
         } else {
-          showError("Login failed, invalid token");
+          const message = error instanceof Error ? error.message : "Token validation failed";
+          showError(`Login validation failed: ${message}`);
+          console.error("Token validation error:", error);
           setIsLoggedIn(false);
           sessionStorage.removeItem("token");
           sessionStorage.removeItem("username");
@@ -80,120 +78,148 @@ export const useAuth = () => {
       }
     };
 
-    // Execute validation
     validateLogin();
 
-    // Cleanup function
     return () => {
       isMounted = false;
     };
   }, [showError]); // Only depends on showError, which is stable
 
-  const login = useCallback(
-    async (username: string, password: string): Promise<void> => {
-      try {
-        const response = await authApi.login(username, password);
-        if (response.success) {
-          const newToken = response.data.token;
-          setToken(newToken);
-          setUsername(username);
-          setIsLoggedIn(true);
-          sessionStorage.setItem("token", newToken);
-          sessionStorage.setItem("username", username);
-          sessionStorage.setItem("lastValidatedToken", newToken); // Track the validated token
-          validationAttempted.current = true; // Mark as validated on successful login
-        } else {
-          const errorMessage = response.error?.message || "Login failed";
-          showError("Login failed");
-          throw new Error(errorMessage);
-        }
-      } catch (error) {
-        // Ensure we handle both Error objects and plain objects
-        const errorMessage = error instanceof Error ? error.message : "Login failed";
-        console.error(errorMessage);
-        showError("Login failed");
-        setToken("");
-        setUsername("");
-        setIsLoggedIn(false);
-        sessionStorage.removeItem("lastValidatedToken");
-        throw error;
-      }
-    },
-    [showError]
-  );
-
-  const register = useCallback(
-    async (username: string, password: string): Promise<void> => {
-      try {
-        const response = await authApi.register(username, password);
-        if (response.success) {
-          setToken(response.data.token);
-          setUsername(username);
-          setIsLoggedIn(true);
-          sessionStorage.setItem("token", response.data.token);
-          sessionStorage.setItem("username", username);
-          validationAttempted.current = true; // Mark as validated on successful registration
-        } else {
-          const errorMessage = response.error?.message || "Registration failed";
-          showError("Registration failed");
-          throw new Error(errorMessage);
-        }
-      } catch (error) {
-        // Ensure we handle both Error objects and plain objects
-        const errorMessage = error instanceof Error ? error.message : "Registration failed";
-        console.error(errorMessage);
-        showError("Registration failed");
-        setToken("");
-        setUsername("");
-        setIsLoggedIn(false);
-        throw error;
-      }
-    },
-    [showError]
-  );
-
-  const logout = useCallback(async (): Promise<void> => {
+  const login = useCallback(async (usernameInput: string, passwordInput: string): Promise<void> => {
     try {
-      const response = await authApi.logout(token);
+      const response = await authApi.login(usernameInput, passwordInput);
       if (response.success) {
-        sessionStorage.removeItem("token");
-        sessionStorage.removeItem("username");
-        sessionStorage.removeItem("lastValidatedToken"); // Clear the validated token
-        setToken("");
-        setUsername("");
-        setIsLoggedIn(false);
-        validationAttempted.current = false; // Reset validation on logout
+        const newToken = response.data.token;
+        setToken(newToken);
+        setUsername(usernameInput);
+        setIsLoggedIn(true);
+        sessionStorage.setItem("token", newToken);
+        sessionStorage.setItem("username", usernameInput);
+        sessionStorage.setItem("lastValidatedToken", newToken);
+        validationAttempted.current = true;
       } else {
-        const serverErrorMessage = `${response.error?.message}, Code: ${response.error?.code}`;
-        throw new Error(serverErrorMessage || "Server: Logout failed");
+        throw new Error((response as APIErrorResponse).error?.message || "Login failed: Unknown API error");
       }
     } catch (error) {
-      showError("Logout failed");
       setToken("");
       setUsername("");
       setIsLoggedIn(false);
-      validationAttempted.current = false; // Reset validation on failed logout too
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("username");
       sessionStorage.removeItem("lastValidatedToken");
-      throw error;
+      console.error("Login error:", error);
+      if (isAxiosError(error)) {
+        throw new Error(error.response?.data?.error?.message || "Login failed due to a network or server issue.");
+      } else if (error instanceof Error) {
+        throw new Error(error.message);
+      } else {
+        throw new Error("Login failed due to an unexpected error.");
+      }
     }
-  }, [token, showError]);
+  }, []);
+
+  const register = useCallback(async (usernameInput: string, passwordInput: string): Promise<void> => {
+    try {
+      const response = await authApi.register(usernameInput, passwordInput);
+      if (response.success) {
+        setToken(response.data.token);
+        setUsername(usernameInput);
+        setIsLoggedIn(true);
+        sessionStorage.setItem("token", response.data.token);
+        sessionStorage.setItem("username", usernameInput);
+        sessionStorage.setItem("lastValidatedToken", response.data.token);
+        validationAttempted.current = true;
+      } else {
+        throw new Error((response as APIErrorResponse).error?.message || "Registration failed: Unknown API error");
+      }
+    } catch (error) {
+      setToken("");
+      setUsername("");
+      setIsLoggedIn(false);
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("username");
+      sessionStorage.removeItem("lastValidatedToken");
+      console.error("Registration error:", error);
+      if (isAxiosError(error)) {
+        throw new Error(
+          error.response?.data?.error?.message || "Registration failed due to a network or server issue."
+        );
+      } else if (error instanceof Error) {
+        throw new Error(error.message);
+      } else {
+        throw new Error("Registration failed due to an unexpected error.");
+      }
+    }
+  }, []);
+
+  const logout = useCallback(async (): Promise<void> => {
+    const previousToken = token;
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("username");
+    sessionStorage.removeItem("lastValidatedToken");
+    setToken("");
+    setUsername("");
+    setIsLoggedIn(false);
+    validationAttempted.current = false;
+
+    if (!previousToken) {
+      console.warn("[useAuth] Logout called without a token.");
+      return;
+    }
+
+    try {
+      const response = await authApi.logout(previousToken);
+      if (!response.success) {
+        const apiError = response as APIErrorResponse;
+        const serverErrorMessage = apiError.error?.message
+          ? `${apiError.error.message}${apiError.error.code ? ` (Code: ${apiError.error.code})` : ""}`
+          : "Server: Logout failed";
+        throw new Error(serverErrorMessage);
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+      if (isAxiosError(error)) {
+        throw new Error("Logout failed. Please try again.");
+      } else if (error instanceof Error) {
+        throw new Error(error.message);
+      } else {
+        throw new Error("Logout failed due to an unexpected error.");
+      }
+    }
+  }, [token]);
 
   const deleteAccount = useCallback(async (): Promise<void> => {
+    const currentToken = token;
+    if (!currentToken) {
+      throw new Error("Cannot delete account: No user logged in.");
+    }
+
     try {
-      const response = await authApi.deleteAccount(token);
+      const response = await authApi.deleteAccount(currentToken);
       if (response.success) {
         sessionStorage.removeItem("token");
         sessionStorage.removeItem("username");
+        sessionStorage.removeItem("lastValidatedToken");
         setToken("");
         setUsername("");
         setIsLoggedIn(false);
-        validationAttempted.current = false; // Reset validation on account deletion
+        validationAttempted.current = false;
+      } else {
+        throw new Error((response as APIErrorResponse).error?.message || "Delete account failed: Unknown API error");
       }
     } catch (error) {
-      showError("Delete account failed");
-      throw error;
+      console.error("Delete account error:", error);
+      if (isAxiosError(error)) {
+        throw new Error(
+          error.response?.data?.error?.message || "Account deletion failed due to a network or server issue."
+        );
+      } else if (error instanceof Error) {
+        throw new Error(error.message);
+      } else {
+        throw new Error("Account deletion failed due to an unexpected error.");
+      }
     }
-  }, [token, showError]);
+  }, [token]);
 
   // Memoize the state object
   const state = useMemo(

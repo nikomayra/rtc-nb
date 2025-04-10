@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuthContext } from "../../hooks/useAuthContext";
+import { useNotification } from "../../hooks/useNotification";
 
 export const RegisterForm = () => {
   const [username, setUsername] = useState("");
@@ -7,10 +8,17 @@ export const RegisterForm = () => {
   const {
     actions: { register },
   } = useAuthContext();
+  const { showError } = useNotification();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await register(username, password);
+    try {
+      await register(username, password);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Registration failed unexpectedly";
+      showError(message);
+      console.error("[RegisterForm] Registration failed:", error);
+    }
   };
 
   return (

@@ -1,20 +1,32 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Notification } from "../../contexts/notificationContext";
+import { useNotification } from "../../hooks/useNotification";
 
-interface NotificationContainerProps {
-  notifications: Notification[];
-  removeNotification: (id: string) => void;
-}
+export const NotificationContainer: React.FC = () => {
+  const { notifications, removeNotification } = useNotification();
 
-export const NotificationContainer = ({ notifications, removeNotification }: NotificationContainerProps) => {
+  // Mount/Unmount logging
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[NotificationContainer] Mounted");
+      return () => {
+        console.log("[NotificationContainer] Unmounted");
+      };
+    }
+  }, []);
+
+  if (notifications.length === 0) {
+    return (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-3 items-center">
+        {/* Placeholder for empty notifications */}
+      </div>
+    );
+  }
+
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-3 items-center">
       {notifications.map((notification) => (
-        <NotificationToast
-          key={notification.id}
-          notification={notification}
-          onClose={() => removeNotification(notification.id)}
-        />
+        <NotificationToast key={notification.id} notification={notification} removeNotification={removeNotification} />
       ))}
     </div>
   );
@@ -22,44 +34,54 @@ export const NotificationContainer = ({ notifications, removeNotification }: Not
 
 interface NotificationToastProps {
   notification: Notification;
-  onClose: () => void;
+  removeNotification: (id: string) => void;
 }
 
-const NotificationToast = ({ notification, onClose }: NotificationToastProps) => {
+const NotificationToast = ({ notification, removeNotification }: NotificationToastProps) => {
   const [isVisible, setIsVisible] = useState(false);
+
+  // Get the stable removeNotification reference for the effect dependency
+  const stableRemoveNotification = useCallback(() => {
+    removeNotification(notification.id);
+  }, [removeNotification, notification.id]);
 
   useEffect(() => {
     // Animate in
-    setTimeout(() => setIsVisible(true), 10);
+    const visibleTimer = window.setTimeout(() => setIsVisible(true), 10);
 
     // Auto close
-    if (notification.duration) {
-      const timeout = setTimeout(() => {
+    let closeTimeout: number | undefined;
+    let cleanupTimeout: number | undefined;
+    if (notification.duration && notification.duration > 0) {
+      closeTimeout = window.setTimeout(() => {
         setIsVisible(false);
-        setTimeout(onClose, 300); // Wait for exit animation
-      }, notification.duration - 300); // Subtract exit animation time
-
-      return () => clearTimeout(timeout);
+        // Use stableRemoveNotification here after animation
+        cleanupTimeout = window.setTimeout(stableRemoveNotification, 300);
+      }, Math.max(0, notification.duration - 300));
     }
-  }, [notification.duration, onClose]);
 
-  const handleClose = () => {
+    return () => {
+      window.clearTimeout(visibleTimer);
+      if (closeTimeout) window.clearTimeout(closeTimeout);
+      if (cleanupTimeout) window.clearTimeout(cleanupTimeout);
+    };
+    // Depend on the stable callback and duration
+  }, [notification.duration, stableRemoveNotification]);
+
+  const handleClose = useCallback(() => {
     setIsVisible(false);
-    setTimeout(onClose, 300); // Wait for exit animation
-  };
+    // Use stableRemoveNotification here after animation
+    window.setTimeout(stableRemoveNotification, 300);
+  }, [stableRemoveNotification]);
 
   const getTypeStyles = () => {
     switch (notification.type) {
-      case "info":
-        return "bg-blue-500/40 text-blue-400 font-bold text-sm border-blue-500/30";
       case "success":
         return "bg-green-500/40 text-green-400 font-bold text-sm border-green-500/30";
-      case "warning":
-        return "bg-yellow-500/40 text-yellow-400 font-bold text-sm border-yellow-500/30";
       case "error":
         return "bg-red-500/40 text-red-400 font-bold text-sm border-red-500/30";
       default:
-        return "bg-primary/40 text-primary font-bold text-sm border-primary/30";
+        return "bg-green-500/40 text-green-400 font-bold text-sm border-green-500/30";
     }
   };
 

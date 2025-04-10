@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Sketch } from "../../types/interfaces";
 import SketchList from "./SketchList";
 import { Modal } from "../Generic/Modal";
@@ -14,15 +14,24 @@ const MAX_SKETCH_WIDTH = 1280;
 const MAX_SKETCH_HEIGHT = 720;
 
 export const SketchConfig = ({ channelName }: SketchConfigProps) => {
+  const { state: sketchState, actions: sketchActions } = useSketchContext();
+
+  // Mount/Unmount logging
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[SketchConfig] Mounted, channelName:", channelName);
+      return () => {
+        console.log("[SketchConfig] Unmounted, channelName:", channelName);
+      };
+    }
+  }, [channelName]);
+
   const [displayName, setDisplayName] = useState("");
   const [width, setWidth] = useState<string>("");
   const [height, setHeight] = useState<string>("");
   const [isOpen, setIsOpen] = useState(false);
 
-  const sketchContext = useSketchContext();
   const { showError } = useNotification();
-
-  const { state: sketchState, actions: sketchActions } = sketchContext;
 
   const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -56,38 +65,40 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
 
   const handleCreateSketch = async (e: React.FormEvent) => {
     e.preventDefault();
-    const error = validateSketchDimensions(width, height);
-    if (error) {
-      showError(error);
+    const validationError = validateSketchDimensions(width, height);
+    if (validationError) {
+      showError(validationError);
       return;
     }
 
     setIsOpen(false);
     try {
       await sketchActions.createSketch(channelName, displayName, parseInt(width), parseInt(height));
-
-      // Reset form fields
       setDisplayName("");
       setWidth("");
       setHeight("");
     } catch (error) {
-      // Error handling is done in the context
+      const message = error instanceof Error ? error.message : "Failed to create sketch unexpectedly";
+      showError(message);
       console.error("Failed to create sketch:", error);
     }
   };
 
   const handleSelectSketch = async (sketch: Sketch) => {
-    // Check if the selected sketch is already the current one
     if (sketch.id === sketchState.currentSketch?.id) {
       if (import.meta.env.DEV) console.log(`[SketchConfig] Sketch ${sketch.id} is already selected. Skipping load.`);
-      return; // Don't reload if it's already the current sketch
+      return;
     }
 
     try {
       if (import.meta.env.DEV) console.log(`[SketchConfig] Selecting sketch ${sketch.id}`);
-      await sketchActions.loadSketch(channelName, sketch.id);
+      const loadedSketch = await sketchActions.loadSketch(channelName, sketch.id);
+      if (loadedSketch === null) {
+        showError("Sketch not found.");
+      }
     } catch (error) {
-      // Error handling is done in the context
+      const message = error instanceof Error ? error.message : "Failed to load sketch unexpectedly";
+      showError(message);
       console.error("Failed to load sketch:", error);
     }
   };
@@ -96,7 +107,8 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
     try {
       await sketchActions.deleteSketch(id);
     } catch (error) {
-      // Error handling is done in the context
+      const message = error instanceof Error ? error.message : "Failed to delete sketch unexpectedly";
+      showError(message);
       console.error("Failed to delete sketch:", error);
     }
   };
@@ -107,7 +119,7 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
         <SketchList
           sketches={sketchState.sketches
             .slice()
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
+            .sort((a: Sketch, b: Sketch) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
           onSelect={handleSelectSketch}
           onDelete={handleDeleteSketch}
           isLoading={sketchState.isLoading}

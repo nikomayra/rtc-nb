@@ -20,8 +20,9 @@ export const CreateChannelForm = ({ setIsCreateFormOpen }: { setIsCreateFormOpen
       (e.target as HTMLFormElement).reset();
       setIsCreateFormOpen(false);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create channel unexpectedly";
+      showError(message);
       console.error("Failed to create channel:", error);
-      showError("Failed to create channel");
     }
   };
 

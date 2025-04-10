@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { HexColorPicker } from "react-colorful";
 
 interface ColorPickerButtonProps {
@@ -7,17 +7,12 @@ interface ColorPickerButtonProps {
 }
 
 const ColorPickerButton: React.FC<ColorPickerButtonProps> = ({ currentColor, onChangeColor }) => {
-  // console.log("[ColorPicker] Rendering or Re-rendering. Initial isOpen state:", useState(false)[0]); // Remove misleading log
   const [isOpen, setIsOpen] = useState(false);
-  // const pickerRef = useRef<HTMLDivElement>(null); // No longer needed for mousedown
-  const containerRef = useRef<HTMLDivElement>(null); // Ref for the blur container
-
-  // Add log here to see the actual state value during render
-  console.log("[ColorPicker] Rendering. Current isOpen state:", isOpen);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Stabilize togglePicker with useCallback
   const togglePicker = useCallback((event: React.MouseEvent) => {
-    event.stopPropagation(); // Keep stopping propagation on the button click
+    event.stopPropagation();
     setIsOpen((prevIsOpen) => {
       console.log("[ColorPicker] togglePicker: Setting isOpen from", prevIsOpen, "to", !prevIsOpen);
       return !prevIsOpen;
@@ -26,10 +21,19 @@ const ColorPickerButton: React.FC<ColorPickerButtonProps> = ({ currentColor, onC
 
   // Close picker when focus leaves the container
   const handleBlur = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
-    // Check if the relatedTarget (where focus went) is outside the container
     if (containerRef.current && !containerRef.current.contains(event.relatedTarget as Node)) {
       console.log("[ColorPicker] handleBlur: Focus left container. Setting isOpen to false.");
       setIsOpen(false);
+    }
+  }, []);
+
+  // Mount/Unmount logging
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[ColorPicker] Mounted");
+      return () => {
+        console.log("[ColorPicker] Unmounted");
+      };
     }
   }, []);
 
@@ -51,9 +55,7 @@ const ColorPickerButton: React.FC<ColorPickerButtonProps> = ({ currentColor, onC
       {/* Color Picker Popover */}
       {isOpen && (
         <div
-          // ref={pickerRef} // No longer needed
           className="absolute z-50 bottom-full mb-2 left-0 p-2 bg-surface-medium rounded-lg shadow-xl border border-border-dark"
-          // Prevent clicks inside the picker from triggering blur/close logic immediately
           onClick={(e) => e.stopPropagation()}
         >
           <HexColorPicker color={currentColor} onChange={(colorResult) => onChangeColor(colorResult)} />

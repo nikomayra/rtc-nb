@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuthContext } from "../../hooks/useAuthContext";
+import { useNotification } from "../../hooks/useNotification";
 
 export const LoginForm = () => {
   const [username, setUsername] = useState("");
@@ -7,6 +8,7 @@ export const LoginForm = () => {
   const {
     actions: { login },
   } = useAuthContext();
+  const { showError } = useNotification();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,7 +18,13 @@ export const LoginForm = () => {
       return; // Prevent form submission with empty fields
     }
 
-    await login(username, password);
+    try {
+      await login(username, password);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Login failed unexpectedly";
+      showError(message);
+      console.error("[LoginForm] Login failed:", error);
+    }
   };
 
   return (

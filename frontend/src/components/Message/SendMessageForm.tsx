@@ -2,6 +2,7 @@ import { FormEvent, useRef, useState } from "react";
 import { useSystemContext } from "../../hooks/useSystemContext";
 import { useChannelContext } from "../../hooks/useChannelContext";
 import { useChannelSocket } from "../../hooks/useChannelSocket";
+import { useNotification } from "../../hooks/useNotification";
 
 export const SendMessageForm = () => {
   const systemContext = useSystemContext();
@@ -11,6 +12,7 @@ export const SendMessageForm = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedFile, setDraggedFile] = useState<File | null>(null);
+  const { showError } = useNotification();
 
   const { state: systemState } = systemContext;
   const { actions: channelActions } = channelContext;
@@ -42,17 +44,25 @@ export const SendMessageForm = () => {
     const file = draggedFile || fileInputRef.current?.files?.[0] || null;
 
     if (file) {
-      // Use the uploadFile action from the chat context
-      const { imagePath, thumbnailPath } = await channelActions.uploadFile(file);
-      sendImageMessage(message.trim(), imagePath, thumbnailPath);
+      try {
+        const result = await channelActions.uploadFile(file);
+        if (!result) {
+          throw new Error("File upload failed");
+        }
+        const { imagePath, thumbnailPath } = result;
+        sendImageMessage(message.trim(), imagePath, thumbnailPath);
+        if (messageInputRef.current) messageInputRef.current.value = "";
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        setDraggedFile(null);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "File upload failed unexpectedly";
+        showError(message);
+        console.error("Upload file failed:", error);
+      }
     } else if (message.trim()) {
       sendChatMessage(message.trim());
+      if (messageInputRef.current) messageInputRef.current.value = "";
     }
-
-    // Clear form
-    if (messageInputRef.current) messageInputRef.current.value = "";
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    setDraggedFile(null);
   };
 
   return (

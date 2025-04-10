@@ -1,7 +1,18 @@
+import { useEffect } from "react";
 import { useNotification } from "../hooks/useNotification";
 
 export const NotificationTest = () => {
   const { showSuccess, showError, showWarning } = useNotification();
+
+  // Mount/Unmount logging
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[NotificationTest] Mounted");
+      return () => {
+        console.log("[NotificationTest] Unmounted");
+      };
+    }
+  }, []);
 
   return (
     <div className="fixed top-4 right-4 z-50 p-4 bg-surface-light rounded-lg border border-primary/20 shadow-lg backdrop-blur-sm max-w-xs">

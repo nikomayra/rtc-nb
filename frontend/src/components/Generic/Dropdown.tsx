@@ -28,6 +28,16 @@ export const Dropdown = ({
   const isOpen = isOpenExternal !== undefined ? isOpenExternal : isOpenInternal;
   const setIsOpen = setIsOpenExternal || setIsOpenInternal;
 
+  // Mount/Unmount logging
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[Dropdown] Mounted");
+      return () => {
+        console.log("[Dropdown] Unmounted");
+      };
+    }
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {

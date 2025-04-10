@@ -57,12 +57,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const actions = useMemo(
     (): WebSocketContextActions => ({
       connectSystem: (token: string) => {
-        if (import.meta.env.DEV) console.log("[WebSocketProvider] Action: connectSystem");
         wsService.connectSystem(token);
       },
-      connectChannel: (token: string, channelName: string) => {
-        if (import.meta.env.DEV) console.log(`[WebSocketProvider] Action: connectChannel to ${channelName}`);
-        wsService.connectChannel(token, channelName);
+      connectChannel: (channelName: string, token: string) => {
+        wsService.connectChannel(channelName, token);
       },
       disconnectChannel: () => {
         if (import.meta.env.DEV) console.log("[WebSocketProvider] Action: disconnectChannel");
@@ -76,19 +74,15 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         wsService.send(message);
       },
       addSystemHandlers: (key: string, handlers: SystemMessageHandler) => {
-        if (import.meta.env.DEV) console.log(`[WebSocketProvider] Action: addSystemHandlers for key: ${key}`);
         systemHandlersRef.current.set(key, handlers);
       },
       removeSystemHandlers: (key: string) => {
-        if (import.meta.env.DEV) console.log(`[WebSocketProvider] Action: removeSystemHandlers for key: ${key}`);
         systemHandlersRef.current.delete(key);
       },
       addChannelHandlers: (key: string, handlers: ChannelMessageHandler) => {
-        if (import.meta.env.DEV) console.log(`[WebSocketProvider] Action: addChannelHandlers for key: ${key}`);
         channelHandlersRef.current.set(key, handlers);
       },
       removeChannelHandlers: (key: string) => {
-        if (import.meta.env.DEV) console.log(`[WebSocketProvider] Action: removeChannelHandlers for key: ${key}`);
         channelHandlersRef.current.delete(key);
       },
     }),

@@ -11,7 +11,7 @@ export const useNotification = () => {
   const { addNotification, removeNotification, clearAllNotifications } = context.actions;
 
   const showNotification = useCallback(
-    (message: string, type: NotificationType = "info", duration = 5000) => {
+    (message: string, type: NotificationType = "success", duration = 5000) => {
       addNotification({ message, type, duration });
     },
     [addNotification]
@@ -20,17 +20,6 @@ export const useNotification = () => {
   const showSuccess = useCallback(
     (message: string, duration = 2000) => {
       showNotification(message, "success", duration);
-    },
-    [showNotification]
-  );
-
-  // const showInfo = (message: string, duration = 5000) => {
-  //   showNotification(message, "info", duration);
-  // };
-
-  const showWarning = useCallback(
-    (message: string, duration = 5000) => {
-      showNotification(message, "warning", duration);
     },
     [showNotification]
   );
@@ -45,8 +34,6 @@ export const useNotification = () => {
   return {
     showNotification,
     showSuccess,
-    // showInfo,
-    showWarning,
     showError,
     removeNotification,
     clearAllNotifications,

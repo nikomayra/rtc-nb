@@ -1,5 +1,4 @@
-import { useCallback } from "react";
-// import { useSketchSync } from "../../hooks/useSketchSync";
+import { useCallback, useEffect } from "react";
 import ColorPickerButton from "./ColorPickerButton";
 
 type Tool = "draw" | "erase" | "pan";
@@ -23,6 +22,15 @@ export const SketchToolbar = ({
   currentColor,
   setCurrentColor,
 }: SketchToolbarProps) => {
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[SketchToolbar] Mounted");
+      return () => {
+        console.log("[SketchToolbar] Unmounted");
+      };
+    }
+  }, []);
+
   const handleClear = useCallback(() => {
     onClear();
   }, [onClear]);

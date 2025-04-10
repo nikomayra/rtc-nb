@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sketch } from "../../types/interfaces";
 import helpers from "../../utils/helpers";
 import { Dropdown } from "../Generic/Dropdown";
@@ -14,6 +14,16 @@ interface SketchListProps {
 const SketchList = ({ sketches, onSelect, onDelete, isLoading = false }: SketchListProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [confirmDeleteSketchID, setConfirmDeleteSketchID] = useState<string | null>(null);
+
+  // Mount/Unmount logging
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[SketchList] Mounted");
+      return () => {
+        console.log("[SketchList] Unmounted");
+      };
+    }
+  }, []);
 
   const handleSelect = (sketch: Sketch) => {
     if (!sketch.id || !sketch.channelName) {

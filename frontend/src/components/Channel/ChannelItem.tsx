@@ -6,9 +6,6 @@ import { useNotification } from "../../hooks/useNotification";
 
 type ChannelItemProps = {
   channel: Channel;
-  // onJoin: (channelName: string, password?: string) => Promise<void>;
-  // onDelete: (channelName: string) => Promise<void>;
-  // onLeave: (channelName: string) => Promise<void>;
 };
 
 export const ChannelItem: React.FC<ChannelItemProps> = ({ channel }) => {
@@ -36,6 +33,15 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log(`[ChannelItem] Mounted: ${channel.name}`);
+      return () => {
+        console.log(`[ChannelItem] Unmounted: ${channel.name}`);
+      };
+    }
+  }, [channel.name]);
+
   const onJoinCheck = async () => {
     if (channel.isPrivate && !showPasswordInput) {
       setShowPasswordInput(true);
@@ -45,8 +51,9 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel }) => {
     try {
       await systemActions.joinChannel(channel.name, channel.isPrivate ? password : undefined);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to join channel unexpectedly";
+      showError(message);
       console.error("Failed to join channel:", error);
-      showError("Failed to join channel");
     }
 
     setShowPasswordInput(false);
@@ -57,8 +64,9 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel }) => {
     try {
       await systemActions.leaveChannel(channel.name);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to leave channel unexpectedly";
+      showError(message);
       console.error("Failed to leave channel:", error);
-      showError("Failed to leave channel");
     }
   };
 
@@ -66,8 +74,9 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel }) => {
     try {
       await systemActions.deleteChannel(channel.name);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete channel unexpectedly";
+      showError(message);
       console.error("Failed to delete channel:", error);
-      showError("Failed to delete channel");
     }
   };
 
@@ -86,7 +95,8 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel }) => {
           {!isActive && (
             <button
               onClick={onJoinCheck}
-              className="text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              className="text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={showPasswordInput && channel.isPrivate}
             >
               Join
             </button>

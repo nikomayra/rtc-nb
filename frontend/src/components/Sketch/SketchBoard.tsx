@@ -1,4 +1,4 @@
-import { useState, useCallback, memo, useRef } from "react";
+import { useState, useCallback, memo, useRef, useEffect } from "react";
 import { Point } from "../../types/interfaces";
 import { useSketchManager } from "../../hooks/useSketchManager";
 import { SketchToolbar } from "./SketchToolbar";
@@ -35,6 +35,16 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
     handleMouseUp: managerMouseUp,
     clearLocalAndRemote,
   } = sketchManager;
+
+  // Mount/Unmount logging
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[SketchBoard] Mounted, channelName:", channelName);
+      return () => {
+        console.log("[SketchBoard] Unmounted, channelName:", channelName);
+      };
+    }
+  }, [channelName]); // Log mount/unmount when channel changes
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {

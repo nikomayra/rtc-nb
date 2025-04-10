@@ -80,11 +80,9 @@ export const useSystemSocket = () => {
     };
 
     if (authState.isLoggedIn && !handlersRegisteredRef.current) {
-      if (import.meta.env.DEV) console.log(`[useSystemSocket] Adding system handlers (Key: ${handlerKey})`);
       addSystemHandlers(handlerKey, handlers);
       handlersRegisteredRef.current = true;
     } else if (!authState.isLoggedIn && handlersRegisteredRef.current) {
-      if (import.meta.env.DEV) console.log(`[useSystemSocket] Removing system handlers (Key: ${handlerKey})`);
       removeSystemHandlers(handlerKey);
       handlersRegisteredRef.current = false;
     }
@@ -92,7 +90,6 @@ export const useSystemSocket = () => {
     // Cleanup on unmount or if login status changes *while* registered
     return () => {
       if (handlersRegisteredRef.current) {
-        if (import.meta.env.DEV) console.log(`[useSystemSocket] Cleaning up system handlers (Key: ${handlerKey})`);
         removeSystemHandlers(handlerKey);
         handlersRegisteredRef.current = false;
       }
@@ -102,9 +99,6 @@ export const useSystemSocket = () => {
   // --- Effect to Initiate System Connection --- // (Mostly unchanged)
   useEffect(() => {
     if (authState.isLoggedIn && authState.token) {
-      if (import.meta.env.DEV) {
-        console.log("[useSystemSocket] Attempting system socket connection (if needed)... Token:", !!authState.token);
-      }
       connectSystem(authState.token);
     }
   }, [authState.isLoggedIn, authState.token, connectSystem]);

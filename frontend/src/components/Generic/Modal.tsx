@@ -9,7 +9,7 @@ interface ModalProps {
   className?: string;
 }
 
-export const Modal = ({ isOpen, onClose, children, title, className = "" }: ModalProps) => {
+export const Modal = ({ isOpen, onClose, title, children, className = "" }: ModalProps) => {
   // Close on escape key
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -27,6 +27,21 @@ export const Modal = ({ isOpen, onClose, children, title, className = "" }: Moda
       document.body.style.overflow = "unset";
     };
   }, [isOpen, onClose]);
+
+  // Mount/Unmount logging
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      // Log based on initial state
+      const initialState = isOpen ? "Open" : "Closed";
+      console.log(`[Modal:${title}] Mounted (${initialState})`);
+      // Return only the cleanup function
+      return () => {
+        console.log(`[Modal:${title}] Unmounted (Was ${initialState})`);
+      };
+    }
+    // Return undefined if not in DEV mode
+    return undefined;
+  }, [title, isOpen]); // Depend on title and initial isOpen state
 
   if (!isOpen) return null;
 

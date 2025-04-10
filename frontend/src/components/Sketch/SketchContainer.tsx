@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { SketchBoard } from "./SketchBoard";
 import { SketchConfig } from "./SketchConfig";
 import { useSketchContext } from "../../hooks/useSketchContext";
@@ -9,6 +10,16 @@ export const SketchContainer = () => {
 
   const { state: systemState } = systemContext;
   const { state: sketchState } = sketchContext;
+
+  // Mount/Unmount logging
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[SketchContainer] Mounted");
+      return () => {
+        console.log("[SketchContainer] Unmounted");
+      };
+    }
+  }, []);
 
   if (!systemState.currentChannel) {
     return (

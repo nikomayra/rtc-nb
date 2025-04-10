@@ -17,7 +17,7 @@ const OnlineUserSchema = z.string();
 export const ChannelProvider = ({ children }: ChannelProviderProps) => {
   const [messages, setMessages] = useState<IncomingMessage[]>([]);
   const [members, setMembers] = useState<EnhancedChannelMember[]>([]);
-  const { showError, showSuccess } = useNotification();
+  const { showError } = useNotification();
 
   const { state: authState } = useAuthContext();
   const token = authState.token;
@@ -37,22 +37,20 @@ export const ChannelProvider = ({ children }: ChannelProviderProps) => {
   }, []);
 
   // Renamed for clarity
-  const fetchOnlineUsernames = useCallback(async () => {
+  const fetchOnlineUsernames = useCallback(async (): Promise<string[]> => {
     if (!currentChannel || !token) return [];
     try {
       const response = await channelApi.fetchOnlineUsersInChannel(currentChannel.name, token);
       if (!response.success) {
-        throw new Error((response as APIErrorResponse).error.message || "Failed to fetch online members");
+        throw new Error((response as APIErrorResponse).error.message || "Failed to fetch online usernames");
       }
       const onlineUsernames = z.array(OnlineUserSchema).parse(response.data);
       return onlineUsernames;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to fetch online members";
-      console.error("Failed to fetch online members:", error);
-      showError(message);
+    } catch (caughtError) {
+      console.error("Failed to fetch online usernames:", caughtError);
       return [];
     }
-  }, [currentChannel, token, showError]);
+  }, [currentChannel, token]);
 
   const fetchMembers = useCallback(async () => {
     if (!currentChannel || !token) return;
@@ -69,12 +67,10 @@ export const ChannelProvider = ({ children }: ChannelProviderProps) => {
       }));
       setMembers(enhancedMembers);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load members";
-      console.error("Error fetching members:", error);
-      showError(message);
       setMembers([]);
+      throw error;
     }
-  }, [currentChannel, token, showError, fetchOnlineUsernames]);
+  }, [currentChannel, token, fetchOnlineUsernames]);
 
   const fetchMessages = useCallback(async () => {
     if (!currentChannel || !token) return;
@@ -86,39 +82,29 @@ export const ChannelProvider = ({ children }: ChannelProviderProps) => {
       const parsedMessages = z.array(IncomingMessageSchema).parse(response.data);
       setMessages(parsedMessages);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load messages";
-      console.error("Error fetching messages:", error);
-      showError(message);
       setMessages([]);
+      throw error;
     }
-  }, [currentChannel, token, showError]);
+  }, [currentChannel, token]);
 
+  // --- Upload File ---
   const uploadFile = useCallback(
-    async (file: File): Promise<{ imagePath: string; thumbnailPath: string } | null> => {
+    async (file: File): Promise<{ imagePath: string; thumbnailPath: string }> => {
       if (!currentChannel || !token) {
-        const errorMsg = "No channel or auth token for file upload";
-        showError(errorMsg);
+        const errorMsg = "Cannot upload file: Not connected to a channel or not authenticated.";
         throw new Error(errorMsg);
       }
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("channelName", currentChannel.name);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("channelName", currentChannel.name);
 
-        const response = await channelApi.uploadFile(formData, token);
-        if (!response.success) {
-          throw new Error((response as APIErrorResponse).error.message || "Failed to upload file");
-        }
-        showSuccess("File uploaded successfully");
-        return response.data;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "An unexpected error occurred during file upload";
-        console.error("Error uploading file:", error);
-        showError(message);
-        return null;
+      const response = await channelApi.uploadFile(formData, token);
+      if (!response.success) {
+        throw new Error((response as APIErrorResponse).error.message || "Failed to upload file");
       }
+      return response.data;
     },
-    [currentChannel, token, showError, showSuccess]
+    [currentChannel, token]
   );
 
   // Fetch channel data when channel or token changes
@@ -129,10 +115,19 @@ export const ChannelProvider = ({ children }: ChannelProviderProps) => {
       return;
     }
     const loadChannelData = async () => {
-      await Promise.all([fetchMessages(), fetchMembers()]);
+      try {
+        // Run fetches concurrently
+        await Promise.all([fetchMessages(), fetchMembers()]);
+      } catch (error) {
+        // Show error here for initial load failures
+        const message = error instanceof Error ? error.message : "Failed to load channel data";
+        console.error("Initial channel data load failed:", error);
+        showError(message);
+        // State is already cleared within the fetch functions' catch blocks
+      }
     };
     loadChannelData();
-  }, [token, fetchMessages, fetchMembers, currentChannel]);
+  }, [token, fetchMessages, fetchMembers, currentChannel, showError]);
 
   // Create context value
   const contextValue = useMemo(

@@ -1,15 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { NotificationContext, NotificationProviderProps, Notification } from "../contexts/notificationContext";
 import { NotificationContainer } from "../components/Generic/NotificationContainer";
-
-// Define interface for our custom event
-interface ApiErrorEvent extends CustomEvent {
-  detail: {
-    message: string;
-    status?: number;
-    url?: string;
-  };
-}
 
 export const NotificationProvider = ({ children }: NotificationProviderProps) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -49,24 +40,6 @@ export const NotificationProvider = ({ children }: NotificationProviderProps) =>
     setNotifications([]);
   }, []);
 
-  // Listen for API errors and show error notifications
-  useEffect(() => {
-    const handleApiError = (event: Event) => {
-      const { detail } = event as ApiErrorEvent;
-      addNotification({
-        type: "error",
-        message: detail.message,
-        duration: 7000, // Show API errors a bit longer
-      });
-    };
-
-    window.addEventListener("api-error", handleApiError);
-
-    return () => {
-      window.removeEventListener("api-error", handleApiError);
-    };
-  }, [addNotification]);
-
   return (
     <NotificationContext.Provider
       value={{
@@ -79,7 +52,7 @@ export const NotificationProvider = ({ children }: NotificationProviderProps) =>
       }}
     >
       {children}
-      <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
+      <NotificationContainer />
     </NotificationContext.Provider>
   );
 };
