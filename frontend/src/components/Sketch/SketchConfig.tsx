@@ -77,7 +77,14 @@ export const SketchConfig = ({ channelName }: SketchConfigProps) => {
   };
 
   const handleSelectSketch = async (sketch: Sketch) => {
+    // Check if the selected sketch is already the current one
+    if (sketch.id === sketchState.currentSketch?.id) {
+      if (import.meta.env.DEV) console.log(`[SketchConfig] Sketch ${sketch.id} is already selected. Skipping load.`);
+      return; // Don't reload if it's already the current sketch
+    }
+
     try {
+      if (import.meta.env.DEV) console.log(`[SketchConfig] Selecting sketch ${sketch.id}`);
       await sketchActions.loadSketch(channelName, sketch.id);
     } catch (error) {
       // Error handling is done in the context

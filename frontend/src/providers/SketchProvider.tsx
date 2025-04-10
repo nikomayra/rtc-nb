@@ -152,6 +152,13 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         stateActions.setLoading(true);
         try {
           await sketchApi.deleteSketch(sketchId, authState.token);
+          // Update local state AFTER successful API call
+          setState((prev) => {
+            const newSketches = prev.sketches.filter((s) => s.id !== sketchId);
+            const newCurrentSketch = prev.currentSketch?.id === sketchId ? null : prev.currentSketch;
+            if (import.meta.env.DEV) console.log(`[SketchProvider] Local delete: Removing sketch ${sketchId}`);
+            return { ...prev, sketches: newSketches, currentSketch: newCurrentSketch };
+          });
           showSuccess("Sketch deleted successfully");
         } catch (error) {
           const message = error instanceof Error ? error.message : "Failed to delete sketch";

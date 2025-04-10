@@ -382,17 +382,22 @@ func (s *Store) CreateSketch(ctx context.Context, sketch *models.Sketch) error {
 	return nil
 }
 
+// UpdateSketchWithTx updates the sketch regions within a given transaction.
+// It marshals the sketch.Regions map (which should contain merged paths)
+// back into JSON for storage.
 func (s *Store) UpdateSketchWithTx(ctx context.Context, tx *sql.Tx, sketch *models.Sketch) error {
-	// The 'sketch' object passed in has already been modified in memory by the sketch buffer.
-	// Do NOT re-fetch the sketch here. Directly marshal the regions from the passed-in sketch.
-
 	updatedRegionsJSON, err := json.Marshal(sketch.Regions)
 	if err != nil {
 		return fmt.Errorf("failed to marshal updated regions: %w", err)
 	}
 
-	_, err = tx.StmtContext(ctx, s.statements.UpdateSketchRegions).
-		ExecContext(ctx, sketch.ID, updatedRegionsJSON)
+	// Use the transaction's prepared statement if available, otherwise use the general one
+	stmt := s.statements.UpdateSketchRegions
+	if tx != nil {
+		stmt = tx.StmtContext(ctx, stmt)
+	}
+
+	_, err = stmt.ExecContext(ctx, sketch.ID, updatedRegionsJSON)
 	if err != nil {
 		return fmt.Errorf("update sketch regions: %w", err)
 	}
@@ -400,7 +405,46 @@ func (s *Store) UpdateSketchWithTx(ctx context.Context, tx *sql.Tx, sketch *mode
 	return nil
 }
 
+// GetSketchForUpdate retrieves sketch metadata and raw regions JSON within a transaction, locking the row.
+func (s *Store) GetSketchForUpdate(ctx context.Context, tx *sql.Tx, sketchID string) (*models.Sketch, []byte, error) {
+	sketch := &models.Sketch{}
+	var regionsJSON []byte
+
+	// Use the prepared statement within the transaction
+	stmt := s.statements.SelectSketchForUpdate
+	if tx != nil {
+		stmt = tx.StmtContext(ctx, stmt)
+	}
+
+	row := stmt.QueryRowContext(ctx, sketchID)
+
+	err := row.Scan(
+		&sketch.ID,
+		&sketch.ChannelName,
+		&sketch.DisplayName,
+		&sketch.Width,
+		&sketch.Height,
+		&regionsJSON,
+		&sketch.CreatedAt,
+		&sketch.CreatedBy,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil, nil // Indicate not found
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get sketch for update: %w", err)
+	}
+
+	// Initialize the Regions map, but don't unmarshal here.
+	// The caller (service layer) will unmarshal the raw bytes.
+	sketch.Regions = make(map[string]models.Region)
+
+	return sketch, regionsJSON, nil
+}
+
 func (s *Store) GetSketch(ctx context.Context, sketchID string) (*models.Sketch, error) {
+	// This function remains for non-locking reads, but ensure it doesn't use the commented-out DecompressRegion
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sketch := &models.Sketch{
@@ -418,11 +462,19 @@ func (s *Store) GetSketch(ctx context.Context, sketchID string) (*models.Sketch,
 		&sketch.CreatedBy,
 	)
 	if err != nil {
+		// Check specifically for ErrNoRows to return nil sketch instead of error
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("failed to get sketch: %w", err)
 	}
+
 	if err := json.Unmarshal(regionsJSON, &sketch.Regions); err != nil {
+		// Log the problematic JSON on unmarshal failure
+		log.Printf("ERROR: GetSketch(%s): Failed to unmarshal regions JSON: %v. JSON: %s", sketchID, err, string(regionsJSON))
 		return nil, fmt.Errorf("failed to unmarshal regions: %w", err)
 	}
+
 	return sketch, nil
 }
 

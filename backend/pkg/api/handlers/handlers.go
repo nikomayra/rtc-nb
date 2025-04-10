@@ -679,7 +679,7 @@ func (h *Handlers) DeleteSketchHandler(w http.ResponseWriter, r *http.Request) {
 		// Log error but don't fail the API response, deletion was successful
 	}
 
-	responses.SendSuccess(w, nil, http.StatusNoContent) // Use 204 No Content for successful deletion
+	responses.SendSuccess(w, "Success", http.StatusOK)
 }
 
 func (h *Handlers) ClearSketchHandler(w http.ResponseWriter, r *http.Request) {
@@ -742,7 +742,7 @@ func (h *Handlers) ClearSketchHandler(w http.ResponseWriter, r *http.Request) {
 		// Log error but don't fail the API response, clear operation was successful
 	}
 
-	responses.SendSuccess(w, nil, http.StatusNoContent) // Use 204 No Content for successful clear
+	responses.SendSuccess(w, "Success", http.StatusOK)
 }
 
 func (h *Handlers) GetMessagesHandler(w http.ResponseWriter, r *http.Request) {

@@ -60,7 +60,7 @@ func (h *Hub) NotifyChannel(channelName string, message []byte) {
 		return
 	}
 
-	log.Printf("Broadcasting message to %d clients in channel %s", len(channelClients), channelName)
+	// log.Printf("Broadcasting message to %d clients in channel %s", len(channelClients), channelName)
 
 	// Send the message to each client
 	for client := range channelClients {

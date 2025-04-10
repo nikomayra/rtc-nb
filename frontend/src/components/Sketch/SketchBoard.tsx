@@ -155,7 +155,7 @@ export const SketchBoard = memo(({ channelName }: SketchBoardProps) => {
               cursor: currentTool === "pan" ? "grab" : "crosshair",
               display: "block",
             }}
-            className="bg-black border-2 border-dashed border-primary/30"
+            className="bg-neutral-500 border-2 border-dashed border-primary/30"
           />
         </div>
       </div>

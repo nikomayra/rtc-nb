@@ -1,9 +1,6 @@
 package models
 
 import (
-	// "fmt"
-	"fmt"
-	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,11 +18,11 @@ type DrawPath struct {
 }
 
 type Region struct {
-	Start      Point      `json:"start"`
-	End        Point      `json:"end"`
-	Paths      []DrawPath `json:"paths"`
-	Pixels     [][]bool   `json:"-"` // Used for rendering
-	Compressed []byte     `json:"-"` // For storage
+	Start Point      `json:"start"`
+	End   Point      `json:"end"`
+	Paths []DrawPath `json:"paths"`
+	// Pixels     [][]bool   `json:"-"` // Used for rendering (COMMENTED OUT: Not used for persistence, rendering handled by frontend)
+	// Compressed []byte     `json:"-"` // For storage (COMMENTED OUT: Compression logic was not correctly persisted)
 }
 
 type Sketch struct {
@@ -52,8 +49,10 @@ func NewSketch(channelName, displayName string, width, height int, createdBy str
 	}
 }
 
+/* COMMENTED OUT: This function overwrites region paths instead of merging/appending.
+// It's unsuitable for processing updates from the buffer.
+// The rasterization/compression logic within was also not persisted correctly.
 func (s *Sketch) AddRegion(region Region) error {
-
 	// Validate region bounds
 	if region.Start.X < 0 || region.Start.Y < 0 ||
 		region.End.X >= s.Width || region.End.Y >= s.Height {
@@ -78,9 +77,15 @@ func (s *Sketch) AddRegion(region Region) error {
 	key := fmt.Sprintf("%d,%d", region.Start.X, region.Start.Y)
 	s.Regions[key] = region
 
+	key := fmt.Sprintf("%d,%d", region.Start.X, region.Start.Y)
+	s.Regions[key] = region                                                                     // Keep this line for now for potential other uses, but buffer shouldn't call AddRegion for updates.
+	fmt.Println("WARNING: Sketch.AddRegion called - this might be incorrect for update logic.") // Add warning if it's somehow still called
+
 	return nil
 }
+*/
 
+/* COMMENTED OUT: Rasterization logic - Not used for persistence
 func rasterizeStroke(pixels [][]bool, stroke DrawPath, offset Point) {
 	for i := 1; i < len(stroke.Points); i++ {
 		p1 := stroke.Points[i-1]
@@ -97,7 +102,9 @@ func rasterizeStroke(pixels [][]bool, stroke DrawPath, offset Point) {
 		drawLine(pixels, p1, p2, stroke.StrokeWidth, stroke.IsDrawing, offset)
 	}
 }
+*/
 
+/* COMMENTED OUT: Rasterization logic - Not used for persistence
 // Filled circle using midpoint circle algorithm with scanline fill
 func drawCircle(pixels [][]bool, center Point, radius int, isDrawing bool, offset Point) {
 	// Adjust for region offset
@@ -121,7 +128,9 @@ func drawCircle(pixels [][]bool, center Point, radius int, isDrawing bool, offse
 		}
 	}
 }
+*/
 
+/* COMMENTED OUT: Rasterization logic - Not used for persistence
 func drawLine(pixels [][]bool, p1, p2 Point, width int, isDrawing bool, offset Point) {
 	if width <= 1 {
 		drawSingleLine(pixels, p1, p2, isDrawing, offset)
@@ -156,7 +165,9 @@ func drawLine(pixels [][]bool, p1, p2 Point, width int, isDrawing bool, offset P
 		drawSingleLine(pixels, start, end, isDrawing, offset)
 	}
 }
+*/
 
+/* COMMENTED OUT: Rasterization logic - Not used for persistence
 // Bresenham's line algorithm
 func drawSingleLine(pixels [][]bool, p1, p2 Point, isDrawing bool, offset Point) {
 
@@ -196,7 +207,9 @@ func drawSingleLine(pixels [][]bool, p1, p2 Point, isDrawing bool, offset Point)
 		}
 	}
 }
+*/
 
+/* COMMENTED OUT: Compression logic - Not used for persistence
 // Example of how RLE compression works for a region:
 // Input pixels:
 // [true,  true,  true,  false, false]
@@ -225,7 +238,9 @@ func compressRegion(pixels [][]bool) []byte {
 	}
 	return result
 }
+*/
 
+/* COMMENTED OUT: Decompression logic - Not used for persistence
 func (s *Sketch) DecompressRegion(data []byte, width, height int) [][]bool {
 	pixels := make([][]bool, height)
 	for i := range pixels {
@@ -248,3 +263,4 @@ func (s *Sketch) DecompressRegion(data []byte, width, height int) [][]bool {
 	}
 	return pixels
 }
+*/

@@ -38,6 +38,9 @@ type Statements struct {
 
 	UpdateChannelMemberRole *sql.Stmt // channel_name, username, is_admin
 	GetChannelAdmins        *sql.Stmt // channel_name
+
+	// Sketch select for locking within a transaction
+	SelectSketchForUpdate *sql.Stmt // id
 }
 
 func PrepareStatements(db *sql.DB) (*Statements, error) {
@@ -211,6 +214,15 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
 		return nil, fmt.Errorf("prepare clear sketch regions: %w", err)
 	}
 
+	// Prepare SelectSketchForUpdate
+	if s.SelectSketchForUpdate, err = prepare(`
+        SELECT id, channel_name, display_name, width, height, regions, created_at, created_by 
+        FROM sketches 
+        WHERE id = $1
+		FOR UPDATE`); err != nil {
+		return nil, fmt.Errorf("prepare select sketch for update: %w", err)
+	}
+
 	// Role change statements
 	if s.UpdateChannelMemberRole, err = prepare(`
         UPDATE channel_member 
@@ -250,6 +262,7 @@ func (s *Statements) CloseStatements() error {
 		s.DeleteSketch,
 		s.UpdateChannelMemberRole,
 		s.GetChannelAdmins,
+		s.SelectSketchForUpdate,
 	} {
 		if stmt != nil {
 			stmt.Close()

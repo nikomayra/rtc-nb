@@ -131,15 +131,34 @@ export const useSketchManager = ({ channelName }: UseSketchManagerProps): UseSke
           clear();
         }
 
-        // Redraw existing paths AFTER potential init/clear
+        // --- Two-Pass Rendering --- //
         const allPaths = regions ? Object.values(regions).flatMap((r) => r.paths || []) : [];
-        if (allPaths.length > 0) {
-          if (import.meta.env.DEV) console.log(`[Manager] Redrawing ${allPaths.length} paths.`);
-          redrawCanvas(allPaths);
-        } else if (canvas.width === width && canvas.height === height) {
-          // Ensure clear is called if redraw didn't run (e.g., empty sketch)
-          // and initialize didn't run (dimensions matched).
-          clear();
+        const drawPaths = allPaths.filter((p) => p.isDrawing);
+        const erasePaths = allPaths.filter((p) => !p.isDrawing);
+        const ctx = canvasRef.current?.getContext("2d");
+
+        if (ctx) {
+          // Pass 1: Draw the 'drawing' paths
+          if (drawPaths.length > 0) {
+            if (import.meta.env.DEV) console.log(`[Manager] Pass 1: Redrawing ${drawPaths.length} 'draw' paths.`);
+            ctx.globalCompositeOperation = "source-over"; // Ensure default
+            redrawCanvas(drawPaths);
+          }
+
+          // Pass 2: Draw the 'erase' paths
+          if (erasePaths.length > 0) {
+            if (import.meta.env.DEV) console.log(`[Manager] Pass 2: Redrawing ${erasePaths.length} 'erase' paths.`);
+            ctx.globalCompositeOperation = "destination-out"; // Set erase mode
+            redrawCanvas(erasePaths);
+            ctx.globalCompositeOperation = "source-over";
+          }
+
+          // If there were no paths at all, ensure canvas is clear if dimensions matched
+          if (allPaths.length === 0 && canvas.width === width && canvas.height === height) {
+            clear();
+          }
+        } else {
+          if (import.meta.env.DEV) console.warn("[Manager] Canvas context not available for redrawing.");
         }
       } else {
         // No sketch selected, but canvas exists - clear it
