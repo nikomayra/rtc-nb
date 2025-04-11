@@ -39,7 +39,7 @@ func NewLocalFileStore(basePath string) (*LocalFileStore, error) {
 
 // Returns the path to the original image and the path to the thumbnail
 func (ls *LocalFileStore) SaveImage(ctx context.Context, img image.Image) (string, string, error) {
-	slog.Info("Saving image to local storage")
+	slog.Debug("Saving image to local storage")
 	// Generate unique filename
 	filename := uuid.New().String() + ".jpg"
 

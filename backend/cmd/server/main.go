@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"rtc-nb/backend/internal/config"
 	"rtc-nb/backend/internal/connections"
@@ -53,8 +54,15 @@ func main() {
 	router := mux.NewRouter()
 	api.RegisterRoutes(router, wsHandler, connManager, chatService, sketchService, cfg.FileStorePath, msgProcessor)
 
-	log.Println("Server started on :8080")
-	if err := http.ListenAndServe(":8080", router); err != nil {
+	// Determine port
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default port for local development
+	}
+	addr := ":" + port
+
+	log.Printf("Server starting on %s", addr)
+	if err := http.ListenAndServe(addr, router); err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
 }

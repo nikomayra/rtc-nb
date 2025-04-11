@@ -69,9 +69,6 @@ func (rl *RateLimiter) RateLimit(next http.Handler) http.Handler {
 		rl.mu.Lock()
 		now := time.Now()
 
-		// Debug logging
-		// log.Printf("Rate limiting request from IP: %s, Current count: %d", ip, len(rl.requests[ip]))
-
 		// Rest of the function remains the same...
 		if times, exists := rl.requests[ip]; exists {
 			valid := make([]time.Time, 0)

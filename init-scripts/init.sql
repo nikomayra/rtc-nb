@@ -2,7 +2,6 @@
 CREATE TABLE users (
     username VARCHAR(50) PRIMARY KEY,
     hashed_password VARCHAR(100) NOT NULL,
-    is_online BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

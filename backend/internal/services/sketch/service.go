@@ -73,25 +73,6 @@ func (s *Service) GetSketches(ctx context.Context, channelName string) ([]*model
 	return s.dbStore.GetSketches(ctx, channelName)
 }
 
-/* COMMENTED OUT: Replaced by ApplySketchUpdates for atomic path merging
-func (s *Service) UpdateSketch(ctx context.Context, sketch *models.Sketch) error {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	tx, err := s.dbStore.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	if err := s.dbStore.UpdateSketchWithTx(ctx, tx, sketch); err != nil {
-		return fmt.Errorf("update sketch: %w", err)
-	}
-
-	return tx.Commit()
-}
-*/
-
 // ApplySketchUpdates atomically fetches a sketch, appends paths from commands, and updates it.
 func (s *Service) ApplySketchUpdates(ctx context.Context, sketchID string, commands []*models.SketchCommand) error {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second) // Increased timeout for Tx
@@ -157,8 +138,6 @@ func (s *Service) ApplySketchUpdates(ctx context.Context, sketchID string, comma
 	sketchMeta.Regions = currentRegions
 
 	// Log before attempting the database update
-	// mergedRegionsJSON, _ := json.Marshal(currentRegions) // Marshal for logging, ignore error for simplicity here
-	// log.Printf("ApplySketchUpdates(%s): Preparing to update DB. Merged regions JSON (length %d): %s", sketchID, len(mergedRegionsJSON), string(mergedRegionsJSON))
 
 	// 5. Update the sketch in the database within the transaction
 	if err := s.dbStore.UpdateSketchWithTx(ctx, tx, sketchMeta); err != nil {
@@ -167,13 +146,11 @@ func (s *Service) ApplySketchUpdates(ctx context.Context, sketchID string, comma
 	}
 
 	// 6. Commit the transaction
-	// log.Printf("ApplySketchUpdates(%s): Attempting to commit transaction...", sketchID)
 	if err := tx.Commit(); err != nil {
 		log.Printf("ERROR: ApplySketchUpdates(%s): Failed to commit transaction: %v", sketchID, err)
 		return fmt.Errorf("commit transaction failed for sketch %s: %w", sketchID, err)
 	}
 
-	// log.Printf("ApplySketchUpdates(%s): Transaction committed successfully. Applied %d commands.", sketchID, len(commands))
 	log.Printf("Successfully applied %d commands for sketch %s", len(commands), sketchID) // Revert to simpler success log
 	return nil
 }

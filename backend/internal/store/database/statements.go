@@ -10,10 +10,6 @@ type Statements struct {
 	SelectUser *sql.Stmt // username
 	DeleteUser *sql.Stmt // username
 
-	// TODO: Implement for idle system maybe
-	// UpsertUserStatus *sql.Stmt // username, is_online
-	// SelectUserStatus *sql.Stmt // username
-
 	InsertChannel        *sql.Stmt // name, is_private, description, created_by, hashed_password
 	SelectChannel        *sql.Stmt // name
 	SelectChannels       *sql.Stmt
@@ -78,21 +74,6 @@ func PrepareStatements(db *sql.DB) (*Statements, error) {
         DELETE FROM users WHERE username = $1`); err != nil {
 		return nil, fmt.Errorf("prepare delete user: %w", err)
 	}
-
-	// // Prepare user status statements
-	// if s.UpsertUserStatus, err = prepare(`
-	//     INSERT INTO user_status (username, is_online, last_seen)
-	//     VALUES ($1, $2, CURRENT_TIMESTAMP)
-	//     ON CONFLICT (username)
-	//     DO UPDATE SET is_online = $2, last_seen = CURRENT_TIMESTAMP`); err != nil {
-	// 	return nil, fmt.Errorf("prepare upsert user status: %w", err)
-	// }
-
-	// if s.SelectUserStatus, err = prepare(`
-	//     SELECT username, is_online, last_seen
-	//     FROM user_status WHERE username = $1`); err != nil {
-	// 	return nil, fmt.Errorf("prepare select user status: %w", err)
-	// }
 
 	// Prepare channel statements
 	if s.InsertChannel, err = prepare(`

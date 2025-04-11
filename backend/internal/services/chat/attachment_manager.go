@@ -15,7 +15,6 @@ import (
 )
 
 type attachmentManager struct {
-	// mu         sync.RWMutex
 	db         *database.Store
 	fileStorer storage.FileStorer
 }

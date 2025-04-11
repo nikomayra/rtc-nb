@@ -1,10 +1,9 @@
 package messaging
 
 import (
-	// "context"
 	"context"
-	// "fmt"
 	"log"
+	"log/slog"
 	"rtc-nb/backend/internal/models"
 	"rtc-nb/backend/internal/services/sketch"
 	"rtc-nb/backend/pkg/utils"
@@ -53,21 +52,21 @@ func (sb *SketchBuffer) processMessages() {
 		case msg := <-sb.messages:
 			batch = append(batch, msg)
 			if len(batch) >= sb.batchSize {
-				log.Printf("Flushing sketch buffer due to batch size (%d messages)", len(batch))
+				slog.Debug("Flushing sketch buffer due to batch size", "count", len(batch))
 				if err := sb.flush(batch); err != nil {
 					log.Printf("ERROR during batch size flush completion: %v", err)
 				} else {
-					log.Printf("Finished flushing sketch batch (size trigger).")
+					slog.Debug("Finished flushing sketch batch (size trigger).")
 				}
 				batch = make([]*models.Message, 0, sb.batchSize)
 			}
 		case <-ticker.C:
 			if len(batch) > 0 {
-				log.Printf("Flushing sketch buffer due to interval (%d messages)", len(batch))
+				slog.Debug("Flushing sketch buffer due to interval", "count", len(batch))
 				if err := sb.flush(batch); err != nil {
 					log.Printf("ERROR during interval flush completion: %v", err)
 				} else {
-					log.Printf("Finished flushing sketch batch (interval trigger).")
+					slog.Debug("Finished flushing sketch batch (interval trigger).")
 				}
 				batch = make([]*models.Message, 0, sb.batchSize)
 			}
@@ -100,11 +99,11 @@ func (sb *SketchBuffer) flush(messages []*models.Message) error {
 	}
 
 	if processedMsgCount == 0 {
-		log.Printf("Sketch buffer flush: No valid COMPLETE update messages found in batch of %d.", len(messages))
+		slog.Debug("Sketch buffer flush: No valid COMPLETE update messages found", "batch_size", len(messages))
 		return nil
 	}
 
-	log.Printf("Processing %d COMPLETE sketch updates across %d unique sketches from batch of %d messages.", processedMsgCount, len(updates), len(messages))
+	slog.Debug("Processing sketch updates", "updates", processedMsgCount, "sketches", len(updates), "batch_size", len(messages))
 
 	// Atomically apply updates for each sketch
 	var firstError error
@@ -112,7 +111,7 @@ func (sb *SketchBuffer) flush(messages []*models.Message) error {
 		if len(commands) == 0 {
 			continue
 		}
-		log.Printf("Attempting to flush %d update command(s) for sketch %s", len(commands), sketchID)
+		slog.Debug("Attempting to flush sketch updates", "count", len(commands), "sketchID", sketchID)
 		if err := sb.sketchService.ApplySketchUpdates(ctx, sketchID, commands); err != nil {
 			// Log the error more clearly, mentioning the commands might be lost for this specific sketch
 			log.Printf("ERROR: Failed to apply %d update(s) for sketch %s. These updates may be lost. Error: %v", len(commands), sketchID, err)
@@ -120,36 +119,8 @@ func (sb *SketchBuffer) flush(messages []*models.Message) error {
 				firstError = err
 			}
 		} else {
-			log.Printf("Successfully flushed %d update command(s) for sketch %s", len(commands), sketchID)
+			slog.Debug("Successfully flushed sketch updates", "count", len(commands), "sketchID", sketchID)
 		}
 	}
 	return firstError
 }
-
-/* COMMENTED OUT: Old, non-atomic, and incorrect update logic
-// Process each sketch's updates
-for sketchID, commands := range updates {
-	sketch, err := sb.sketchService.GetSketch(ctx, sketchID)
-	if err != nil {
-		log.Printf("Error getting sketch %s: %v", sketchID, err)
-		continue
-	}
-
-	// Process each update
-	for _, cmd := range commands {
-		if cmd.Region == nil {
-			continue
-		}
-
-		err := sketch.AddRegion(*cmd.Region) // This was overwriting, not merging
-		if err != nil {
-			log.Printf("Error adding region to sketch %s: %v", sketchID, err)
-			continue
-		}
-	}
-
-	if err := sb.sketchService.UpdateSketch(ctx, sketch); err != nil {
-		log.Printf("Error updating sketch: %v", err)
-	}
-}
-*/

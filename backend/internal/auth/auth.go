@@ -126,13 +126,3 @@ func CheckPassword(hashedPassword, password string) error {
 	// Comparing the hashed password to string password
 	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 }
-
-// func GenerateRefreshToken(username string) (string, error) {
-// 	// Logic to generate refresh token
-// 	return "some-refresh-token", nil
-// }
-
-// func RefreshAccessToken(refreshToken string) (string, error) {
-// 	// Logic to refresh access token
-// 	return "new-access-token", nil
-// }

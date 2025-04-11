@@ -59,7 +59,6 @@ func (s *Store) BatchInsertMessages(ctx context.Context, messages []*models.Mess
 
 			if !exists {
 				// Skip this message as channel doesn't exist
-				log.Printf("Skipping message for non-existent channel: %s", msg.ChannelName)
 				continue
 			}
 

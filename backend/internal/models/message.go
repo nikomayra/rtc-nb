@@ -235,22 +235,3 @@ func NewSketchBroadcastMessage(channelName, username string, command SketchComma
 		},
 	}
 }
-
-// func (m *Message) RequiresPersistence() bool {
-// 	switch m.Type {
-// 	case MessageTypeSketch:
-// 		// Only persist COMPLETE sketch updates
-// 		if m.Content.SketchCmd != nil &&
-// 			m.Content.SketchCmd.CommandType == SketchCommandTypeUpdate &&
-// 			m.Content.SketchCmd.IsPartial != nil &&
-// 			!*m.Content.SketchCmd.IsPartial {
-// 			return true
-// 		}
-// 		return false
-// 	case MessageTypeChannelUpdate, MessageTypeMemberUpdate, MessageTypeUserStatus, MessageTypeSystemUserStatus:
-// 		// System/Status messages generally not persisted this way
-// 		return false
-// 	default: // Text, Image
-// 		return true
-// 	}
-// }

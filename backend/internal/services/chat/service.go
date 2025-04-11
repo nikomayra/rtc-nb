@@ -16,12 +16,6 @@ import (
 	gorilla_websocket "github.com/gorilla/websocket"
 )
 
-// const (
-// 	maxImageSize = 2 << 20 // 2MB
-// 	maxVideoSize = 8 << 20 // 8MB
-// 	maxAudioSize = 5 << 20 // 5MB
-// )
-
 type Service struct {
 	channelManager
 	userManager

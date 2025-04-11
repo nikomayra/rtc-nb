@@ -34,14 +34,6 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 	}
 
 	// Log basic message info for routing
-	// log.Printf("Processing message: Type=%d, Channel=%s, SketchCmdType=%v",
-	// 	msg.Type, msg.ChannelName,
-	// 	func() models.SketchCommandType { // Avoid nil pointer if SketchCmd is nil
-	// 		if msg.Content.SketchCmd != nil {
-	// 			return msg.Content.SketchCmd.CommandType
-	// 		}
-	// 		return ""
-	// 	}()) // Execute the function
 
 	outgoingMsgBytes, err := json.Marshal(msg)
 	if err != nil {

@@ -16,7 +16,7 @@ export enum SketchCommandType {
   Clear = "CLEAR",
   Delete = "DELETE",
   New = "NEW",
-  Select = "SELECT",
+  // Select = "SELECT",
 }
 
 export enum ChannelUpdateAction {
@@ -27,7 +27,7 @@ export enum ChannelUpdateAction {
 export enum MemberUpdateAction {
   Added = "added",
   RoleChanged = "role_changed",
-  Removed = "removed",
+  // Removed = "removed",
 }
 
 // ============= Sketch Types =============
@@ -77,7 +77,7 @@ export const SketchCommandSchema = z
           return data.sketchData !== undefined;
         case SketchCommandType.Clear:
         case SketchCommandType.Delete:
-        case SketchCommandType.Select:
+          // case SketchCommandType.Select:
           return true;
         default:
           return false;

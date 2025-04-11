@@ -113,11 +113,6 @@ export const useChannelSocket = () => {
           // Also add the system message associated with the join
           channelActions.setMessages((prev: IncomingMessage[]) => [...prev, message]);
           break;
-        case MemberUpdateAction.Removed:
-          channelActions.setMembers((prev) => prev.filter((m) => m.username !== username));
-          // Also add the system message associated with leaving
-          channelActions.setMessages((prev: IncomingMessage[]) => [...prev, message]);
-          break;
         case MemberUpdateAction.RoleChanged:
           channelActions.setMembers((prev) =>
             prev.map((member) => (member.username === username ? { ...member, isAdmin: isAdmin } : member))
