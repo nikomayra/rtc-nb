@@ -9,16 +9,16 @@ RUN npm run build # Output usually goes to /app/frontend/dist
 # Stage 2: Build Backend
 FROM golang:1.23-alpine
 WORKDIR /app
-COPY go.mod ./
-COPY go.sum* ./
+COPY backend/go.mod ./
+COPY backend/go.sum* ./
 RUN go mod download
-COPY . .
+COPY backend/ ./
 
 # Copy built frontend from the first stage
 # Adjust path if your frontend build output is different
 COPY --from=frontend-builder /app/frontend/dist ./static
 
-# Build the application
+# Build the application using the path relative to the WORKDIR
 RUN go build -o main ./cmd/server
 
 # Expose port

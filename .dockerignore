@@ -1,0 +1,72 @@
+# flyctl launch added from .gitignore
+**\*.env
+**\pgdata
+**\*.toml
+**\tmp
+
+# Filesystem
+**\filestore
+
+# flyctl launch added from backend\.gitignore
+# Binaries and temp files
+backend\tmp
+backend\**\*.exe
+backend\**\*.exe~
+backend\**\*.dll
+backend\**\*.so
+backend\**\*.dylib
+
+# Test binary, built with `go test -c`
+backend\**\*.test
+
+# Output of the go coverage tool
+backend\**\*.out
+
+# Go workspace file
+backend\**\go.work
+
+# Air temporary files
+backend\**\.air.toml
+backend\**\tmp
+
+# IDE specific files
+backend\**\.idea
+backend\**\.vscode
+backend\**\*.swp
+backend\**\*.swo
+
+# Environment variables
+backend\**\.env
+backend\**\.env.local
+
+# Log files
+backend\**\*.log
+
+
+
+# flyctl launch added from frontend\.gitignore
+# Logs
+frontend\**\logs
+frontend\**\*.log
+frontend\**\npm-debug.log*
+frontend\**\yarn-debug.log*
+frontend\**\yarn-error.log*
+frontend\**\pnpm-debug.log*
+frontend\**\lerna-debug.log*
+
+frontend\**\node_modules
+frontend\**\dist
+frontend\**\dist-ssr
+frontend\**\*.local
+
+# Editor directories and files
+frontend\**\.vscode\*
+!frontend\**\.vscode\extensions.json
+frontend\**\.idea
+frontend\**\.DS_Store
+frontend\**\*.suo
+frontend\**\*.ntvs*
+frontend\**\*.njsproj
+frontend\**\*.sln
+frontend\**\*.sw?
+fly.toml

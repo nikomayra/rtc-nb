@@ -28,13 +28,18 @@ func Load() *Config {
 }
 
 func initPostgres() *sql.DB {
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		os.Getenv("POSTGRES_HOST"),
-		os.Getenv("POSTGRES_PORT"),
-		os.Getenv("POSTGRES_USER"),
-		os.Getenv("POSTGRES_PASSWORD"),
-		os.Getenv("POSTGRES_DB"),
-	)
+	connStr := os.Getenv("DATABASE_URL") // Use DATABASE_URL first
+	if connStr == "" {
+		// Fallback for local development using individual variables
+		log.Println("DATABASE_URL not found, falling back to individual POSTGRES_* variables")
+		connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+			os.Getenv("POSTGRES_HOST"),
+			os.Getenv("POSTGRES_PORT"),
+			os.Getenv("POSTGRES_USER"),
+			os.Getenv("POSTGRES_PASSWORD"),
+			os.Getenv("POSTGRES_DB"),
+		)
+	}
 
 	var err error
 	db, err := sql.Open("postgres", connStr)
