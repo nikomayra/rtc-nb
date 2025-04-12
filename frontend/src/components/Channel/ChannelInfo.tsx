@@ -122,7 +122,7 @@ export const ChannelInfo = () => {
         </div>
       )}
 
-      <div className="flex flex-col p-4 border-b border-primary/20 min-h-16 overflow-visible w-full">
+      <div className="flex flex-col p-4 border-b border-primary/20 min-h-16 w-full">
         <div className="flex flex-col gap-2 w-full">
           <div className="flex items-center justify-between w-full whitespace-nowrap">
             <Dropdown
@@ -145,10 +145,10 @@ export const ChannelInfo = () => {
 
           <div
             onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-            className="cursor-pointer group w-full select-none"
+            className="cursor-pointer group w-full select-none overflow-hidden"
           >
             <p
-              className={`text-xs text-text-light/50 ${
+              className={`text-xs text-text-light/50 overflow-hidden ${
                 isDescriptionExpanded ? "whitespace-normal break-words" : "truncate"
               } text-left group-hover:text-primary/70 transition-colors w-full max-w-full`}
             >

@@ -9,18 +9,45 @@ export const MessageList = () => {
   const { state: systemState } = useSystemContext();
   const { state: channelState } = useChannelContext();
   const { state: wsState } = useWebSocketContext();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageContainerRef = useRef<HTMLDivElement>(null);
 
   const channelConnected = wsState ? wsState.channelConnected : false;
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+  // Function to handle image load and re-scroll if necessary
+  const handleImageLoad = () => {
+    const container = messageContainerRef.current;
+    if (container) {
+      // Use a small tolerance. If we are further than this from the bottom after
+      // an image loads, it means the scrollHeight changed significantly.
+      const tolerance = 10; // pixels
+      const isNearBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + tolerance;
+
+      // If not near bottom after image load, scroll smoothly
+      if (!isNearBottom) {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: "smooth",
+        });
       }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [systemState.currentChannel, channelState.messages]);
+    }
+  };
+
+  useEffect(() => {
+    const container = messageContainerRef.current;
+    if (container) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [channelState.messages]);
+
+  useEffect(() => {
+    const container = messageContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [systemState.currentChannel]);
 
   if (!systemState.currentChannel) {
     return <div className="flex-1 flex items-center justify-center text-text-light/50">No channel selected</div>;
@@ -35,14 +62,14 @@ export const MessageList = () => {
       )}
 
       <div
-        className="flex-1 overflow-y-auto flex flex-col gap-2 pr-2 mb-2
+        ref={messageContainerRef}
+        className="flex-1 overflow-y-scroll flex flex-col gap-2 pr-2 mb-2
           scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-surface-dark 
           scrollbar-hover:scrollbar-thumb-primary/30"
       >
         {channelState.messages.map((message) => (
-          <MessageItem key={message.id} message={message} />
+          <MessageItem key={message.id} message={message} onImageLoad={handleImageLoad} />
         ))}
-        <div ref={messagesEndRef} />
       </div>
       <div>
         <SendMessageForm />

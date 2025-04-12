@@ -60,7 +60,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Channel websocket connection for user %s to channel %s", claims.Username, channelName)
+	// log.Printf("Channel websocket connection for user %s to channel %s", claims.Username, channelName)
 
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -77,14 +77,14 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.connMgr.AddClientToChannel(channelName, conn)
-	log.Printf("Added user %s to channel %s", claims.Username, channelName)
+	// log.Printf("Added user %s to channel %s", claims.Username, channelName)
 	h.broadcastUserStatus(channelName, claims.Username, "online")
 
 	// Cleanup on disconnect
 	defer func() {
+		// log.Printf("Removed user %s from channel %s", claims.Username, channelName)
 		h.connMgr.RemoveConnection(claims.Username)
 		h.connMgr.RemoveClientFromChannel(channelName, conn)
-		log.Printf("Removed user %s from channel %s", claims.Username, channelName)
 		h.broadcastUserStatus(channelName, claims.Username, "offline")
 		conn.Close()
 	}()
@@ -156,7 +156,7 @@ func (h *Handler) HandleSystemWebSocket(w http.ResponseWriter, r *http.Request) 
 	}
 
 	username := claims.Username
-	log.Printf("Handling system WebSocket connection for user: %s", username)
+	// log.Printf("Handling system WebSocket connection for user: %s", username)
 
 	// Upgrade HTTP connection to WebSocket
 	conn, err := h.upgrader.Upgrade(w, r, nil)
@@ -169,10 +169,10 @@ func (h *Handler) HandleSystemWebSocket(w http.ResponseWriter, r *http.Request) 
 	h.connMgr.AddSystemConnection(username, conn)
 	h.broadcastSystemUserCount()
 	defer func() {
-		log.Printf("Closing system WebSocket connection for user: %s", username)
-		conn.Close()
+		// log.Printf("Closing system WebSocket connection for user: %s", username)
 		h.connMgr.RemoveSystemConnection(username)
 		h.broadcastSystemUserCount()
+		conn.Close()
 	}()
 
 	// Process incoming system messages
@@ -180,9 +180,9 @@ func (h *Handler) HandleSystemWebSocket(w http.ResponseWriter, r *http.Request) 
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("System WebSocket error for user %s: %v", username, err)
+				// log.Printf("System WebSocket error for user %s: %v", username, err)
 			} else {
-				log.Printf("System WebSocket closed for user %s", username)
+				// log.Printf("System WebSocket closed for user %s", username)
 			}
 			break
 		}
@@ -196,7 +196,7 @@ func (h *Handler) HandleSystemWebSocket(w http.ResponseWriter, r *http.Request) 
 
 		// Verify this is actually a system message (ChannelUpdate only)
 		if incomingMsg.Type != models.MessageTypeChannelUpdate {
-			log.Printf("Received non-system message type %d on system WebSocket", incomingMsg.Type)
+			// log.Printf("Received non-system message type %d on system WebSocket", incomingMsg.Type)
 			continue
 		}
 

@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -46,14 +47,16 @@ func (cb *ChatBuffer) processMessages() {
 			batch = append(batch, msg)
 			if len(batch) >= cb.batchSize {
 				if err := cb.flush(batch); err != nil {
-					log.Printf("Error flushing messages: %v", err)
+					// log.Printf("Error flushing messages: %v", err)
+					continue
 				}
 				batch = batch[:0]
 			}
 		case <-ticker.C:
 			if len(batch) > 0 {
 				if err := cb.flush(batch); err != nil {
-					log.Printf("Error flushing messages: %v", err)
+					// log.Printf("Error flushing messages: %v", err)
+					continue
 				}
 				batch = batch[:0]
 			}
@@ -66,7 +69,7 @@ func (cb *ChatBuffer) flush(messages []*models.Message) error {
 
 	// Batch insert to database
 	if err := cb.chatService.BatchInsertMessages(ctx, messages); err != nil {
-		return err
+		return fmt.Errorf("error during batch size flush: %w", err)
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,10 +29,9 @@ func Load() *Config {
 }
 
 func initPostgres() *sql.DB {
-	connStr := os.Getenv("DATABASE_URL") // Use DATABASE_URL first
+	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
-		// Fallback for local development using individual variables
-		log.Println("DATABASE_URL not found, falling back to individual POSTGRES_* variables")
+		log.Println("DATABASE_URL not found, falling back to individual POSTGRES_* variables (for local dev)")
 		connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 			os.Getenv("POSTGRES_HOST"),
 			os.Getenv("POSTGRES_PORT"),
@@ -39,6 +39,21 @@ func initPostgres() *sql.DB {
 			os.Getenv("POSTGRES_PASSWORD"),
 			os.Getenv("POSTGRES_DB"),
 		)
+	} else {
+		// Ensure SSL is required for Fly.io connection strings
+		// Parse the URL to safely add/check query parameters
+		parsedURL, err := url.Parse(connStr)
+		if err != nil {
+			log.Printf("Warning: Could not parse DATABASE_URL: %v. Proceeding anyway.", err)
+		} else {
+			query := parsedURL.Query()
+			if query.Get("sslmode") == "" {
+				query.Set("sslmode", "require")
+				parsedURL.RawQuery = query.Encode()
+				connStr = parsedURL.String()
+				log.Println("Ensured sslmode=require for DATABASE_URL")
+			}
+		}
 	}
 
 	var err error
@@ -50,16 +65,24 @@ func initPostgres() *sql.DB {
 	if err != nil {
 		log.Fatalf("Error connecting to the database: %v", err)
 	}
+
 	log.Println("Successfully connected to PostgreSQL")
 	return db
 }
 
-// LoadEnv reads a .env file and sets environment variables
+// LoadEnv reads a .env file and sets environment variables, unless APP_ENV=production
 func LoadEnv() {
+	// Check if running in production
+	appEnv := strings.ToLower(os.Getenv("APP_ENV"))
+	if appEnv == "production" {
+		log.Println("Running in production mode, skipping .env file loading.")
+		return
+	}
+
 	// Determine the absolute path to the root directory's .env file
 	rootDir, err := findProjectRoot()
 	if err != nil {
-		log.Println("Failed to find project root:", err)
+		log.Println("Failed to find project root when trying to load .env:", err)
 		return
 	}
 

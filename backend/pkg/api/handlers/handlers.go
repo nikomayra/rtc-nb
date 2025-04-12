@@ -561,7 +561,7 @@ func (h *Handlers) GetSketchHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate channel membership
 	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
 	if err != nil {
-		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
+		responses.SendError(w, "Unauthorized: Could not verify user channel connection", http.StatusUnauthorized)
 		return
 	}
 
@@ -598,7 +598,7 @@ func (h *Handlers) GetSketchesHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate channel membership
 	userChannel, err := h.connMgr.GetUserChannel(claims.Username)
 	if err != nil {
-		responses.SendError(w, "Failed to get user channel", http.StatusInternalServerError)
+		responses.SendError(w, "Unauthorized: Could not verify user channel connection", http.StatusUnauthorized)
 		return
 	}
 
@@ -645,18 +645,6 @@ func (h *Handlers) DeleteSketchHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
-	// TODO: Implement permission checks
-	// isChannelAdmin, adminCheckErr := h.chatService.IsUserAdminOfChannel(ctx, sketch.ChannelName, claims.Username)
-	// if adminCheckErr != nil {
-	// 	log.Printf("Error checking channel admin status for deletion: %v", adminCheckErr)
-	// 	responses.SendError(w, "Error checking permissions", http.StatusInternalServerError)
-	// 	return
-	// }
-	// if sketch.CreatedBy != claims.Username && !isChannelAdmin {
-	// 	responses.SendError(w, "Forbidden: Only the creator or a channel admin can delete this sketch", http.StatusForbidden)
-	// 	return
-	// }
 
 	// Proceed with deletion
 	err = h.sketchService.DeleteSketch(ctx, sketchId)
@@ -705,18 +693,6 @@ func (h *Handlers) ClearSketchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-
-	// TODO: Implement permission check: h.chatService.IsUserMemberOfChannel(ctx, req.ChannelName, claims.Username)
-	// isMember, err := h.chatService.IsUserMemberOfChannel(ctx, req.ChannelName, claims.Username)
-	// if err != nil {
-	// 	log.Printf("Error checking channel membership for clear: %v", err)
-	// 	responses.SendError(w, "Error checking permissions", http.StatusInternalServerError)
-	// 	return
-	// }
-	// if !isMember {
-	// 	responses.SendError(w, "Forbidden: User is not a member of this channel", http.StatusForbidden)
-	// 	return
-	// }
 
 	// Call the service to clear the sketch (e.g., remove all regions)
 	err := h.sketchService.ClearSketch(ctx, req.SketchId)

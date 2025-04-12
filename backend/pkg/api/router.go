@@ -22,7 +22,7 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 	fileStorePath string, msgProcessor *messaging.Processor) {
 
 	// Define the directory where frontend build output is located
-	staticDir := "./static"
+	staticPath := "./static"
 
 	// Apply global middleware (Rate Limiter)
 	limiter := middleware.NewRateLimiter()
@@ -93,12 +93,12 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 
 	// --- Static Frontend File Serving --- (Register this LAST)
 	// This handles serving the index.html and other assets like CSS, JS
-	staticFileServer := http.FileServer(http.Dir(staticDir))
+	staticFileServer := http.FileServer(http.Dir(staticPath))
 
 	// Use PathPrefix to catch all non-API routes
 	router.PathPrefix("/").Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Construct the path to the file in the static directory
-		filePath := filepath.Join(staticDir, r.URL.Path)
+		filePath := filepath.Join(staticPath, r.URL.Path)
 
 		// Check if the requested path corresponds to an existing file
 		_, err := os.Stat(filePath) // Check file status
@@ -108,7 +108,7 @@ func RegisterRoutes(router *mux.Router, wsh *websocket.Handler, connManager conn
 			staticFileServer.ServeHTTP(w, r)
 		} else if os.IsNotExist(err) { // Case 2: File does NOT exist
 			// Serve the index.html for SPA routing (let React Router handle it)
-			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+			http.ServeFile(w, r, filepath.Join(staticPath, "index.html"))
 		} else { // Case 3: Other error (e.g., permissions)
 			// Log the error and return a generic server error
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)

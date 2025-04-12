@@ -26,15 +26,16 @@ export const ChannelList = () => {
           >
             {systemContext?.state.onlineUsersCount} online
           </span>
-          <span className="text-xs bg-gray-700/20 text-gray-400 px-2 py-0.5 rounded-full truncate whitespace-nowrap">
-            <div className="flex items-center whitespace-nowrap">
-              <div className="flex-none w-2 h-2 rounded-full bg-warning mr-1" />
-              Private |
-              <div className="flex-none w-2 h-2 rounded-full bg-info ml-1 mr-1" />
-              Public
-            </div>
-          </span>
         </div>
+        {/* <span className="w-[50%] text-xs truncate whitespace-nowrap">
+          <div className="flex items-center whitespace-nowrap justify-center">
+            <div className="flex-none w-2 h-2 rounded-full bg-warning mr-1" />
+            Private |
+            <div className="flex-none w-2 h-2 rounded-full bg-info ml-1 mr-1" />
+            Public
+          </div>
+        </span> */}
+
         <div
           className="flex-1 overflow-y-scroll px-2 
           scrollbar-thin 

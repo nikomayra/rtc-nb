@@ -32,7 +32,7 @@ func NewSketchBuffer(sketchService *sketch.Service) *SketchBuffer {
 
 func (sb *SketchBuffer) Add(msg *models.Message) {
 	if !sb.rateLimiter.Allow() {
-		log.Printf("WARN: Rate limit exceeded for user %s on sketch buffer. Message ID %s dropped.", msg.Username, msg.ID)
+		// log.Printf("WARN: Rate limit exceeded for user %s on sketch buffer. Message ID %s dropped.", msg.Username, msg.ID)
 		return
 	}
 	select {
@@ -54,6 +54,7 @@ func (sb *SketchBuffer) processMessages() {
 			if len(batch) >= sb.batchSize {
 				slog.Debug("Flushing sketch buffer due to batch size", "count", len(batch))
 				if err := sb.flush(batch); err != nil {
+					// Only log critical error if flush fails
 					log.Printf("ERROR during batch size flush completion: %v", err)
 				} else {
 					slog.Debug("Finished flushing sketch batch (size trigger).")
@@ -64,6 +65,7 @@ func (sb *SketchBuffer) processMessages() {
 			if len(batch) > 0 {
 				slog.Debug("Flushing sketch buffer due to interval", "count", len(batch))
 				if err := sb.flush(batch); err != nil {
+					// Only log critical error if flush fails
 					log.Printf("ERROR during interval flush completion: %v", err)
 				} else {
 					slog.Debug("Finished flushing sketch batch (interval trigger).")
@@ -88,7 +90,7 @@ func (sb *SketchBuffer) flush(messages []*models.Message) error {
 			msg.Content.SketchCmd.CommandType != models.SketchCommandTypeUpdate ||
 			msg.Content.SketchCmd.IsPartial == nil || *msg.Content.SketchCmd.IsPartial ||
 			msg.Content.SketchCmd.Region == nil {
-			log.Printf("WARN: Skipping invalid/non-COMPLETE update message found in sketch buffer flush: MsgID=%s", msg.ID)
+			// log.Printf("WARN: Skipping invalid/non-COMPLETE update message found in sketch buffer flush: MsgID=%s", msg.ID)
 			continue
 		}
 
@@ -113,7 +115,7 @@ func (sb *SketchBuffer) flush(messages []*models.Message) error {
 		}
 		slog.Debug("Attempting to flush sketch updates", "count", len(commands), "sketchID", sketchID)
 		if err := sb.sketchService.ApplySketchUpdates(ctx, sketchID, commands); err != nil {
-			// Log the error more clearly, mentioning the commands might be lost for this specific sketch
+			// This is a critical error, updates might be lost.
 			log.Printf("ERROR: Failed to apply %d update(s) for sketch %s. These updates may be lost. Error: %v", len(commands), sketchID, err)
 			if firstError == nil {
 				firstError = err

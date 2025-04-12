@@ -2,7 +2,6 @@ package messaging
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 
 	"rtc-nb/backend/internal/connections"
@@ -37,7 +36,7 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 
 	outgoingMsgBytes, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("Error marshaling message: %v", err)
+		// log.Printf("Error marshaling message: %v", err)
 		return err
 	}
 
@@ -45,16 +44,16 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 	switch msg.Type {
 	case models.MessageTypeChannelUpdate, models.MessageTypeSystemUserStatus:
 		// System-wide messages
-		log.Printf("Broadcasting system message type %d to all system connections", msg.Type)
+		// log.Printf("Broadcasting system message type %d to all system connections", msg.Type)
 		p.connManager.NotifyAll(outgoingMsgBytes)
 	default:
 		// Channel-specific messages
 		if msg.ChannelName == "" {
-			log.Printf("Skipping channel message with empty channel name (Type: %d)", msg.Type)
+			// log.Printf("Skipping channel message with empty channel name (Type: %d)", msg.Type)
 			return nil
 		}
 		if msg.Type != models.MessageTypeSketch {
-			log.Printf("Broadcasting message type %d to channel %s", msg.Type, msg.ChannelName)
+			// log.Printf("Broadcasting message type %d to channel %s", msg.Type, msg.ChannelName)
 		}
 		p.connManager.NotifyChannel(msg.ChannelName, outgoingMsgBytes)
 	}
@@ -66,29 +65,28 @@ func (p *Processor) ProcessMessage(msg *models.Message) error {
 		p.chatBuffer.Add(msg)
 
 	case models.MessageTypeSketch:
-		// --- START ADDED DIAGNOSTIC LOGGING ---
-		log.Printf("DEBUG: Processor received MessageTypeSketch. MsgID: %s, Channel: %s, User: %s", msg.ID, msg.ChannelName, msg.Username)
+		// log.Printf("DEBUG: Processor received MessageTypeSketch. MsgID: %s, Channel: %s, User: %s", msg.ID, msg.ChannelName, msg.Username)
 		if msg.Content.SketchCmd == nil {
-			log.Printf("DEBUG: SketchCmd is nil for MsgID: %s. Skipping persistence.", msg.ID)
-			break // Exit silently as before, but log why
+			// log.Printf("DEBUG: SketchCmd is nil for MsgID: %s. Skipping persistence.", msg.ID)
+			break
 		}
 		// Log the relevant fields before the check
-		cmd := msg.Content.SketchCmd // Assign cmd here
-		isPartialValue := "nil"
-		if cmd.IsPartial != nil {
-			isPartialValue = fmt.Sprintf("%t", *cmd.IsPartial)
-		}
-		log.Printf("DEBUG: Checking SketchCmd for persistence: MsgID: %s, SketchID: %s, CommandType: %s, IsPartial: %s",
-			msg.ID, cmd.SketchID, cmd.CommandType, isPartialValue)
+		cmd := msg.Content.SketchCmd
+		// isPartialValue := "nil"
+		// if cmd.IsPartial != nil {
+		// 	isPartialValue = fmt.Sprintf("%t", *cmd.IsPartial)
+		// }
+		// log.Printf("DEBUG: Checking SketchCmd for persistence: MsgID: %s, SketchID: %s, CommandType: %s, IsPartial: %s",
+		// 	msg.ID, cmd.SketchID, cmd.CommandType, isPartialValue)
 		// --- END ADDED DIAGNOSTIC LOGGING ---
 
 		// Original check for COMPLETE update persistence
 		if cmd.CommandType == models.SketchCommandTypeUpdate && cmd.IsPartial != nil && !*cmd.IsPartial {
-			log.Printf("Adding COMPLETE sketch update to buffer for sketch %s", cmd.SketchID) // This is the log we are sometimes missing
+			// log.Printf("Adding COMPLETE sketch update to buffer for sketch %s", cmd.SketchID)
 			p.sketchBuffer.Add(msg)
 		} else {
 			// --- ADDED LOGGING for non-persistence ---
-			log.Printf("DEBUG: SketchCmd did NOT meet criteria for COMPLETE update persistence. MsgID: %s", msg.ID)
+			// log.Printf("DEBUG: SketchCmd did NOT meet criteria for COMPLETE update persistence. MsgID: %s", msg.ID)
 			// --- END ADDED LOGGING ---
 		}
 	}

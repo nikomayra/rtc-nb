@@ -70,3 +70,15 @@ frontend\**\*.njsproj
 frontend\**\*.sln
 frontend\**\*.sw?
 fly.toml
+
+node_modules
+npm-debug.log
+Dockerfile*
+.dockerignore
+.git
+.gitignore
+.env
+*.swp
+*.swo
+*~
+*.log

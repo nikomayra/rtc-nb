@@ -67,7 +67,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = "" }: Moda
             <h2 className="text-lg font-medium text-text-light">{title}</h2>
           </div>
         )}
-        <div className="p-6 space-y-4">{children}</div>
+        <div className="p-4 space-y-4">{children}</div>
       </div>
     </div>,
     document.body // Portal target

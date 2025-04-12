@@ -49,7 +49,7 @@ export const AppContent = () => {
         {systemContext.state.currentChannel &&
         systemContext.state.channels.find((c) => c.name === systemContext.state.currentChannel?.name) ? (
           <>
-            <div className="w-[40%] bg-surface-light rounded-lg shadow-md overflow-hidden flex flex-col">
+            <div className="w-[40%] min-w-0 bg-surface-light rounded-lg shadow-md overflow-hidden flex flex-col">
               <div className="flex-none">
                 <ChannelInfo />
               </div>

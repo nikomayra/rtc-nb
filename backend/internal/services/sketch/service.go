@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"rtc-nb/backend/internal/auth"
 	"rtc-nb/backend/internal/connections"
 	"rtc-nb/backend/internal/models"
@@ -104,7 +103,7 @@ func (s *Service) ApplySketchUpdates(ctx context.Context, sketchID string, comma
 	// 3. Merge paths from commands
 	for _, cmd := range commands {
 		if cmd == nil || cmd.Region == nil {
-			log.Printf("Skipping nil command or region for sketch %s", sketchID)
+			// log.Printf("Skipping nil command or region for sketch %s", sketchID)
 			continue
 		}
 		cmdRegion := cmd.Region
@@ -126,9 +125,9 @@ func (s *Service) ApplySketchUpdates(ctx context.Context, sketchID string, comma
 		// Append paths from the command to the target region
 		if len(cmdRegion.Paths) > 0 {
 			targetRegion.Paths = append(targetRegion.Paths, cmdRegion.Paths...)
-			log.Printf("Appended %d paths to region %s for sketch %s", len(cmdRegion.Paths), key, sketchID)
+			// log.Printf("Appended %d paths to region %s for sketch %s", len(cmdRegion.Paths), key, sketchID)
 		} else {
-			log.Printf("Command for region %s sketch %s had no paths to append", key, sketchID)
+			// log.Printf("Command for region %s sketch %s had no paths to append", key, sketchID)
 		}
 
 		currentRegions[key] = targetRegion
@@ -147,11 +146,11 @@ func (s *Service) ApplySketchUpdates(ctx context.Context, sketchID string, comma
 
 	// 6. Commit the transaction
 	if err := tx.Commit(); err != nil {
-		log.Printf("ERROR: ApplySketchUpdates(%s): Failed to commit transaction: %v", sketchID, err)
-		return fmt.Errorf("commit transaction failed for sketch %s: %w", sketchID, err)
+		// log.Printf("ERROR: ApplySketchUpdates(%s): Failed to commit transaction: %v", sketchID, err)
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	log.Printf("Successfully applied %d commands for sketch %s", len(commands), sketchID) // Revert to simpler success log
+	// log.Printf("Successfully applied %d commands for sketch %s", len(commands), sketchID)
 	return nil
 }
 

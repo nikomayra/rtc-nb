@@ -2,7 +2,6 @@ package connections
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -41,32 +40,22 @@ func (h *Hub) NotifyChannel(channelName string, message []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	// Skip empty channel names
 	if channelName == "" {
-		log.Printf("NotifyChannel called with empty channel name, skipping")
 		return
 	}
 
-	// Get the channel clients
 	channelClients, exists := h.channels[channelName]
 	if !exists {
-		log.Printf("Cannot notify non-existent channel: %s", channelName)
 		return
 	}
 
-	// Check if there are clients in the channel
 	if len(channelClients) == 0 {
-		log.Printf("No clients in channel %s to notify", channelName)
 		return
 	}
 
-	// log.Printf("Broadcasting message to %d clients in channel %s", len(channelClients), channelName)
-
-	// Send the message to each client
 	for client := range channelClients {
 		err := client.WriteMessage(websocket.TextMessage, message)
 		if err != nil {
-			log.Printf("Error sending message to client in channel %s: %v", channelName, err)
 			// Connection errors will be handled by the cleanup routine
 		}
 	}
@@ -79,7 +68,7 @@ func (h *Hub) NotifyUser(username string, message []byte) {
 	if conn, ok := h.connections[username]; ok {
 		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
-			log.Printf("Error writing message to client: %v", err)
+			// log.Printf("Error writing message to client: %v", err)
 		}
 	}
 }
@@ -89,18 +78,16 @@ func (h *Hub) NotifyAll(message []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	log.Printf("Broadcasting system message to %d system connections", len(h.systemConns))
+	// log.Printf("Broadcasting system message to %d system connections", len(h.systemConns))
 
-	// If no system connections exist yet, log and return
 	if len(h.systemConns) == 0 {
-		log.Printf("No system connections available for broadcasting")
+		// log.Printf("No system connections available for broadcasting")
 		return
 	}
 
-	for username, conn := range h.systemConns {
+	for _, conn := range h.systemConns {
 		err := conn.WriteMessage(websocket.TextMessage, message)
 		if err != nil {
-			log.Printf("Error sending system message to %s: %v", username, err)
 			// Connection errors will be handled by the cleanup routine
 		}
 	}
@@ -128,7 +115,7 @@ func (h *Hub) AddClientToChannel(channelName string, userConn *websocket.Conn) {
 	}
 	h.channels[channelName][userConn] = true
 	h.connToChannel[userConn] = channelName
-	log.Printf("Added client to channel: %s\n", channelName)
+	// log.Printf("Added client to channel: %s\n", channelName)
 }
 
 func (h *Hub) RemoveClientFromChannel(channelName string, userConn *websocket.Conn) {
@@ -139,22 +126,20 @@ func (h *Hub) RemoveClientFromChannel(channelName string, userConn *websocket.Co
 		delete(conns, userConn)
 		delete(h.connToChannel, userConn)
 	}
-	log.Printf("Removed client from channel: %s\n", channelName)
+	// log.Printf("Removed client from channel: %s\n", channelName)
 }
 
 func (h *Hub) AddConnection(username string, conn *websocket.Conn) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// If there's an existing connection, return an error instead of closing it.
 	if _, exists := h.connections[username]; exists {
-		// The existing connection will be handled by its own lifecycle (disconnect/cleanup).
-		log.Printf("Attempt to add connection for user %s failed: connection already exists.", username)
+		// log.Printf("Attempt to add connection for user %s failed: connection already exists.", username)
 		return fmt.Errorf("connection already exists for user: %s", username)
 	}
 
 	h.connections[username] = conn
-	log.Printf("Client Username: %s, connected. Total connections: %d", username, len(h.connections))
+	// log.Printf("Client Username: %s, connected. Total connections: %d", username, len(h.connections))
 	return nil
 }
 
@@ -162,7 +147,7 @@ func (h *Hub) RemoveConnection(username string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.connections, username)
-	log.Printf("Client Username: %s, disconnected.\n", username)
+	// log.Printf("Client Username: %s, disconnected.\n", username)
 }
 
 func (h *Hub) GetConnection(username string) (*websocket.Conn, bool) {
@@ -177,21 +162,20 @@ func (h *Hub) AddSystemConnection(username string, conn *websocket.Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// If there's an existing system connection, close it
 	if existingConn, exists := h.systemConns[username]; exists {
-		log.Printf("Closing existing system connection for user: %s", username)
+		// log.Printf("Closing existing system connection for user: %s", username)
 		existingConn.Close()
 	}
 
 	h.systemConns[username] = conn
-	log.Printf("System connection added for user: %s (total: %d)", username, len(h.systemConns))
+	// log.Printf("System connection added for user: %s (total: %d)", username, len(h.systemConns))
 }
 
 func (h *Hub) RemoveSystemConnection(username string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.systemConns, username)
-	log.Printf("System connection removed for user: %s (remaining: %d)", username, len(h.systemConns))
+	// log.Printf("System connection removed for user: %s (remaining: %d)", username, len(h.systemConns))
 }
 
 func (h *Hub) GetSystemConnection(username string) (*websocket.Conn, bool) {
@@ -262,17 +246,17 @@ func (h *Hub) cleanupConnection(username string, conn *websocket.Conn, isSystem 
 
 	if isSystem {
 		delete(h.systemConns, username)
-		log.Printf("Cleaned up stale system connection for user: %s", username)
+		// log.Printf("Cleaned up stale system connection for user: %s", username)
 	} else {
 		delete(h.connections, username)
-		log.Printf("Cleaned up stale channel connection for user: %s", username)
+		// log.Printf("Cleaned up stale channel connection for user: %s", username)
 
 		// Clean up from channels
-		for channelName, clients := range h.channels {
+		for _, clients := range h.channels {
 			if _, ok := clients[conn]; ok {
 				delete(clients, conn)
 				delete(h.connToChannel, conn)
-				log.Printf("Removed user %s from channel %s during cleanup", username, channelName)
+				// log.Printf("Removed user %s from channel %s during cleanup", username, channelName)
 			}
 		}
 	}

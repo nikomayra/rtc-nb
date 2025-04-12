@@ -78,11 +78,48 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           // Clean up state on any error
           stateActions.setSketches([]);
           console.error("Load sketches error:", error);
-          // Re-throw a user-friendly error
-          if (isAxiosError(error)) {
-            throw new Error(error.response?.data?.error?.message || "Failed to load sketches.");
-          } else if (error instanceof Error) {
-            throw new Error(error.message);
+
+          // --- Retry Logic for 401 ---
+          let shouldRetry = false;
+          let finalError: unknown = error; // Use a separate variable for the final error
+
+          if (isAxiosError(error) && error.response?.status === 401) {
+            shouldRetry = true;
+          }
+
+          if (shouldRetry) {
+            if (import.meta.env.DEV)
+              console.warn(
+                "[SketchProvider] Received 401 on loadSketches, likely due to connection timing. Retrying once..."
+              );
+            try {
+              await new Promise((resolve) => setTimeout(resolve, 250)); // Wait 250ms
+              const retryResponse = await sketchApi.getSketches(channelName, authState.token);
+              if (!retryResponse.success) {
+                // If retry also fails, throw the original error
+                throw new Error(
+                  (retryResponse as APIErrorResponse).error.message || "Failed to load sketches on retry"
+                );
+              }
+              const retrySketches = z.array(SketchSchema).parse(retryResponse.data);
+              console.log("[SketchProvider] Retry successful.");
+              stateActions.setSketches(retrySketches);
+              // Need to set loading false here as well if retry succeeds before returning
+              stateActions.setLoading(false);
+              return retrySketches; // Return the successfully retried sketches
+            } catch (retryError) {
+              console.error("[SketchProvider] Retry failed:", retryError);
+              // If retry fails, fall through to throw the original error's message (or retry error if preferred)
+              finalError = retryError; // Update finalError with the retry error
+            }
+          }
+          // --- End Retry Logic ---
+
+          // Re-throw a user-friendly error (using original or retry error)
+          if (isAxiosError(finalError)) {
+            throw new Error(finalError.response?.data?.error?.message || "Failed to load sketches.");
+          } else if (finalError instanceof Error) {
+            throw new Error(finalError.message);
           } else {
             throw new Error("Failed to load sketches due to an unexpected error.");
           }
@@ -106,7 +143,12 @@ export const SketchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             throw new Error((response as APIErrorResponse).error.message || "Failed to create sketch");
           }
           const newSketch = SketchSchema.parse(response.data);
-          setState((prev) => ({ ...prev, sketches: [...prev.sketches, newSketch] }));
+          setState((prev) => ({
+            ...prev,
+            sketches: [...prev.sketches, newSketch],
+            currentSketch: newSketch,
+            paths: [],
+          }));
           return newSketch;
         } catch (error) {
           // Don't update state on error
