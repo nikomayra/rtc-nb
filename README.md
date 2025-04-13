@@ -88,11 +88,9 @@ src/
 - **Error Handling**: Robust error boundaries and fallback UI
 - **Performance**: Efficient drawing algorithms for smooth sketching experience
 
-### Application Screenshots
+### Application Screenshot
 
-`[Placeholder for Chat Interface Screenshot]`
-
-`[Placeholder for Collaborative Sketch Interface Screenshot]`
+![Screenshot 2025-04-12 212413](https://github.com/user-attachments/assets/5a31bfd8-3393-456d-b873-5ce4f1a3ef03)
 
 ### Frontend Architecture Diagram
 
